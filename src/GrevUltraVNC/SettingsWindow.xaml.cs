@@ -19,6 +19,7 @@ public partial class SettingsWindow : Window
         AutoScaleCheck.IsChecked = settings.AutoScaling;
         FullScreenCheck.IsChecked = settings.FullScreenByDefault;
         IntervalBox.Text = settings.StatusCheckSeconds.ToString();
+        ThemeBox.SelectedIndex = ThemeService.Normalize(settings.Theme) == ThemeService.Light ? 1 : 0;
     }
 
     private void Browse_Click(object sender, RoutedEventArgs e)
@@ -64,6 +65,7 @@ public partial class SettingsWindow : Window
         _settings.AutoScaling = AutoScaleCheck.IsChecked == true;
         _settings.FullScreenByDefault = FullScreenCheck.IsChecked == true;
         _settings.StatusCheckSeconds = seconds;
+        _settings.Theme = ThemeBox.SelectedIndex == 1 ? ThemeService.Light : ThemeService.Dark;
         DialogResult = true;
     }
 }
