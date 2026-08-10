@@ -15,17 +15,17 @@
             <Grid>
                 <StackPanel>
                     <TextBlock x:Name="MachineNameText" FontSize="28" FontWeight="Bold" />
-                    <TextBlock x:Name="MachineAddressText" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0" />
+                    <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />
                 </StackPanel>
                 <Button HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource SecondaryButton}" Content="Edit machine" Click="Edit_Click" />
             </Grid>
 
-            <Border Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+            <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" Padding="18" Margin="0,22,0,0">
                 <StackPanel>
-                    <TextBlock Text="REMOTE DESKTOP" Foreground="{StaticResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="REMOTE DESKTOP" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
                     <Button Style="{StaticResource PrimaryButton}" Content="🖥  VNC TO MACHINE" Click="Vnc_Click" Margin="0,12,0,0" />
-                    <TextBlock Text="Remote keys target the last VNC Viewer opened for this machine." Foreground="{StaticResource MutedTextBrush}" Margin="0,16,0,8" />
+                    <TextBlock Text="Remote keys target the last VNC Viewer opened for this machine." Foreground="{DynamicResource MutedTextBrush}" Margin="0,16,0,8" />
                     <UniformGrid Columns="3">
                         <Button Style="{StaticResource SecondaryButton}" Content="Ctrl+Alt+Del" Click="Cad_Click" Margin="0,0,8,0" />
                         <Button Style="{StaticResource SecondaryButton}" Content="Windows ⊞" Click="WindowsKey_Click" Margin="4,0" />
@@ -34,10 +34,10 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+            <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" Padding="18" Margin="0,14,0,0">
                 <StackPanel>
-                    <TextBlock Text="MACHINE" Foreground="{StaticResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="MACHINE" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
                     <UniformGrid Columns="3" Margin="0,12,0,0">
                         <Button Style="{StaticResource SecondaryButton}" Content="⚡ Wake" Click="Wake_Click" Margin="0,0,8,0" />
                         <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart" Click="Restart_Click" Margin="4,0" />
@@ -46,10 +46,10 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="3" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+            <Border Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" Padding="18" Margin="0,14,0,0">
                 <StackPanel>
-                    <TextBlock Text="TOOLS" Foreground="{StaticResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="TOOLS" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
                     <UniformGrid Columns="2" Margin="0,12,0,0">
                         <Button Style="{StaticResource SecondaryButton}" Content="📁 Open network shares" Click="Shares_Click" Margin="0,0,6,0" />
                         <Button Style="{StaticResource SecondaryButton}" Content="📡 Ping / connection info" Click="Diagnostics_Click" Margin="6,0,0,0" />
