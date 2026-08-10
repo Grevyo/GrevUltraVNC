@@ -37,6 +37,9 @@ public partial class MachineActionWindow : Window
         try
         {
             _vnc.Launch(_machine, _settings);
+            var controlPanel = new GrevControlPanelWindow(_machine, _vnc);
+            controlPanel.Show();
+            Close();
         }
         catch (Exception ex)
         {
