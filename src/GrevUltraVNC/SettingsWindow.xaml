@@ -17,11 +17,11 @@
         <StackPanel Grid.Row="1" Margin="0,24,0,20">
             <TextBlock Text="APPEARANCE" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
             <TextBlock Text="Theme" Margin="0,10,0,6" />
-            <ComboBox x:Name="ThemeBox" Width="180" HorizontalAlignment="Left">
+            <ComboBox x:Name="ThemeBox" Width="180" HorizontalAlignment="Left" SelectionChanged="ThemeBox_SelectionChanged">
                 <ComboBoxItem Content="Dark" />
                 <ComboBoxItem Content="Light" />
             </ComboBox>
-            <TextBlock Text="Dark mode is used by default." Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,6,0,0" />
+            <TextBlock Text="Changes preview immediately. Dark mode is the default." Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,6,0,0" />
 
             <TextBlock Text="ULTRAVNC" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,24,0,0" />
             <TextBlock Text="UltraVNC Viewer path" Margin="0,10,0,6" />
