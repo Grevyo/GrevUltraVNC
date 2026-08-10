@@ -1,7 +1,6 @@
 using Microsoft.Win32;
 using System.IO;
 using System.Windows;
-using System.Windows.Controls;
 using GrevUltraVNC.Models;
 using GrevUltraVNC.Services;
 
@@ -25,16 +24,20 @@ public partial class SettingsWindow : Window
         AutoScaleCheck.IsChecked = settings.AutoScaling;
         FullScreenCheck.IsChecked = settings.FullScreenByDefault;
         IntervalBox.Text = settings.StatusCheckSeconds.ToString();
-        ThemeBox.SelectedIndex = _originalTheme == ThemeService.Light ? 1 : 0;
+
+        if (_originalTheme == ThemeService.Light)
+            LightThemeRadio.IsChecked = true;
+        else
+            DarkThemeRadio.IsChecked = true;
 
         _initializing = false;
         Closed += SettingsWindow_Closed;
     }
 
-    private void ThemeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void ThemeChoice_Checked(object sender, RoutedEventArgs e)
     {
         if (_initializing) return;
-        ThemeService.Apply(ThemeBox.SelectedIndex == 1 ? ThemeService.Light : ThemeService.Dark);
+        ThemeService.Apply(LightThemeRadio.IsChecked == true ? ThemeService.Light : ThemeService.Dark);
     }
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
@@ -86,7 +89,7 @@ public partial class SettingsWindow : Window
         _settings.AutoScaling = AutoScaleCheck.IsChecked == true;
         _settings.FullScreenByDefault = FullScreenCheck.IsChecked == true;
         _settings.StatusCheckSeconds = seconds;
-        _settings.Theme = ThemeBox.SelectedIndex == 1 ? ThemeService.Light : ThemeService.Dark;
+        _settings.Theme = LightThemeRadio.IsChecked == true ? ThemeService.Light : ThemeService.Dark;
         DialogResult = true;
     }
 }
