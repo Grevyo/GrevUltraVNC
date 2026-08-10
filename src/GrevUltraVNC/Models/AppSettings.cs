@@ -6,4 +6,5 @@ public sealed class AppSettings
     public bool AutoScaling { get; set; } = true;
     public bool FullScreenByDefault { get; set; }
     public int StatusCheckSeconds { get; set; } = 10;
+    public string Theme { get; set; } = "Dark";
 }
