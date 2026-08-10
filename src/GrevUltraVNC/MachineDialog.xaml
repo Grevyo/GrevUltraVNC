@@ -1,8 +1,11 @@
 <Window x:Class="GrevUltraVNC.MachineDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Machine" Width="520" Height="570" ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
-    <Grid Margin="26">
+        Title="Machine" Width="520" Height="570" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        Style="{StaticResource AppWindowStyle}"
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}">
+    <Grid Margin="26" Background="{DynamicResource WindowBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
