@@ -1,0 +1,66 @@
+<Window x:Class="GrevUltraVNC.MachineActionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Machine actions" Width="670" Height="720" ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="26">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid>
+                <StackPanel>
+                    <TextBlock x:Name="MachineNameText" FontSize="28" FontWeight="Bold" />
+                    <TextBlock x:Name="MachineAddressText" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0" />
+                </StackPanel>
+                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource SecondaryButton}" Content="Edit machine" Click="Edit_Click" />
+            </Grid>
+
+            <Border Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="12" Padding="18" Margin="0,22,0,0">
+                <StackPanel>
+                    <TextBlock Text="REMOTE DESKTOP" Foreground="{StaticResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="🖥  VNC TO MACHINE" Click="Vnc_Click" Margin="0,12,0,0" />
+                    <TextBlock Text="Remote keys target the last VNC Viewer opened for this machine." Foreground="{StaticResource MutedTextBrush}" Margin="0,16,0,8" />
+                    <UniformGrid Columns="3">
+                        <Button Style="{StaticResource SecondaryButton}" Content="Ctrl+Alt+Del" Click="Cad_Click" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Windows ⊞" Click="WindowsKey_Click" Margin="4,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Ctrl+Shift+Esc" Click="TaskManager_Click" Margin="8,0,0,0" />
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="12" Padding="18" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="MACHINE" Foreground="{StaticResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <UniformGrid Columns="3" Margin="0,12,0,0">
+                        <Button Style="{StaticResource SecondaryButton}" Content="⚡ Wake" Click="Wake_Click" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart" Click="Restart_Click" Margin="4,0" />
+                        <Button Style="{StaticResource DangerButton}" Content="⏻ Shut down" Click="Shutdown_Click" Margin="8,0,0,0" />
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="3" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="12" Padding="18" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="TOOLS" Foreground="{StaticResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <UniformGrid Columns="2" Margin="0,12,0,0">
+                        <Button Style="{StaticResource SecondaryButton}" Content="📁 Open network shares" Click="Shares_Click" Margin="0,0,6,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="📡 Ping / connection info" Click="Diagnostics_Click" Margin="6,0,0,0" />
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Grid Grid.Row="4" Margin="0,18,0,0">
+                <Button Style="{StaticResource DangerButton}" Content="Remove machine" Click="Remove_Click" HorizontalAlignment="Left" />
+                <Button Style="{StaticResource SecondaryButton}" Content="Close" IsCancel="True" HorizontalAlignment="Right" />
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Window>
