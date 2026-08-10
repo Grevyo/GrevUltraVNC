@@ -19,7 +19,7 @@
         <Grid Grid.Row="0">
             <StackPanel>
                 <TextBlock Text="GrevUltraVNC" FontSize="30" FontWeight="Bold" />
-                <TextBlock Text="Your LAN machines" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0" />
+                <TextBlock Text="Your LAN machines" Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <Button Style="{StaticResource SecondaryButton}" Content="Settings" Click="Settings_Click" Margin="0,0,10,0" />
@@ -27,9 +27,9 @@
             </StackPanel>
         </Grid>
 
-        <Border Grid.Row="1" Background="#12151B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+        <Border Grid.Row="1" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 CornerRadius="10" Padding="14,10" Margin="0,24,0,18">
-            <TextBlock Foreground="{StaticResource MutedTextBrush}"
+            <TextBlock Foreground="{DynamicResource MutedTextBrush}"
                        Text="Double-click a machine for VNC, power, file and diagnostics actions." />
         </Border>
 
@@ -43,7 +43,7 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Width="295" Height="180" Margin="0,0,16,16" Padding="18"
-                                Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Cursor="Hand"
                                 MouseLeftButtonDown="MachineCard_MouseLeftButtonDown">
                             <Grid>
@@ -60,10 +60,10 @@
                                 </Grid>
                                 <StackPanel Grid.Row="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Name}" FontSize="21" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding IpAddress}" Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
-                                    <TextBlock Text="{Binding Group}" Foreground="#788394" FontSize="12" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding IpAddress}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,5,0,0" />
+                                    <TextBlock Text="{Binding Group}" Foreground="{DynamicResource FaintTextBrush}" FontSize="12" Margin="0,4,0,0" />
                                 </StackPanel>
-                                <TextBlock Grid.Row="2" Text="{Binding DetailText}" Foreground="{StaticResource MutedTextBrush}" FontSize="12" />
+                                <TextBlock Grid.Row="2" Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -72,8 +72,8 @@
         </ScrollViewer>
 
         <Grid Grid.Row="3" Margin="0,12,0,0">
-            <TextBlock x:Name="FooterStatus" Foreground="{StaticResource MutedTextBrush}" Text="Ready" />
-            <TextBlock HorizontalAlignment="Right" Foreground="#626C7A" Text="LAN-only remote management" />
+            <TextBlock x:Name="FooterStatus" Foreground="{DynamicResource MutedTextBrush}" Text="Ready" />
+            <TextBlock HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" Text="LAN-only remote management" />
         </Grid>
     </Grid>
 </Window>
