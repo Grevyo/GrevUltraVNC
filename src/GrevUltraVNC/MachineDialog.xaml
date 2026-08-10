@@ -11,7 +11,7 @@
 
         <StackPanel>
             <TextBlock Text="Machine details" FontSize="26" FontWeight="Bold" />
-            <TextBlock Text="Static LAN details used by GrevUltraVNC." Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0" />
+            <TextBlock Text="Static LAN details used by GrevUltraVNC." Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />
         </StackPanel>
 
         <StackPanel Grid.Row="1" Margin="0,24,0,20">
