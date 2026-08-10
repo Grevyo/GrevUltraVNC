@@ -27,6 +27,12 @@ public sealed class UltraVncSessionService
 
     public Process Launch(Machine machine, AppSettings settings)
     {
+        if (TryGetSession(machine.Id, out var existing))
+        {
+            FocusViewer(existing!);
+            return existing!;
+        }
+
         var viewer = FindViewer(settings.UltraVncViewerPath)
             ?? throw new FileNotFoundException("UltraVNC Viewer was not found. Set its path in Settings.");
 
@@ -46,6 +52,40 @@ public sealed class UltraVncSessionService
     }
 
     public bool HasActiveSession(Guid machineId) => TryGetSession(machineId, out _);
+
+    public bool TryGetViewerWindowHandle(Guid machineId, out IntPtr handle)
+    {
+        handle = IntPtr.Zero;
+        if (!TryGetSession(machineId, out var process) || process is null)
+            return false;
+
+        process.Refresh();
+        handle = process.MainWindowHandle;
+        return handle != IntPtr.Zero;
+    }
+
+    public void BringViewerToFront(Guid machineId) => FocusViewer(GetSession(machineId));
+
+    public void Disconnect(Guid machineId)
+    {
+        if (!TryGetSession(machineId, out var process) || process is null)
+            return;
+
+        try
+        {
+            if (!process.CloseMainWindow())
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        finally
+        {
+            _sessions.Remove(machineId);
+        }
+    }
 
     public void SendCtrlAltDelete(Guid machineId)
     {
@@ -75,11 +115,21 @@ public sealed class UltraVncSessionService
     {
         process = null;
         if (!_sessions.TryGetValue(machineId, out var candidate)) return false;
-        if (candidate.HasExited)
+
+        try
+        {
+            if (candidate.HasExited)
+            {
+                _sessions.Remove(machineId);
+                return false;
+            }
+        }
+        catch
         {
             _sessions.Remove(machineId);
             return false;
         }
+
         process = candidate;
         return true;
     }
@@ -99,11 +149,20 @@ public sealed class UltraVncSessionService
         var handle = process.MainWindowHandle;
         if (handle == IntPtr.Zero)
         {
-            process.WaitForInputIdle(3000);
+            try
+            {
+                process.WaitForInputIdle(3000);
+            }
+            catch
+            {
+                // Viewer may still be starting; refresh below and report a clean error if no window exists yet.
+            }
+
             process.Refresh();
             handle = process.MainWindowHandle;
         }
-        if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not locate the UltraVNC Viewer window.");
+
+        if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not locate the UltraVNC Viewer window yet.");
         ShowWindow(handle, SW_RESTORE);
         SetForegroundWindow(handle);
         Thread.Sleep(120);
