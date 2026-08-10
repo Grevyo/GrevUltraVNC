@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using GrevUltraVNC.Models;
 using GrevUltraVNC.Services;
 
@@ -10,17 +11,36 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
     private readonly UltraVncSessionService _vnc;
+    private readonly string _originalTheme;
+    private bool _initializing = true;
 
     public SettingsWindow(AppSettings settings, UltraVncSessionService vnc)
     {
         InitializeComponent();
         _settings = settings;
         _vnc = vnc;
+        _originalTheme = ThemeService.Normalize(settings.Theme);
+
         ViewerPathBox.Text = settings.UltraVncViewerPath;
         AutoScaleCheck.IsChecked = settings.AutoScaling;
         FullScreenCheck.IsChecked = settings.FullScreenByDefault;
         IntervalBox.Text = settings.StatusCheckSeconds.ToString();
-        ThemeBox.SelectedIndex = ThemeService.Normalize(settings.Theme) == ThemeService.Light ? 1 : 0;
+        ThemeBox.SelectedIndex = _originalTheme == ThemeService.Light ? 1 : 0;
+
+        _initializing = false;
+        Closed += SettingsWindow_Closed;
+    }
+
+    private void ThemeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing) return;
+        ThemeService.Apply(ThemeBox.SelectedIndex == 1 ? ThemeService.Light : ThemeService.Dark);
+    }
+
+    private void SettingsWindow_Closed(object? sender, EventArgs e)
+    {
+        if (DialogResult != true)
+            ThemeService.Apply(_originalTheme);
     }
 
     private void Browse_Click(object sender, RoutedEventArgs e)
