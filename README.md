@@ -16,16 +16,37 @@ A LAN-first Windows machine manager built around UltraVNC. Save the static-IP PC
 - Remote-key buttons for Ctrl+Alt+Del, Windows/Start, and Ctrl+Shift+Esc (Task Manager)
 - UltraVNC path auto-detection
 - Auto-scaling/fullscreen preferences
+- Light and Dark themes, with Dark as the default
 
-## Requirements
+## Requirements for development/testing
 
 - Windows 11/10 control PC
-- .NET 10 Desktop Runtime (or build self-contained later)
+- .NET 10 SDK
 - UltraVNC Viewer installed on the control PC
 - UltraVNC Server installed/running on each target PC
 - Static/reserved LAN IPs
 
 Remote restart/shutdown uses Windows' built-in `shutdown.exe /m` support. The account/firewall/Local Security Policy on the target PCs must permit remote shutdown.
+
+## Run the current build
+
+From the repository folder, double-click:
+
+```text
+run-dev.cmd
+```
+
+Or run it manually:
+
+```powershell
+dotnet run --project .\src\GrevUltraVNC\GrevUltraVNC.csproj
+```
+
+The development launcher checks whether the .NET SDK is installed and displays the WinGet command if it is missing.
+
+## Themes
+
+Open **Settings → Appearance → Theme** and choose **Dark** or **Light**. Dark is the default. The choice is saved to `%APPDATA%\GrevUltraVNC\settings.json` and is restored the next time the app starts.
 
 ## UltraVNC remote keys
 
