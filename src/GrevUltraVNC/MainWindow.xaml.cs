@@ -29,6 +29,9 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         _settings = await _storage.LoadSettingsAsync();
+        _settings.Theme = ThemeService.Normalize(_settings.Theme);
+        ThemeService.Apply(_settings.Theme);
+
         foreach (var machine in await _storage.LoadMachinesAsync()) Machines.Add(machine);
         ConfigureStatusTimer();
         await RefreshStatusesAsync();
@@ -84,11 +87,14 @@ public partial class MainWindow : Window
             UltraVncViewerPath = _settings.UltraVncViewerPath,
             AutoScaling = _settings.AutoScaling,
             FullScreenByDefault = _settings.FullScreenByDefault,
-            StatusCheckSeconds = _settings.StatusCheckSeconds
+            StatusCheckSeconds = _settings.StatusCheckSeconds,
+            Theme = _settings.Theme
         };
         var dialog = new SettingsWindow(working, _vnc) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         _settings = working;
+        _settings.Theme = ThemeService.Normalize(_settings.Theme);
+        ThemeService.Apply(_settings.Theme);
         await _storage.SaveSettingsAsync(_settings);
         ConfigureStatusTimer();
     }
