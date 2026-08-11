@@ -42,7 +42,7 @@ public static class AgentProtocol
         try
         {
             var bodyHash = SHA256.HashData(body);
-            var canonical = string.Join('\n',
+            var canonical = string.Join("\n",
                 unixTimestamp.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 nonce,
                 method.ToUpperInvariant(),
