@@ -27,8 +27,12 @@ var app = builder.Build();
 
 app.Use(async (context, next) =>
 {
-    if (!context.Request.Path.StartsWithSegments("/api/v1") ||
-        context.Request.Path.Equals(AgentProtocol.PingPath, StringComparison.OrdinalIgnoreCase))
+    var isPing = string.Equals(
+        context.Request.Path.Value,
+        AgentProtocol.PingPath,
+        StringComparison.OrdinalIgnoreCase);
+
+    if (!context.Request.Path.StartsWithSegments("/api/v1") || isPing)
     {
         await next();
         return;
