@@ -18,7 +18,7 @@
     <Using Include="System.Linq" />
     <Using Include="System.Threading" />
     <Using Include="System.Threading.Tasks" />
-    <!-- BrandAssets decodes this at runtime for WPF window/taskbar and tray branding. -->
-    <None Update="Assets\GrevUltraVNC.ico.b64" CopyToOutputDirectory="PreserveNewest" />
+    <!-- BrandAssets decodes the supplied Grev logo at runtime for window/taskbar/tray branding. -->
+    <None Update="Assets\GrevLogo.jpg.b64" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
