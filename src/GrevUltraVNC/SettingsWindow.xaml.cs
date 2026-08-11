@@ -24,6 +24,8 @@ public partial class SettingsWindow : Window
         AutoScaleCheck.IsChecked = settings.AutoScaling;
         FullScreenCheck.IsChecked = settings.FullScreenByDefault;
         IntervalBox.Text = settings.StatusCheckSeconds.ToString();
+        StartWithWindowsCheck.IsChecked = settings.StartWithWindows;
+        MinimizeToTrayCheck.IsChecked = settings.MinimizeToTray;
 
         if (_originalTheme == ThemeService.Light)
             LightThemeRadio.IsChecked = true;
@@ -90,6 +92,8 @@ public partial class SettingsWindow : Window
         _settings.FullScreenByDefault = FullScreenCheck.IsChecked == true;
         _settings.StatusCheckSeconds = seconds;
         _settings.Theme = LightThemeRadio.IsChecked == true ? ThemeService.Light : ThemeService.Dark;
+        _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+        _settings.MinimizeToTray = MinimizeToTrayCheck.IsChecked == true;
         DialogResult = true;
     }
 }
