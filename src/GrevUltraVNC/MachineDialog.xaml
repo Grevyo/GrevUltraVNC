@@ -1,7 +1,8 @@
 <Window x:Class="GrevUltraVNC.MachineDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Machine" Width="520" Height="690" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        xmlns:svc="clr-namespace:GrevUltraVNC.Services"
+        Title="GrevUltraVNC · Machine" Width="540" Height="735" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}">
@@ -12,10 +13,19 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel>
-            <TextBlock Text="Machine details" FontSize="26" FontWeight="Bold" />
-            <TextBlock Text="Static LAN details used by GrevUltraVNC." Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />
-        </StackPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="56" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Width="48" Height="48" CornerRadius="12" Background="#030509" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                <TextBlock Text="Machine details" FontSize="25" FontWeight="Bold" />
+                <TextBlock Text="Connection, Wake-on-LAN and secure VNC credential settings." Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,0,0" />
+            </StackPanel>
+        </Grid>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,24,0,20">
             <StackPanel>
@@ -34,11 +44,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <PasswordBox x:Name="VncPasswordBox"
-                                 Background="{DynamicResource SubtlePanelBrush}"
-                                 Foreground="{DynamicResource TextBrush}"
-                                 BorderBrush="{DynamicResource BorderBrush}"
-                                 BorderThickness="1" Padding="10,8" />
+                    <PasswordBox x:Name="VncPasswordBox" />
                     <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Forget saved"
                             Click="ForgetPassword_Click" Margin="10,0,0,0" />
                 </Grid>
@@ -47,8 +53,10 @@
 
                 <TextBlock Text="Group" Margin="0,16,0,6" />
                 <TextBox x:Name="GroupBox" />
+                <CheckBox x:Name="FavoriteCheck" Content="★ Pin this machine as a favourite" Margin="0,14,0,0" />
+
                 <TextBlock Text="Notes" Margin="0,16,0,6" />
-                <TextBox x:Name="NotesBox" Height="58" AcceptsReturn="True" TextWrapping="Wrap" />
+                <TextBox x:Name="NotesBox" Height="62" AcceptsReturn="True" TextWrapping="Wrap" />
             </StackPanel>
         </ScrollViewer>
 
