@@ -63,7 +63,7 @@ New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 Write-Host 'Installing Windows service...'
 New-Service `
     -Name $serviceName `
-    -BinaryPathName ('"{0}"' -f $exePath) `
+    -BinaryPathName ('"{0}"' -f $exePath).Replace('\"','"') `
     -DisplayName $displayName `
     -Description 'Authenticated LAN telemetry and management agent for GrevUltraVNC.' `
     -StartupType Automatic | Out-Null
