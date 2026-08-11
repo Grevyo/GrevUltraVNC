@@ -1,7 +1,7 @@
 <Window x:Class="GrevUltraVNC.MachineActionWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Machine actions" Width="670" Height="720" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        Title="Machine actions" Width="670" Height="780" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}">
@@ -28,7 +28,8 @@
                 <StackPanel>
                     <TextBlock Text="REMOTE DESKTOP" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
                     <Button Style="{StaticResource PrimaryButton}" Content="🖥  VNC TO MACHINE" Click="Vnc_Click" Margin="0,12,0,0" />
-                    <TextBlock Text="Remote keys target the last VNC Viewer opened for this machine." Foreground="{DynamicResource MutedTextBrush}" Margin="0,16,0,8" />
+                    <TextBlock Text="A saved VNC password is supplied automatically. Remote keys target the active Viewer for this machine."
+                               Foreground="{DynamicResource MutedTextBrush}" Margin="0,16,0,8" TextWrapping="Wrap" />
                     <UniformGrid Columns="3">
                         <Button Style="{StaticResource SecondaryButton}" Content="Ctrl+Alt+Del" Click="Cad_Click" Margin="0,0,8,0" />
                         <Button Style="{StaticResource SecondaryButton}" Content="Windows ⊞" Click="WindowsKey_Click" Margin="4,0" />
@@ -46,6 +47,14 @@
                         <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart" Click="Restart_Click" Margin="4,0" />
                         <Button Style="{StaticResource DangerButton}" Content="⏻ Shut down" Click="Shutdown_Click" Margin="8,0,0,0" />
                     </UniformGrid>
+
+                    <TextBlock Text="ULTRAVNC SERVICE" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                    <UniformGrid Columns="2">
+                        <Button Style="{StaticResource SecondaryButton}" Content="▶ Start VNC service" Click="StartVncService_Click" Margin="0,0,6,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="⚙ Start VNC at boot" Click="EnableVncAutoStart_Click" Margin="6,0,0,0" />
+                    </UniformGrid>
+                    <TextBlock Text="Remote service control requires Windows administrative access to the target PC and Remote Service Management to be allowed through its firewall."
+                               Foreground="{DynamicResource FaintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,8,2,0" />
                 </StackPanel>
             </Border>
 
