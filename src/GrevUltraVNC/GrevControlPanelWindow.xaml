@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
         Title="Grev Control Panel"
-        Width="300" Height="780" MinHeight="560"
+        Width="300" Height="800" MinHeight="580"
         ResizeMode="NoResize" WindowStyle="ToolWindow"
         ShowInTaskbar="False" Topmost="True"
         Icon="{x:Static svc:BrandAssets.Logo}"
@@ -55,10 +55,16 @@
                     <Button Style="{StaticResource DangerButton}" Content="Disconnect" Click="Disconnect_Click" Margin="4,0,0,0" Padding="12,7" />
                 </UniformGrid>
 
+                <TextBlock Text="VNC SERVICE" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <UniformGrid Columns="3">
+                    <Button Style="{StaticResource CardActionButton}" Content="Start" Click="StartVncService_Click" Margin="0,0,4,8" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Restart" Click="RestartVncService_Click" Margin="4,0,4,8" />
+                    <Button Style="{StaticResource DangerButton}" Content="Stop" Click="StopVncService_Click" Margin="4,0,0,8" Padding="10,7" />
+                </UniformGrid>
+                <Button Style="{StaticResource SecondaryButton}" Content="⚙ Set VNC to start with Windows" Click="EnableVncAutoStart_Click" />
+
                 <TextBlock Text="MACHINE" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <Button Style="{StaticResource SecondaryButton}" Content="⚡ Wake machine" Click="Wake_Click" Margin="0,0,0,8" />
-                <Button Style="{StaticResource SecondaryButton}" Content="▶ Start VNC service" Click="StartVncService_Click" Margin="0,0,0,8" />
-                <Button Style="{StaticResource SecondaryButton}" Content="⚙ Start VNC at boot" Click="EnableVncAutoStart_Click" Margin="0,0,0,8" />
                 <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart machine" Click="Restart_Click" Margin="0,0,0,8" />
                 <Button Style="{StaticResource DangerButton}" Content="⏻ Shut down machine" Click="Shutdown_Click" />
 
