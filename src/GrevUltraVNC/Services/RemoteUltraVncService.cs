@@ -18,6 +18,28 @@ public sealed class RemoteUltraVncService
         return new RemoteServiceResult(false, FriendlyError(result.Text));
     }
 
+    public async Task<RemoteServiceResult> StopAsync(string host)
+    {
+        var result = await RunScAsync(host, "stop", ServiceName);
+
+        if (result.ExitCode == 0 || result.Text.Contains("1062", StringComparison.OrdinalIgnoreCase))
+            return new RemoteServiceResult(true, "UltraVNC service is stopped.");
+
+        return new RemoteServiceResult(false, FriendlyError(result.Text));
+    }
+
+    public async Task<RemoteServiceResult> RestartAsync(string host)
+    {
+        var stop = await StopAsync(host);
+        if (!stop.Success) return stop;
+
+        await Task.Delay(700);
+        var start = await StartAsync(host);
+        return start.Success
+            ? new RemoteServiceResult(true, "UltraVNC service restarted.")
+            : start;
+    }
+
     public async Task<RemoteServiceResult> EnableAutoStartAndStartAsync(string host)
     {
         var config = await RunScAsync(host, "config", ServiceName, "start=", "auto");
@@ -29,6 +51,20 @@ public sealed class RemoteUltraVncService
             return start;
 
         return new RemoteServiceResult(true, "UltraVNC is set to start automatically with Windows and is running now.");
+    }
+
+    public async Task<RemoteServiceResult> QueryAsync(string host)
+    {
+        var result = await RunScAsync(host, "query", ServiceName);
+        if (result.ExitCode != 0)
+            return new RemoteServiceResult(false, FriendlyError(result.Text));
+
+        if (result.Text.Contains("RUNNING", StringComparison.OrdinalIgnoreCase))
+            return new RemoteServiceResult(true, "UltraVNC service state: RUNNING");
+        if (result.Text.Contains("STOPPED", StringComparison.OrdinalIgnoreCase))
+            return new RemoteServiceResult(true, "UltraVNC service state: STOPPED");
+
+        return new RemoteServiceResult(true, result.Text);
     }
 
     private static async Task<ScResult> RunScAsync(string host, params string[] arguments)
