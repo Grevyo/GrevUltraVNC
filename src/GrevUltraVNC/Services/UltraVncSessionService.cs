@@ -8,6 +8,7 @@ namespace GrevUltraVNC.Services;
 public sealed class UltraVncSessionService
 {
     private readonly Dictionary<Guid, Process> _sessions = [];
+    private readonly VncCredentialService _credentials = new();
 
     public string? FindViewer(string configuredPath)
     {
@@ -43,6 +44,13 @@ public sealed class UltraVncSessionService
         };
         psi.ArgumentList.Add("-connect");
         psi.ArgumentList.Add($"{machine.IpAddress}::{machine.VncPort}");
+
+        if (_credentials.TryRead(machine.Id, out var password) && !string.IsNullOrEmpty(password))
+        {
+            psi.ArgumentList.Add("-password");
+            psi.ArgumentList.Add(password);
+        }
+
         if (settings.AutoScaling) psi.ArgumentList.Add("-autoscaling");
         if (settings.FullScreenByDefault) psi.ArgumentList.Add("-fullscreen");
 
