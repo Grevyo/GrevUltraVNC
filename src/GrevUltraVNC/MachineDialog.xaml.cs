@@ -1,6 +1,7 @@
 using System.Net;
 using System.Windows;
 using GrevUltraVNC.Models;
+using GrevUltraVNC.Services;
 
 namespace GrevUltraVNC;
 
@@ -8,6 +9,9 @@ public partial class MachineDialog : Window
 {
     private readonly Machine _target;
     private readonly Machine _working;
+    private readonly VncCredentialService _credentials = new();
+    private bool _forgetPasswordRequested;
+    private readonly bool _hadSavedPassword;
 
     public MachineDialog(Machine target)
     {
@@ -20,6 +24,20 @@ public partial class MachineDialog : Window
         PortBox.Text = _working.VncPort.ToString();
         GroupBox.Text = _working.Group;
         NotesBox.Text = _working.Notes;
+
+        _hadSavedPassword = _credentials.HasSavedPassword(_working.Id);
+        PasswordStateText.Text = _hadSavedPassword
+            ? "A VNC password is saved securely in Windows Credential Manager. Leave this blank to keep it, or enter a new password to replace it."
+            : "No VNC password is saved. Enter one here and GrevUltraVNC will use it automatically when connecting.";
+    }
+
+    private void ForgetPassword_Click(object sender, RoutedEventArgs e)
+    {
+        _forgetPasswordRequested = true;
+        VncPasswordBox.Clear();
+        PasswordStateText.Text = _hadSavedPassword
+            ? "The saved VNC password will be removed when you click Save machine."
+            : "No saved VNC password to remove.";
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -47,6 +65,19 @@ public partial class MachineDialog : Window
         if (!string.IsNullOrWhiteSpace(mac) && new string(mac.Where(Uri.IsHexDigit).ToArray()).Length != 12)
         {
             MessageBox.Show(this, "The MAC address must contain 12 hexadecimal digits.", "GrevUltraVNC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            if (!string.IsNullOrEmpty(VncPasswordBox.Password))
+                _credentials.Save(_working.Id, VncPasswordBox.Password);
+            else if (_forgetPasswordRequested)
+                _credentials.Delete(_working.Id);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Could not save VNC password", MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
 
