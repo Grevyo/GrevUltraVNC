@@ -9,7 +9,6 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>GrevUltraVNC</AssemblyName>
     <RootNamespace>GrevUltraVNC</RootNamespace>
-    <ApplicationIcon>Assets\GrevUltraVNC.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,11 +18,7 @@
     <Using Include="System.Linq" />
     <Using Include="System.Threading" />
     <Using Include="System.Threading.Tasks" />
+    <!-- BrandAssets decodes this at runtime for WPF window/taskbar and tray branding. -->
     <None Update="Assets\GrevUltraVNC.ico.b64" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
-  <Target Name="DecodeGrevUltraVncIcon" BeforeTargets="PrepareForBuild">
-    <Exec Condition="Exists('$(MSBuildProjectDirectory)\Assets\GrevUltraVNC.ico.b64')"
-          Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$b=[IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Assets\GrevUltraVNC.ico.b64'); [IO.File]::WriteAllBytes('$(MSBuildProjectDirectory)\Assets\GrevUltraVNC.ico',[Convert]::FromBase64String($b))&quot;" />
-  </Target>
 </Project>
