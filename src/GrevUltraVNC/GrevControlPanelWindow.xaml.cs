@@ -43,7 +43,7 @@ public partial class GrevControlPanelWindow : Window
     {
         if (!_vnc.HasActiveSession(_machine.Id))
         {
-            SessionStatusText.Text = "● Session ended";
+            SessionStatusText.Text = "● SESSION ENDED";
             Close();
             return;
         }
@@ -80,32 +80,30 @@ public partial class GrevControlPanelWindow : Window
         var viewerRight = viewerRect.Right / scale;
         var viewerBottom = viewerRect.Bottom / scale;
 
-        var gap = 8.0;
+        const double gap = 8.0;
         var panelWidth = Width;
         var availableHeight = Math.Max(300, workBottom - workTop);
         var viewerHeight = Math.Max(300, viewerBottom - viewerTop);
 
-        Height = Math.Min(availableHeight, Math.Max(500, viewerHeight));
+        Height = Math.Min(availableHeight, Math.Max(560, viewerHeight));
         Top = Math.Clamp(viewerTop, workTop, Math.Max(workTop, workBottom - Height));
 
         if (viewerRight + gap + panelWidth <= workRight)
-        {
             Left = viewerRight + gap;
-        }
         else if (viewerLeft - gap - panelWidth >= workLeft)
-        {
             Left = viewerLeft - gap - panelWidth;
-        }
         else
-        {
-            // A maximised/fullscreen Viewer leaves no outside space, so keep the panel visible at the work-area edge.
             Left = Math.Max(workLeft, workRight - panelWidth);
-        }
     }
 
     private void Cad_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendCtrlAltDelete(_machine.Id));
     private void WindowsKey_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWindowsKey(_machine.Id));
     private void TaskManager_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendCtrlShiftEscape(_machine.Id));
+    private void AltTab_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendAltTab(_machine.Id));
+    private void AltF4_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendAltF4(_machine.Id));
+    private void WinR_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWinR(_machine.Id));
+    private void WinE_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWinE(_machine.Id));
+    private void WinL_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWinL(_machine.Id));
 
     private void SendRemoteKey(Action action)
     {
@@ -131,6 +129,9 @@ public partial class GrevControlPanelWindow : Window
         }
     }
 
+    private void FullScreen_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.ToggleFullScreen(_machine.Id));
+    private void RefreshScreen_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.RequestScreenRefresh(_machine.Id));
+
     private void Disconnect_Click(object sender, RoutedEventArgs e)
     {
         if (MessageBox.Show(this, $"Disconnect the VNC session to {_machine.Name}?", "Disconnect VNC",
@@ -151,6 +152,20 @@ public partial class GrevControlPanelWindow : Window
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Wake-on-LAN", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void StartVncService_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var result = await _remoteVnc.StartAsync(_machine.IpAddress);
+            MessageBox.Show(this, result.Message, "Start UltraVNC", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Start UltraVNC", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -209,13 +224,13 @@ public partial class GrevControlPanelWindow : Window
     {
         var result = await _network.ProbeAsync(_machine);
         var latency = result.LatencyMs is null ? "No ping response" : $"{result.LatencyMs} ms";
-        var vnc = result.VncAvailable ? $"Open on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
+        var vnc = result.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
         MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC: {vnc}\nStatus: {result.Status}",
+            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nProbe result: {result.Status}",
             "Connection info", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void HidePanel_Click(object sender, RoutedEventArgs e) => Close();
+    private void HidePanel_Click(object sender, RoutedEventArgs e) => Hide();
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
 
