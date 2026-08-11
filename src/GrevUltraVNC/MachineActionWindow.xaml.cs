@@ -96,33 +96,45 @@ public partial class MachineActionWindow : Window
             result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
     }
 
-    private async void StartVncService_Click(object sender, RoutedEventArgs e)
+    private async void StartVncService_Click(object sender, RoutedEventArgs e) =>
+        await RunVncServiceActionAsync(() => _remoteVnc.StartAsync(_machine.IpAddress), "Start UltraVNC");
+
+    private async void RestartVncService_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vnc.HasActiveSession(_machine.Id) && MessageBox.Show(this,
+                "Restarting UltraVNC will normally disconnect the active VNC session. Continue?",
+                "Restart UltraVNC", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunVncServiceActionAsync(() => _remoteVnc.RestartAsync(_machine.IpAddress), "Restart UltraVNC");
+    }
+
+    private async void StopVncService_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vnc.HasActiveSession(_machine.Id) && MessageBox.Show(this,
+                "Stopping UltraVNC will disconnect the active VNC session. Continue?",
+                "Stop UltraVNC", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunVncServiceActionAsync(() => _remoteVnc.StopAsync(_machine.IpAddress), "Stop UltraVNC");
+    }
+
+    private async Task RunVncServiceActionAsync(Func<Task<RemoteServiceResult>> action, string title)
     {
         try
         {
-            var result = await _remoteVnc.StartAsync(_machine.IpAddress);
-            MessageBox.Show(this, result.Message, "UltraVNC service", MessageBoxButton.OK,
+            var result = await action();
+            MessageBox.Show(this, result.Message, title, MessageBoxButton.OK,
                 result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "UltraVNC service", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var result = await _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress);
-            MessageBox.Show(this, result.Message, "UltraVNC at boot", MessageBoxButton.OK,
-                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "UltraVNC at boot", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
+    private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e) =>
+        await RunVncServiceActionAsync(() => _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress), "UltraVNC at boot");
 
     private void Shares_Click(object sender, RoutedEventArgs e)
     {
@@ -143,12 +155,15 @@ public partial class MachineActionWindow : Window
 
     private async void Diagnostics_Click(object sender, RoutedEventArgs e)
     {
-        var result = await _network.ProbeAsync(_machine);
-        var latency = result.LatencyMs is null ? "No ping response" : $"{result.LatencyMs} ms";
-        var vnc = result.VncAvailable ? $"Open on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
+        var networkResult = await _network.ProbeAsync(_machine);
+        var serviceResult = await _remoteVnc.QueryAsync(_machine.IpAddress);
+        var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
+        var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
+        var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
+
         MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC: {vnc}\nStatus: {result.Status}",
-            "Connection info", MessageBoxButton.OK, MessageBoxImage.Information);
+            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nProbe result: {networkResult.Status}",
+            "Connection diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void Edit_Click(object sender, RoutedEventArgs e)
