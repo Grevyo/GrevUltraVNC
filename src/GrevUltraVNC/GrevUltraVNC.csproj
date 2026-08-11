@@ -5,13 +5,20 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Keep WinForms available only for NotifyIcon, but don't import System.Windows.Forms globally into WPF code. -->
+    <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>GrevUltraVNC</AssemblyName>
     <RootNamespace>GrevUltraVNC</RootNamespace>
     <ApplicationIcon>Assets\GrevUltraVNC.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
     <None Update="Assets\GrevUltraVNC.ico.b64" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
