@@ -10,7 +10,6 @@ $ErrorActionPreference = 'Stop'
 $serviceName = 'GrevUltraVNCAgent'
 $displayName = 'GrevUltraVNC Agent'
 $firewallName = 'GrevUltraVNC Agent - LAN'
-$agentPort = 47820
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repoRoot 'src\GrevUltraVNC.Agent\GrevUltraVNC.Agent.csproj'
 $installDir = Join-Path $env:ProgramFiles 'GrevUltraVNC Agent'
@@ -60,23 +59,15 @@ Write-Host 'Securing agent configuration folder...'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 & icacls.exe $dataDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'BUILTIN\Administrators:(OI)(CI)F' | Out-Null
 
+$binaryPath = '"' + $exePath + '"'
+
 Write-Host 'Installing Windows service...'
 New-Service `
     -Name $serviceName `
-    -BinaryPathName ('"{0}"' -f $exePath).Replace('\"','"') `
+    -BinaryPathName $binaryPath `
     -DisplayName $displayName `
     -Description 'Authenticated LAN telemetry and management agent for GrevUltraVNC.' `
     -StartupType Automatic | Out-Null
-
-Write-Host 'Configuring LAN-only firewall rule...'
-Get-NetFirewallRule -DisplayName $firewallName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
-New-NetFirewallRule `
-    -DisplayName $firewallName `
-    -Direction Inbound `
-    -Protocol TCP `
-    -LocalPort $agentPort `
-    -RemoteAddress LocalSubnet `
-    -Action Allow | Out-Null
 
 Write-Host 'Starting Grev agent...'
 Start-Service -Name $serviceName
@@ -92,6 +83,16 @@ if (-not (Test-Path $configPath)) {
 }
 
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
+
+Write-Host 'Configuring LAN-only firewall rule...'
+Get-NetFirewallRule -DisplayName $firewallName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+New-NetFirewallRule `
+    -DisplayName $firewallName `
+    -Direction Inbound `
+    -Protocol TCP `
+    -LocalPort ([int]$config.Port) `
+    -RemoteAddress LocalSubnet `
+    -Action Allow | Out-Null
 
 Write-Host ''
 Write-Host 'GrevUltraVNC Agent is installed and running.' -ForegroundColor Green
