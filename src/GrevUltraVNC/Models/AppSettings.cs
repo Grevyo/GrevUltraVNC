@@ -7,4 +7,6 @@ public sealed class AppSettings
     public bool FullScreenByDefault { get; set; }
     public int StatusCheckSeconds { get; set; } = 10;
     public string Theme { get; set; } = "Dark";
+    public bool StartWithWindows { get; set; }
+    public bool MinimizeToTray { get; set; } = true;
 }
