@@ -10,6 +10,7 @@
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <conv:MachineStatusBrushConverter x:Key="StatusBrushConverter" />
+        <conv:AgentStateBrushConverter x:Key="AgentStateBrushConverter" />
     </Window.Resources>
 
     <Grid Background="{DynamicResource WindowBrush}">
@@ -20,7 +21,6 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Branded header -->
         <Border Grid.Row="0" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="30,22">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -49,7 +49,6 @@
             </Grid>
         </Border>
 
-        <!-- Search / filters -->
         <Grid Grid.Row="1" Margin="30,22,30,18">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -70,7 +69,6 @@
             </StackPanel>
         </Grid>
 
-        <!-- Machine cards -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}" Margin="30,0,14,0">
             <ItemsControl ItemsSource="{Binding MachinesView}" Background="{DynamicResource WindowBrush}">
                 <ItemsControl.ItemsPanel>
@@ -80,7 +78,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Width="350" Height="232" Margin="0,0,16,16" Padding="18"
+                        <Border Width="350" Height="276" Margin="0,0,16,16" Padding="18"
                                 Style="{StaticResource MachineCardStyle}" Cursor="Hand"
                                 MouseLeftButtonDown="MachineCard_MouseLeftButtonDown"
                                 MouseRightButtonUp="MachineCard_MouseRightButtonUp">
@@ -107,8 +105,19 @@
                                 <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="2,8,2,8">
                                     <TextBlock Text="{Binding Name}" FontSize="23" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding IpAddress}" Foreground="{DynamicResource MutedTextBrush}" FontSize="13" Margin="0,5,0,0" />
-                                    <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,11,0,0" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding LastCheckedText}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,10,0,0" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding LastCheckedText}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" Margin="0,3,0,0" />
+
+                                    <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                            CornerRadius="8" Padding="9,7" Margin="0,10,0,0" ToolTip="{Binding AgentMessage}">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding AgentStatusText}"
+                                                       Foreground="{Binding AgentState, Converter={StaticResource AgentStateBrushConverter}}"
+                                                       FontSize="10" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding AgentSummaryText}" Foreground="{DynamicResource MutedTextBrush}"
+                                                       FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
 
                                 <Grid Grid.Row="2">
