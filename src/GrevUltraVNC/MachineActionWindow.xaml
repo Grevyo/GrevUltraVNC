@@ -1,12 +1,13 @@
 <Window x:Class="GrevUltraVNC.MachineActionWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Machine actions" Width="670" Height="780" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        xmlns:svc="clr-namespace:GrevUltraVNC.Services"
+        Title="GrevUltraVNC · Machine actions" Width="700" Height="820" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}">
-        <Grid Margin="26" Background="{DynamicResource WindowBrush}">
+        <Grid Margin="28" Background="{DynamicResource WindowBrush}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -16,24 +17,32 @@
             </Grid.RowDefinitions>
 
             <Grid>
-                <StackPanel>
-                    <TextBlock x:Name="MachineNameText" FontSize="28" FontWeight="Bold" />
-                    <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="50" Height="50" CornerRadius="12" Background="#030509" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="MachineNameText" FontSize="27" FontWeight="Bold" />
+                    <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,0,0" />
                 </StackPanel>
-                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource SecondaryButton}" Content="Edit machine" Click="Edit_Click" />
+                <Button Grid.Column="2" VerticalAlignment="Center" Style="{StaticResource SecondaryButton}" Content="Edit machine" Click="Edit_Click" />
             </Grid>
 
             <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" Padding="18" Margin="0,22,0,0">
                 <StackPanel>
-                    <TextBlock Text="REMOTE DESKTOP" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
-                    <Button Style="{StaticResource PrimaryButton}" Content="🖥  VNC TO MACHINE" Click="Vnc_Click" Margin="0,12,0,0" />
-                    <TextBlock Text="A saved VNC password is supplied automatically. Remote keys target the active Viewer for this machine."
-                               Foreground="{DynamicResource MutedTextBrush}" Margin="0,16,0,8" TextWrapping="Wrap" />
+                    <TextBlock Text="REMOTE DESKTOP" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="VNC TO MACHINE" Click="Vnc_Click" Margin="0,12,0,0" />
+                    <TextBlock Text="A saved VNC password is supplied automatically. Double-clicking the dashboard card skips this window and connects directly."
+                               Foreground="{DynamicResource MutedTextBrush}" Margin="0,12,0,10" TextWrapping="Wrap" />
                     <UniformGrid Columns="3">
                         <Button Style="{StaticResource SecondaryButton}" Content="Ctrl+Alt+Del" Click="Cad_Click" Margin="0,0,8,0" />
                         <Button Style="{StaticResource SecondaryButton}" Content="Windows ⊞" Click="WindowsKey_Click" Margin="4,0" />
-                        <Button Style="{StaticResource SecondaryButton}" Content="Ctrl+Shift+Esc" Click="TaskManager_Click" Margin="8,0,0,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Task Manager" Click="TaskManager_Click" Margin="8,0,0,0" />
                     </UniformGrid>
                 </StackPanel>
             </Border>
@@ -41,19 +50,21 @@
             <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" Padding="18" Margin="0,14,0,0">
                 <StackPanel>
-                    <TextBlock Text="MACHINE" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="MACHINE &amp; VNC RECOVERY" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold" />
                     <UniformGrid Columns="3" Margin="0,12,0,0">
                         <Button Style="{StaticResource SecondaryButton}" Content="⚡ Wake" Click="Wake_Click" Margin="0,0,8,0" />
-                        <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart" Click="Restart_Click" Margin="4,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart PC" Click="Restart_Click" Margin="4,0" />
                         <Button Style="{StaticResource DangerButton}" Content="⏻ Shut down" Click="Shutdown_Click" Margin="8,0,0,0" />
                     </UniformGrid>
 
                     <TextBlock Text="ULTRAVNC SERVICE" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                    <UniformGrid Columns="2">
-                        <Button Style="{StaticResource SecondaryButton}" Content="▶ Start VNC service" Click="StartVncService_Click" Margin="0,0,6,0" />
-                        <Button Style="{StaticResource SecondaryButton}" Content="⚙ Start VNC at boot" Click="EnableVncAutoStart_Click" Margin="6,0,0,0" />
+                    <UniformGrid Columns="3">
+                        <Button Style="{StaticResource SecondaryButton}" Content="▶ Start" Click="StartVncService_Click" Margin="0,0,6,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart" Click="RestartVncService_Click" Margin="3,0" />
+                        <Button Style="{StaticResource DangerButton}" Content="■ Stop" Click="StopVncService_Click" Margin="6,0,0,0" />
                     </UniformGrid>
-                    <TextBlock Text="Remote service control requires Windows administrative access to the target PC and Remote Service Management to be allowed through its firewall."
+                    <Button Style="{StaticResource SecondaryButton}" Content="⚙ Set VNC to start with Windows" Click="EnableVncAutoStart_Click" Margin="0,10,0,0" />
+                    <TextBlock Text="Remote service control requires Windows administrative access and Remote Service Management on the target PC."
                                Foreground="{DynamicResource FaintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,8,2,0" />
                 </StackPanel>
             </Border>
@@ -61,10 +72,10 @@
             <Border Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" Padding="18" Margin="0,14,0,0">
                 <StackPanel>
-                    <TextBlock Text="TOOLS" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="TOOLS" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold" />
                     <UniformGrid Columns="2" Margin="0,12,0,0">
                         <Button Style="{StaticResource SecondaryButton}" Content="📁 Open network shares" Click="Shares_Click" Margin="0,0,6,0" />
-                        <Button Style="{StaticResource SecondaryButton}" Content="📡 Ping / connection info" Click="Diagnostics_Click" Margin="6,0,0,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="📡 Connection diagnostics" Click="Diagnostics_Click" Margin="6,0,0,0" />
                     </UniformGrid>
                 </StackPanel>
             </Border>
