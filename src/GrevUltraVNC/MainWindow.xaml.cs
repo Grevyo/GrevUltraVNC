@@ -15,8 +15,10 @@ public partial class MainWindow : Window
 {
     private readonly JsonStorage _storage = new();
     private readonly NetworkStatusService _network = new();
+    private readonly GrevAgentClient _agent = new();
     private readonly UltraVncSessionService _vnc = new();
     private readonly VncCredentialService _credentials = new();
+    private readonly AgentCredentialService _agentCredentials = new();
     private readonly DispatcherTimer _statusTimer = new();
     private readonly Dictionary<Guid, GrevControlPanelWindow> _controlPanels = [];
     private AppSettings _settings = new();
@@ -31,7 +33,6 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        // Build the collection view before XAML is loaded because TextChanged/Checked handlers can fire during InitializeComponent.
         MachinesView = CollectionViewSource.GetDefaultView(Machines);
         MachinesView.Filter = FilterMachine;
         MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.IsFavorite), ListSortDirection.Descending));
@@ -75,6 +76,7 @@ public partial class MainWindow : Window
     {
         _statusTimer.Stop();
         _tray?.Dispose();
+        _agent.Dispose();
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -100,14 +102,29 @@ public partial class MainWindow : Window
         {
             FooterStatus.Text = $"Checking {Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}…";
             var checkedAt = DateTime.Now;
+
             var probes = Machines.Select(async machine =>
             {
                 machine.Status = MachineStatus.Checking;
-                var result = await _network.ProbeAsync(machine);
-                machine.LatencyMs = result.LatencyMs;
-                machine.VncAvailable = result.VncAvailable;
+                machine.AgentState = GrevAgentState.Unknown;
+                machine.AgentStatus = null;
+                machine.AgentMessage = null;
+
+                var networkTask = _network.ProbeAsync(machine);
+                var agentTask = _agent.ProbeAsync(machine);
+                await Task.WhenAll(networkTask, agentTask);
+
+                var networkResult = await networkTask;
+                var agentResult = await agentTask;
+
+                machine.LatencyMs = networkResult.LatencyMs;
+                machine.VncAvailable = networkResult.VncAvailable;
                 machine.LastCheckedAt = checkedAt;
-                machine.Status = result.Status;
+                machine.Status = networkResult.Status;
+
+                machine.AgentStatus = agentResult.Status;
+                machine.AgentMessage = agentResult.Message;
+                machine.AgentState = agentResult.State;
             });
 
             await Task.WhenAll(probes);
@@ -287,6 +304,7 @@ public partial class MainWindow : Window
         {
             Machines.Remove(machine);
             try { _credentials.Delete(machine.Id); } catch { }
+            try { _agentCredentials.Delete(machine.Id); } catch { }
             await _storage.SaveMachinesAsync(Machines);
             RefreshMachineView();
             return;
