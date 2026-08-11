@@ -6,3 +6,4 @@
 *.suo
 *.nupkg
 artifacts/
+dist/
