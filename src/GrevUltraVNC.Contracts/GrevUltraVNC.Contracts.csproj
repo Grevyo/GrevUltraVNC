@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>GrevUltraVNC.Contracts</AssemblyName>
+    <RootNamespace>GrevUltraVNC.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>
