@@ -1,6 +1,10 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Models;
 using GrevUltraVNC.Services;
@@ -12,17 +16,31 @@ public partial class MainWindow : Window
     private readonly JsonStorage _storage = new();
     private readonly NetworkStatusService _network = new();
     private readonly UltraVncSessionService _vnc = new();
+    private readonly VncCredentialService _credentials = new();
     private readonly DispatcherTimer _statusTimer = new();
+    private readonly Dictionary<Guid, GrevControlPanelWindow> _controlPanels = [];
     private AppSettings _settings = new();
     private bool _statusRefreshRunning;
+    private string _searchText = string.Empty;
+    private bool _favoritesOnly;
+    private TrayIconService? _tray;
 
     public ObservableCollection<Machine> Machines { get; } = [];
+    public ICollectionView MachinesView { get; }
 
     public MainWindow()
     {
         InitializeComponent();
+
+        MachinesView = CollectionViewSource.GetDefaultView(Machines);
+        MachinesView.Filter = FilterMachine;
+        MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.IsFavorite), ListSortDirection.Descending));
+        MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.Name), ListSortDirection.Ascending));
+
         DataContext = this;
         Loaded += MainWindow_Loaded;
+        Closed += MainWindow_Closed;
+        StateChanged += MainWindow_StateChanged;
         _statusTimer.Tick += StatusTimer_Tick;
     }
 
@@ -32,9 +50,34 @@ public partial class MainWindow : Window
         _settings.Theme = ThemeService.Normalize(_settings.Theme);
         ThemeService.Apply(_settings.Theme);
 
-        foreach (var machine in await _storage.LoadMachinesAsync()) Machines.Add(machine);
+        foreach (var machine in await _storage.LoadMachinesAsync())
+            Machines.Add(machine);
+
+        try
+        {
+            StartupService.SetEnabled(_settings.StartWithWindows);
+        }
+        catch
+        {
+            // Startup registration can still be changed from Settings if Windows blocks it here.
+        }
+
+        _tray = new TrayIconService(this, () => Machines.Where(x => x.IsFavorite), ConnectMachine);
         ConfigureStatusTimer();
+        RefreshMachineView();
         await RefreshStatusesAsync();
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        _statusTimer.Stop();
+        _tray?.Dispose();
+    }
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized && _settings.MinimizeToTray && _tray is not null)
+            Hide();
     }
 
     private void ConfigureStatusTimer()
@@ -53,16 +96,20 @@ public partial class MainWindow : Window
         try
         {
             FooterStatus.Text = $"Checking {Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}…";
+            var checkedAt = DateTime.Now;
             var probes = Machines.Select(async machine =>
             {
                 machine.Status = MachineStatus.Checking;
                 var result = await _network.ProbeAsync(machine);
                 machine.LatencyMs = result.LatencyMs;
                 machine.VncAvailable = result.VncAvailable;
+                machine.LastCheckedAt = checkedAt;
                 machine.Status = result.Status;
             });
+
             await Task.WhenAll(probes);
             FooterStatus.Text = $"Last checked {DateTime.Now:HH:mm:ss}";
+            RefreshMachineView();
         }
         finally
         {
@@ -70,13 +117,36 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool FilterMachine(object item)
+    {
+        if (item is not Machine machine) return false;
+        if (_favoritesOnly && !machine.IsFavorite) return false;
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+
+        return machine.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+               || machine.IpAddress.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+               || machine.Group.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+               || machine.Notes.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RefreshMachineView()
+    {
+        MachinesView.Refresh();
+        var shown = MachinesView.Cast<object>().Count();
+        FilterSummaryText.Text = shown == Machines.Count
+            ? $"{Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}"
+            : $"Showing {shown} of {Machines.Count}";
+    }
+
     private async void AddMachine_Click(object sender, RoutedEventArgs e)
     {
         var machine = new Machine();
         var dialog = new MachineDialog(machine) { Owner = this };
         if (dialog.ShowDialog() != true) return;
+
         Machines.Add(machine);
         await _storage.SaveMachinesAsync(Machines);
+        RefreshMachineView();
         await RefreshStatusesAsync();
     }
 
@@ -88,52 +158,85 @@ public partial class MainWindow : Window
             AutoScaling = _settings.AutoScaling,
             FullScreenByDefault = _settings.FullScreenByDefault,
             StatusCheckSeconds = _settings.StatusCheckSeconds,
-            Theme = _settings.Theme
+            Theme = _settings.Theme,
+            StartWithWindows = _settings.StartWithWindows,
+            MinimizeToTray = _settings.MinimizeToTray
         };
+
         var dialog = new SettingsWindow(working, _vnc) { Owner = this };
         if (dialog.ShowDialog() != true) return;
+
         _settings = working;
         _settings.Theme = ThemeService.Normalize(_settings.Theme);
         ThemeService.Apply(_settings.Theme);
         await _storage.SaveSettingsAsync(_settings);
         ConfigureStatusTimer();
+
+        try
+        {
+            StartupService.SetEnabled(_settings.StartWithWindows);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Start with Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshStatusesAsync();
+
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _searchText = SearchBox.Text.Trim();
+        RefreshMachineView();
+    }
+
+    private void FavoritesOnlyCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        _favoritesOnly = FavoritesOnlyCheck.IsChecked == true;
+        RefreshMachineView();
     }
 
     private void MachineCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount != 2 || (sender as FrameworkElement)?.DataContext is not Machine machine) return;
-
-        try
-        {
-            _vnc.Launch(machine, _settings);
-            var controlPanel = new GrevControlPanelWindow(machine, _vnc);
-            controlPanel.Show();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Could not open VNC", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        if (FindAncestor<Button>(e.OriginalSource as DependencyObject) is not null) return;
+        ConnectMachine(machine);
     }
 
     private async void MachineCard_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
         e.Handled = true;
+        await OpenMachineActionsAsync(machine);
+    }
 
-        var dialog = new MachineActionWindow(machine, _settings, _vnc) { Owner = this };
-        dialog.ShowDialog();
+    private void ConnectMachine_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if ((sender as FrameworkElement)?.DataContext is Machine machine)
+            ConnectMachine(machine);
+    }
 
-        if (dialog.MachineDeleted)
+    private void ConnectMachine(Machine machine)
+    {
+        try
         {
-            Machines.Remove(machine);
-            await _storage.SaveMachinesAsync(Machines);
-            return;
+            _vnc.Launch(machine, _settings);
+
+            if (_controlPanels.TryGetValue(machine.Id, out var existing) && existing.IsVisible)
+            {
+                existing.Activate();
+                return;
+            }
+
+            var controlPanel = new GrevControlPanelWindow(machine, _vnc);
+            _controlPanels[machine.Id] = controlPanel;
+            controlPanel.Closed += (_, _) => _controlPanels.Remove(machine.Id);
+            controlPanel.Show();
         }
-
-        if (dialog.MachineChanged)
+        catch (Exception ex)
         {
-            await _storage.SaveMachinesAsync(Machines);
-            await RefreshStatusesAsync();
+            MessageBox.Show(this, ex.Message, "Could not open VNC", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -146,6 +249,56 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
 
         await _storage.SaveMachinesAsync(Machines);
+        RefreshMachineView();
         await RefreshStatusesAsync();
+    }
+
+    private async void FavoriteMachine_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
+
+        machine.IsFavorite = !machine.IsFavorite;
+        await _storage.SaveMachinesAsync(Machines);
+        RefreshMachineView();
+    }
+
+    private async void MoreMachine_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
+        await OpenMachineActionsAsync(machine);
+    }
+
+    private async Task OpenMachineActionsAsync(Machine machine)
+    {
+        var dialog = new MachineActionWindow(machine, _settings, _vnc) { Owner = this };
+        dialog.ShowDialog();
+
+        if (dialog.MachineDeleted)
+        {
+            Machines.Remove(machine);
+            try { _credentials.Delete(machine.Id); } catch { }
+            await _storage.SaveMachinesAsync(Machines);
+            RefreshMachineView();
+            return;
+        }
+
+        if (dialog.MachineChanged)
+        {
+            await _storage.SaveMachinesAsync(Machines);
+            RefreshMachineView();
+            await RefreshStatusesAsync();
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match) return match;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 }
