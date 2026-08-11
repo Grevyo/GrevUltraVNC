@@ -99,24 +99,31 @@ public partial class MainWindow : Window
         ConfigureStatusTimer();
     }
 
-    private async void MachineCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void MachineCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount != 2 || (sender as FrameworkElement)?.DataContext is not Machine machine) return;
 
-        var dialog = new MachineActionWindow(machine, _settings, _vnc) { Owner = this };
-        dialog.ShowDialog();
-
-        if (dialog.MachineDeleted)
+        try
         {
-            Machines.Remove(machine);
-            await _storage.SaveMachinesAsync(Machines);
-            return;
+            _vnc.Launch(machine, _settings);
+            var controlPanel = new GrevControlPanelWindow(machine, _vnc);
+            controlPanel.Show();
         }
-
-        if (dialog.MachineChanged)
+        catch (Exception ex)
         {
-            await _storage.SaveMachinesAsync(Machines);
-            await RefreshStatusesAsync();
+            MessageBox.Show(this, ex.Message, "Could not open VNC", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private async void EditMachine_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
+
+        var dialog = new MachineDialog(machine) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        await _storage.SaveMachinesAsync(Machines);
+        await RefreshStatusesAsync();
     }
 }
