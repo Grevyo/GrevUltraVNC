@@ -85,7 +85,7 @@ public partial class GrevControlPanelWindow : Window
         var availableHeight = Math.Max(300, workBottom - workTop);
         var viewerHeight = Math.Max(300, viewerBottom - viewerTop);
 
-        Height = Math.Min(availableHeight, Math.Max(560, viewerHeight));
+        Height = Math.Min(availableHeight, Math.Max(580, viewerHeight));
         Top = Math.Clamp(viewerTop, workTop, Math.Max(workTop, workBottom - Height));
 
         if (viewerRight + gap + panelWidth <= workRight)
@@ -157,30 +157,46 @@ public partial class GrevControlPanelWindow : Window
 
     private async void StartVncService_Click(object sender, RoutedEventArgs e)
     {
+        await RunVncServiceActionAsync(() => _remoteVnc.StartAsync(_machine.IpAddress), "Start UltraVNC");
+    }
+
+    private async void RestartVncService_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                "Restarting the UltraVNC service will normally disconnect this active VNC session. Continue?",
+                "Restart UltraVNC service", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunVncServiceActionAsync(() => _remoteVnc.RestartAsync(_machine.IpAddress), "Restart UltraVNC");
+    }
+
+    private async void StopVncService_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                "Stopping the UltraVNC service will disconnect this session. Continue?",
+                "Stop UltraVNC service", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunVncServiceActionAsync(() => _remoteVnc.StopAsync(_machine.IpAddress), "Stop UltraVNC");
+    }
+
+    private async Task RunVncServiceActionAsync(Func<Task<RemoteServiceResult>> action, string title)
+    {
         try
         {
-            var result = await _remoteVnc.StartAsync(_machine.IpAddress);
-            MessageBox.Show(this, result.Message, "Start UltraVNC", MessageBoxButton.OK,
+            var result = await action();
+            MessageBox.Show(this, result.Message, title, MessageBoxButton.OK,
                 result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Start UltraVNC", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
     private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            var result = await _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress);
-            MessageBox.Show(this, result.Message, "UltraVNC at boot", MessageBoxButton.OK,
-                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "UltraVNC at boot", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        await RunVncServiceActionAsync(() => _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress), "UltraVNC at boot");
     }
 
     private async void Restart_Click(object sender, RoutedEventArgs e)
@@ -222,11 +238,14 @@ public partial class GrevControlPanelWindow : Window
 
     private async void Diagnostics_Click(object sender, RoutedEventArgs e)
     {
-        var result = await _network.ProbeAsync(_machine);
-        var latency = result.LatencyMs is null ? "No ping response" : $"{result.LatencyMs} ms";
-        var vnc = result.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
+        var networkResult = await _network.ProbeAsync(_machine);
+        var serviceResult = await _remoteVnc.QueryAsync(_machine.IpAddress);
+        var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
+        var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
+        var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
+
         MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nProbe result: {result.Status}",
+            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nProbe result: {networkResult.Status}",
             "Connection info", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
