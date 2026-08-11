@@ -14,24 +14,38 @@ public static class BrandAssets
 
     public static Icon? CreateDrawingIcon()
     {
-        var bytes = IconBytesLazy.Value;
-        if (bytes is null || bytes.Length == 0) return null;
+        try
+        {
+            var bytes = IconBytesLazy.Value;
+            if (bytes is null || bytes.Length == 0) return null;
 
-        using var stream = new MemoryStream(bytes, writable: false);
-        using var icon = new Icon(stream);
-        return (Icon)icon.Clone();
+            using var stream = new MemoryStream(bytes, writable: false);
+            using var icon = new Icon(stream);
+            return (Icon)icon.Clone();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static ImageSource? CreateLogo()
     {
-        var bytes = IconBytesLazy.Value;
-        if (bytes is null || bytes.Length == 0) return null;
+        try
+        {
+            var bytes = IconBytesLazy.Value;
+            if (bytes is null || bytes.Length == 0) return null;
 
-        using var stream = new MemoryStream(bytes, writable: false);
-        var decoder = new IconBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var frame = decoder.Frames.OrderByDescending(x => x.PixelWidth * x.PixelHeight).FirstOrDefault();
-        frame?.Freeze();
-        return frame;
+            using var stream = new MemoryStream(bytes, writable: false);
+            var decoder = new IconBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames.OrderByDescending(x => x.PixelWidth * x.PixelHeight).FirstOrDefault();
+            frame?.Freeze();
+            return frame;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static byte[]? LoadIconBytes()
