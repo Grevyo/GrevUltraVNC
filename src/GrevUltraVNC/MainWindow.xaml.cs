@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<Guid, GrevControlPanelWindow> _controlPanels = [];
     private AppSettings _settings = new();
     private bool _statusRefreshRunning;
+    private bool _uiReady;
     private string _searchText = string.Empty;
     private bool _favoritesOnly;
     private TrayIconService? _tray;
@@ -30,14 +31,16 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        InitializeComponent();
-
+        // Build the collection view before XAML is loaded because TextChanged/Checked handlers can fire during InitializeComponent.
         MachinesView = CollectionViewSource.GetDefaultView(Machines);
         MachinesView.Filter = FilterMachine;
         MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.IsFavorite), ListSortDirection.Descending));
         MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.Name), ListSortDirection.Ascending));
 
+        InitializeComponent();
         DataContext = this;
+        _uiReady = true;
+
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         StateChanged += MainWindow_StateChanged;
@@ -131,6 +134,8 @@ public partial class MainWindow : Window
 
     private void RefreshMachineView()
     {
+        if (!_uiReady) return;
+
         MachinesView.Refresh();
         var shown = MachinesView.Cast<object>().Count();
         FilterSummaryText.Text = shown == Machines.Count
@@ -186,14 +191,14 @@ public partial class MainWindow : Window
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        _searchText = SearchBox.Text.Trim();
-        RefreshMachineView();
+        _searchText = (sender as TextBox)?.Text.Trim() ?? string.Empty;
+        if (_uiReady) RefreshMachineView();
     }
 
     private void FavoritesOnlyCheck_Changed(object sender, RoutedEventArgs e)
     {
-        _favoritesOnly = FavoritesOnlyCheck.IsChecked == true;
-        RefreshMachineView();
+        _favoritesOnly = (sender as CheckBox)?.IsChecked == true;
+        if (_uiReady) RefreshMachineView();
     }
 
     private void MachineCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -223,8 +228,11 @@ public partial class MainWindow : Window
         {
             _vnc.Launch(machine, _settings);
 
-            if (_controlPanels.TryGetValue(machine.Id, out var existing) && existing.IsVisible)
+            if (_controlPanels.TryGetValue(machine.Id, out var existing))
             {
+                if (!existing.IsVisible)
+                    existing.Show();
+
                 existing.Activate();
                 return;
             }
@@ -297,7 +305,15 @@ public partial class MainWindow : Window
         while (current is not null)
         {
             if (current is T match) return match;
-            current = VisualTreeHelper.GetParent(current);
+
+            try
+            {
+                current = VisualTreeHelper.GetParent(current);
+            }
+            catch (InvalidOperationException)
+            {
+                current = LogicalTreeHelper.GetParent(current);
+            }
         }
         return null;
     }
