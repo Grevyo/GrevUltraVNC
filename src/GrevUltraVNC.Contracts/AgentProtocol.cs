@@ -1,0 +1,75 @@
+using System.Security.Cryptography;
+using System.Text;
+
+namespace GrevUltraVNC.Contracts;
+
+public static class AgentProtocol
+{
+    public const int DefaultPort = 47820;
+    public const string PingPath = "/api/v1/ping";
+    public const string StatusPath = "/api/v1/status";
+    public const string TimestampHeader = "X-Grev-Timestamp";
+    public const string NonceHeader = "X-Grev-Nonce";
+    public const string SignatureHeader = "X-Grev-Signature";
+    public static readonly TimeSpan AllowedClockSkew = TimeSpan.FromSeconds(90);
+
+    public static string CreateSharedKey() =>
+        Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+    public static bool IsValidSharedKey(string? sharedKey)
+    {
+        if (string.IsNullOrWhiteSpace(sharedKey)) return false;
+
+        try
+        {
+            return Convert.FromBase64String(sharedKey.Trim()).Length >= 32;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    public static string CreateSignature(
+        string sharedKey,
+        long unixTimestamp,
+        string nonce,
+        string method,
+        string path,
+        ReadOnlySpan<byte> body)
+    {
+        var key = Convert.FromBase64String(sharedKey.Trim());
+        try
+        {
+            var bodyHash = SHA256.HashData(body);
+            var canonical = string.Join('\n',
+                unixTimestamp.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                nonce,
+                method.ToUpperInvariant(),
+                path,
+                Convert.ToHexString(bodyHash));
+
+            using var hmac = new HMACSHA256(key);
+            return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical)));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+        }
+    }
+
+    public static bool FixedTimeSignatureEquals(string expected, string actual)
+    {
+        try
+        {
+            var expectedBytes = Convert.FromHexString(expected);
+            var actualBytes = Convert.FromHexString(actual);
+            return expectedBytes.Length == actualBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+}
