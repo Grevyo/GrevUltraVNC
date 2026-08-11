@@ -24,6 +24,7 @@ public partial class MachineDialog : Window
         PortBox.Text = _working.VncPort.ToString();
         GroupBox.Text = _working.Group;
         NotesBox.Text = _working.Notes;
+        FavoriteCheck.IsChecked = _working.IsFavorite;
 
         _hadSavedPassword = _credentials.HasSavedPassword(_working.Id);
         PasswordStateText.Text = _hadSavedPassword
@@ -87,6 +88,7 @@ public partial class MachineDialog : Window
         _working.VncPort = port;
         _working.Group = string.IsNullOrWhiteSpace(group) ? "My PCs" : group;
         _working.Notes = NotesBox.Text.Trim();
+        _working.IsFavorite = FavoriteCheck.IsChecked == true;
         _target.ApplyFrom(_working);
         DialogResult = true;
     }
