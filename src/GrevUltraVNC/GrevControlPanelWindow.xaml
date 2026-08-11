@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
         Title="Grev Control Panel"
-        Width="300" Height="800" MinHeight="580"
+        Width="310" Height="840" MinHeight="600"
         ResizeMode="NoResize" WindowStyle="ToolWindow"
         ShowInTaskbar="False" Topmost="True"
         Icon="{x:Static svc:BrandAssets.Logo}"
@@ -33,6 +33,17 @@
                         <TextBlock Text="VNC SESSION" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" FontWeight="SemiBold" />
                         <TextBlock x:Name="SessionStatusText" Text="● VIEWER ACTIVE" HorizontalAlignment="Right" Foreground="#50DC91" FontSize="10" FontWeight="SemiBold" />
                     </Grid>
+                </Border>
+
+                <TextBlock Text="SYSTEM HEALTH" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="11">
+                    <StackPanel>
+                        <TextBlock x:Name="AgentConnectionText" Text="AGENT CHECKING" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AgentCpuRamText" Text="CPU / RAM waiting for Grev Agent" FontSize="12" Margin="0,7,0,0" />
+                        <TextBlock x:Name="AgentUserUptimeText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        <TextBlock x:Name="AgentVncHealthText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        <TextBlock x:Name="AgentDiskText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,6,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
                 </Border>
 
                 <TextBlock Text="REMOTE KEYS" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
