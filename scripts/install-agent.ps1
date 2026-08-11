@@ -59,7 +59,7 @@ Write-Host 'Securing agent configuration folder...'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 & icacls.exe $dataDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'BUILTIN\Administrators:(OI)(CI)F' | Out-Null
 
-$binaryPath = '"' + $exePath + '"'
+$binaryPath = [char]34 + $exePath + [char]34
 
 Write-Host 'Installing Windows service...'
 New-Service `
