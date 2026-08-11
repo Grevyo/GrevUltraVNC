@@ -1,3 +1,5 @@
 <Solution>
+  <Project Path="src/GrevUltraVNC.Contracts/GrevUltraVNC.Contracts.csproj" />
   <Project Path="src/GrevUltraVNC/GrevUltraVNC.csproj" />
+  <Project Path="src/GrevUltraVNC.Agent/GrevUltraVNC.Agent.csproj" />
 </Solution>
