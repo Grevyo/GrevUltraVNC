@@ -74,6 +74,19 @@ public sealed class UltraVncSessionService
 
     public void BringViewerToFront(Guid machineId) => FocusViewer(GetSession(machineId));
 
+    public void ToggleFullScreen(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        FocusViewer(process);
+        SendChord(VK_CONTROL, VK_MENU, VK_F12);
+    }
+
+    public void RequestScreenRefresh(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        SendRemoteChordWithScrollLock(process, VK_SNAPSHOT);
+    }
+
     public void Disconnect(Guid machineId)
     {
         if (!TryGetSession(machineId, out var process) || process is null)
@@ -113,6 +126,21 @@ public sealed class UltraVncSessionService
         var process = GetSession(machineId);
         SendRemoteChordWithScrollLock(process, VK_CONTROL, VK_SHIFT, VK_ESCAPE);
     }
+
+    public void SendAltTab(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_MENU, VK_TAB);
+
+    public void SendAltF4(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_MENU, VK_F4);
+
+    public void SendWinR(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_R);
+
+    public void SendWinE(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_E);
+
+    public void SendWinL(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_L);
 
     private Process GetSession(Guid machineId) =>
         TryGetSession(machineId, out var process)
@@ -197,9 +225,16 @@ public sealed class UltraVncSessionService
     private const byte VK_CONTROL = 0x11;
     private const byte VK_SHIFT = 0x10;
     private const byte VK_MENU = 0x12;
+    private const byte VK_TAB = 0x09;
     private const byte VK_ESCAPE = 0x1B;
     private const byte VK_SCROLL = 0x91;
+    private const byte VK_SNAPSHOT = 0x2C;
+    private const byte VK_LWIN = 0x5B;
     private const byte VK_F4 = 0x73;
+    private const byte VK_F12 = 0x7B;
+    private const byte VK_R = 0x52;
+    private const byte VK_E = 0x45;
+    private const byte VK_L = 0x4C;
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
