@@ -115,6 +115,28 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void MachineCard_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
+        e.Handled = true;
+
+        var dialog = new MachineActionWindow(machine, _settings, _vnc) { Owner = this };
+        dialog.ShowDialog();
+
+        if (dialog.MachineDeleted)
+        {
+            Machines.Remove(machine);
+            await _storage.SaveMachinesAsync(Machines);
+            return;
+        }
+
+        if (dialog.MachineChanged)
+        {
+            await _storage.SaveMachinesAsync(Machines);
+            await RefreshStatusesAsync();
+        }
+    }
+
     private async void EditMachine_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
