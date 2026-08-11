@@ -81,6 +81,13 @@ public sealed class UltraVncSessionService
         SendChord(VK_CONTROL, VK_MENU, VK_F12);
     }
 
+    public void OpenFileTransfer(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        FocusViewer(process);
+        SendChord(VK_CONTROL, VK_MENU, VK_F7);
+    }
+
     public void RequestScreenRefresh(Guid machineId)
     {
         var process = GetSession(machineId);
@@ -231,6 +238,7 @@ public sealed class UltraVncSessionService
     private const byte VK_SNAPSHOT = 0x2C;
     private const byte VK_LWIN = 0x5B;
     private const byte VK_F4 = 0x73;
+    private const byte VK_F7 = 0x76;
     private const byte VK_F12 = 0x7B;
     private const byte VK_R = 0x52;
     private const byte VK_E = 0x45;
