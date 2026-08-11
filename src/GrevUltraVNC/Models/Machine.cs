@@ -16,6 +16,8 @@ public sealed class Machine : INotifyPropertyChanged
     private MachineStatus _status = MachineStatus.Checking;
     private long? _latencyMs;
     private bool _vncAvailable;
+    private bool _isFavorite;
+    private DateTime? _lastCheckedAt;
 
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "New PC";
@@ -24,6 +26,12 @@ public sealed class Machine : INotifyPropertyChanged
     public int VncPort { get; set; } = 5900;
     public string Group { get; set; } = "My PCs";
     public string Notes { get; set; } = string.Empty;
+
+    public bool IsFavorite
+    {
+        get => _isFavorite;
+        set => SetField(ref _isFavorite, value);
+    }
 
     public MachineStatus Status
     {
@@ -43,21 +51,39 @@ public sealed class Machine : INotifyPropertyChanged
         set => SetField(ref _vncAvailable, value);
     }
 
+    public DateTime? LastCheckedAt
+    {
+        get => _lastCheckedAt;
+        set => SetField(ref _lastCheckedAt, value);
+    }
+
+    public string FavoriteGlyph => IsFavorite ? "★" : "☆";
+
     public string StatusText => Status switch
     {
         MachineStatus.Checking => "● CHECKING",
-        MachineStatus.Online => "● ONLINE",
-        MachineStatus.VncUnavailable => "● ONLINE · VNC OFFLINE",
-        _ => "● OFFLINE"
+        MachineStatus.Online => "● PC ONLINE",
+        MachineStatus.VncUnavailable => "● PC ONLINE · VNC UNREACHABLE",
+        _ => "● PC OFFLINE"
     };
+
+    public string PingText => LatencyMs is not null ? $"Ping {LatencyMs} ms" : "No ping reply";
+
+    public string VncText => VncAvailable
+        ? $"TCP {VncPort} reachable"
+        : $"TCP {VncPort} unavailable";
 
     public string DetailText => Status switch
     {
-        MachineStatus.Online when LatencyMs is not null => $"{LatencyMs} ms · VNC {VncPort}",
-        MachineStatus.VncUnavailable when LatencyMs is not null => $"{LatencyMs} ms · VNC {VncPort} unavailable",
-        MachineStatus.Offline => "No response",
-        _ => $"VNC {VncPort}"
+        MachineStatus.Online => $"{PingText} · {VncText}",
+        MachineStatus.VncUnavailable => $"{PingText} · {VncText}",
+        MachineStatus.Offline => "No network response",
+        _ => $"Checking {IpAddress}:{VncPort}"
     };
+
+    public string LastCheckedText => LastCheckedAt is null
+        ? "Not checked yet"
+        : $"Checked {LastCheckedAt:HH:mm:ss}";
 
     public Machine Clone() => new()
     {
@@ -68,9 +94,11 @@ public sealed class Machine : INotifyPropertyChanged
         VncPort = VncPort,
         Group = Group,
         Notes = Notes,
+        IsFavorite = IsFavorite,
         Status = Status,
         LatencyMs = LatencyMs,
-        VncAvailable = VncAvailable
+        VncAvailable = VncAvailable,
+        LastCheckedAt = LastCheckedAt
     };
 
     public void ApplyFrom(Machine other)
@@ -81,6 +109,7 @@ public sealed class Machine : INotifyPropertyChanged
         VncPort = other.VncPort;
         Group = other.Group;
         Notes = other.Notes;
+        IsFavorite = other.IsFavorite;
         OnPropertyChanged(string.Empty);
     }
 
@@ -91,11 +120,18 @@ public sealed class Machine : INotifyPropertyChanged
         if (EqualityComparer<T>.Default.Equals(field, value)) return;
         field = value;
         OnPropertyChanged(propertyName);
-        if (propertyName is nameof(Status) or nameof(LatencyMs) or nameof(VncAvailable))
+
+        if (propertyName is nameof(Status) or nameof(LatencyMs) or nameof(VncAvailable) or nameof(LastCheckedAt))
         {
             OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(PingText));
+            OnPropertyChanged(nameof(VncText));
             OnPropertyChanged(nameof(DetailText));
+            OnPropertyChanged(nameof(LastCheckedText));
         }
+
+        if (propertyName == nameof(IsFavorite))
+            OnPropertyChanged(nameof(FavoriteGlyph));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
