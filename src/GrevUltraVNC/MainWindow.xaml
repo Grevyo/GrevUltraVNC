@@ -33,7 +33,7 @@
         <Border Grid.Row="1" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 CornerRadius="10" Padding="14,10" Margin="0,24,0,18">
             <TextBlock Foreground="{DynamicResource MutedTextBrush}"
-                       Text="Double-click a machine to connect immediately. Use Edit on the card to change its details or VNC password." />
+                       Text="Double-click to connect · Edit changes machine details/password · Right-click for Wake, power and recovery actions." />
         </Border>
 
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}">
@@ -48,7 +48,8 @@
                         <Border Width="295" Height="180" Margin="0,0,16,16" Padding="18"
                                 Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Cursor="Hand"
-                                MouseLeftButtonDown="MachineCard_MouseLeftButtonDown">
+                                MouseLeftButtonDown="MachineCard_MouseLeftButtonDown"
+                                MouseRightButtonUp="MachineCard_MouseRightButtonUp">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
