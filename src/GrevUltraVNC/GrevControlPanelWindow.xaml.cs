@@ -14,6 +14,7 @@ public partial class GrevControlPanelWindow : Window
     private readonly WakeOnLanService _wake = new();
     private readonly PowerService _power = new();
     private readonly NetworkStatusService _network = new();
+    private readonly RemoteUltraVncService _remoteVnc = new();
     private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
 
     public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
@@ -150,6 +151,20 @@ public partial class GrevControlPanelWindow : Window
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Wake-on-LAN", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var result = await _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress);
+            MessageBox.Show(this, result.Message, "UltraVNC at boot", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "UltraVNC at boot", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
