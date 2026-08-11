@@ -96,16 +96,19 @@ public partial class GrevControlPanelWindow : Window
             Left = Math.Max(workLeft, workRight - panelWidth);
     }
 
-    private void Cad_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendCtrlAltDelete(_machine.Id));
-    private void WindowsKey_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWindowsKey(_machine.Id));
-    private void TaskManager_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendCtrlShiftEscape(_machine.Id));
-    private void AltTab_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendAltTab(_machine.Id));
-    private void AltF4_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendAltF4(_machine.Id));
-    private void WinR_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWinR(_machine.Id));
-    private void WinE_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWinE(_machine.Id));
-    private void WinL_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendWinL(_machine.Id));
+    private void Cad_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendCtrlAltDelete(_machine.Id));
+    private void WindowsKey_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWindowsKey(_machine.Id));
+    private void TaskManager_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendCtrlShiftEscape(_machine.Id));
+    private void AltTab_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltTab(_machine.Id));
+    private void AltF4_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltF4(_machine.Id));
+    private void WinR_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinR(_machine.Id));
+    private void WinE_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinE(_machine.Id));
+    private void WinL_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinL(_machine.Id));
+    private void FullScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.ToggleFullScreen(_machine.Id));
+    private void RefreshScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.RequestScreenRefresh(_machine.Id));
+    private void FileTransfer_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.OpenFileTransfer(_machine.Id));
 
-    private void SendRemoteKey(Action action)
+    private void SendViewerAction(Action action)
     {
         try
         {
@@ -113,7 +116,7 @@ public partial class GrevControlPanelWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Remote key", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, ex.Message, "VNC session", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -128,9 +131,6 @@ public partial class GrevControlPanelWindow : Window
             MessageBox.Show(this, ex.Message, "VNC session", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
-
-    private void FullScreen_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.ToggleFullScreen(_machine.Id));
-    private void RefreshScreen_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.RequestScreenRefresh(_machine.Id));
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)
     {
