@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Models;
 using GrevUltraVNC.Services;
@@ -11,11 +12,14 @@ public partial class GrevControlPanelWindow : Window
 {
     private readonly Machine _machine;
     private readonly UltraVncSessionService _vnc;
+    private readonly GrevAgentClient _agent = new();
     private readonly WakeOnLanService _wake = new();
     private readonly PowerService _power = new();
     private readonly NetworkStatusService _network = new();
     private readonly RemoteUltraVncService _remoteVnc = new();
     private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
+    private readonly DispatcherTimer _agentTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private bool _agentRefreshRunning;
 
     public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
     {
@@ -29,15 +33,23 @@ public partial class GrevControlPanelWindow : Window
         Loaded += GrevControlPanelWindow_Loaded;
         Closed += GrevControlPanelWindow_Closed;
         _dockTimer.Tick += DockTimer_Tick;
+        _agentTimer.Tick += AgentTimer_Tick;
     }
 
-    private void GrevControlPanelWindow_Loaded(object sender, RoutedEventArgs e)
+    private async void GrevControlPanelWindow_Loaded(object sender, RoutedEventArgs e)
     {
         _dockTimer.Start();
+        _agentTimer.Start();
         DockToViewer();
+        await RefreshAgentHealthAsync();
     }
 
-    private void GrevControlPanelWindow_Closed(object? sender, EventArgs e) => _dockTimer.Stop();
+    private void GrevControlPanelWindow_Closed(object? sender, EventArgs e)
+    {
+        _dockTimer.Stop();
+        _agentTimer.Stop();
+        _agent.Dispose();
+    }
 
     private void DockTimer_Tick(object? sender, EventArgs e)
     {
@@ -49,6 +61,57 @@ public partial class GrevControlPanelWindow : Window
         }
 
         DockToViewer();
+    }
+
+    private async void AgentTimer_Tick(object? sender, EventArgs e) => await RefreshAgentHealthAsync();
+
+    private async Task RefreshAgentHealthAsync()
+    {
+        if (_agentRefreshRunning) return;
+        _agentRefreshRunning = true;
+
+        try
+        {
+            var result = await _agent.ProbeAsync(_machine);
+            _machine.AgentState = result.State;
+            _machine.AgentStatus = result.Status;
+            _machine.AgentMessage = result.Message;
+
+            if (result.State == GrevAgentState.Connected && result.Status is not null)
+            {
+                var status = result.Status;
+                var usedMemory = Math.Max(0, status.TotalMemoryBytes - status.AvailableMemoryBytes);
+                AgentConnectionText.Text = "● AGENT CONNECTED";
+                AgentConnectionText.Foreground = new SolidColorBrush(Color.FromRgb(80, 220, 145));
+                AgentCpuRamText.Text = $"CPU {status.CpuUsagePercent:0.#}%   ·   RAM {FormatGiB(usedMemory)} / {FormatGiB(status.TotalMemoryBytes)}";
+                AgentUserUptimeText.Text = $"{status.InteractiveUser ?? "No console user"}   ·   Uptime {FormatUptime(status.UptimeSeconds)}";
+                AgentVncHealthText.Text = $"UltraVNC {status.UltraVncServiceStatus}   ·   TCP {status.UltraVncPort} {(status.UltraVncPortListening ? "listening" : "not listening")}";
+                AgentDiskText.Text = status.Disks.Count == 0
+                    ? "No fixed-disk telemetry"
+                    : string.Join("   ·   ", status.Disks.Take(2).Select(d => $"{d.Name.TrimEnd('\\')} {FormatGiB(d.FreeBytes)} free"));
+                return;
+            }
+
+            AgentConnectionText.Text = result.State switch
+            {
+                GrevAgentState.ReadyToPair => "● AGENT READY TO PAIR",
+                GrevAgentState.AuthenticationFailed => "● AGENT KEY REJECTED",
+                GrevAgentState.Error => "● AGENT ERROR",
+                _ => "AGENT NOT DETECTED"
+            };
+
+            AgentConnectionText.Foreground = result.State is GrevAgentState.AuthenticationFailed or GrevAgentState.Error
+                ? new SolidColorBrush(Color.FromRgb(255, 107, 119))
+                : new SolidColorBrush(Color.FromRgb(98, 111, 130));
+            AgentCpuRamText.Text = result.Message ?? "Install or pair Grev Agent to enable system telemetry.";
+            AgentUserUptimeText.Text = string.Empty;
+            AgentVncHealthText.Text = string.Empty;
+            AgentDiskText.Text = string.Empty;
+        }
+        finally
+        {
+            _agentRefreshRunning = false;
+        }
     }
 
     private void DockToViewer()
@@ -85,7 +148,7 @@ public partial class GrevControlPanelWindow : Window
         var availableHeight = Math.Max(300, workBottom - workTop);
         var viewerHeight = Math.Max(300, viewerBottom - viewerTop);
 
-        Height = Math.Min(availableHeight, Math.Max(580, viewerHeight));
+        Height = Math.Min(availableHeight, Math.Max(600, viewerHeight));
         Top = Math.Clamp(viewerTop, workTop, Math.Max(workTop, workBottom - Height));
 
         if (viewerRight + gap + panelWidth <= workRight)
@@ -240,16 +303,30 @@ public partial class GrevControlPanelWindow : Window
     {
         var networkResult = await _network.ProbeAsync(_machine);
         var serviceResult = await _remoteVnc.QueryAsync(_machine.IpAddress);
+        var agentResult = await _agent.ProbeAsync(_machine);
         var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
         var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
         var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
+        var agent = agentResult.Status is null
+            ? $"{agentResult.State}: {agentResult.Message}"
+            : $"Connected · CPU {agentResult.Status.CpuUsagePercent:0.#}% · RAM {FormatGiB(agentResult.Status.TotalMemoryBytes - agentResult.Status.AvailableMemoryBytes)}/{FormatGiB(agentResult.Status.TotalMemoryBytes)}";
 
         MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nProbe result: {networkResult.Status}",
+            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nUltraVNC service: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
             "Connection info", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void HidePanel_Click(object sender, RoutedEventArgs e) => Hide();
+
+    private static string FormatGiB(long bytes) => $"{Math.Max(0, bytes) / 1024d / 1024d / 1024d:0.#} GB";
+
+    private static string FormatUptime(long seconds)
+    {
+        var span = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return span.TotalDays >= 1
+            ? $"{(int)span.TotalDays}d {span.Hours}h"
+            : $"{(int)span.TotalHours}h {span.Minutes}m";
+    }
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
 
