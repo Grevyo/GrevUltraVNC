@@ -33,7 +33,7 @@
         <Border Grid.Row="1" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 CornerRadius="10" Padding="14,10" Margin="0,24,0,18">
             <TextBlock Foreground="{DynamicResource MutedTextBrush}"
-                       Text="Double-click a machine for VNC, power, file and diagnostics actions." />
+                       Text="Double-click a machine to connect immediately. Use Edit on the card to change its details or VNC password." />
         </Border>
 
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}">
@@ -66,7 +66,13 @@
                                     <TextBlock Text="{Binding IpAddress}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,5,0,0" />
                                     <TextBlock Text="{Binding Group}" Foreground="{DynamicResource FaintTextBrush}" FontSize="12" Margin="0,4,0,0" />
                                 </StackPanel>
-                                <TextBlock Grid.Row="2" Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
+                                <Grid Grid.Row="2">
+                                    <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12"
+                                               VerticalAlignment="Center" Margin="0,0,68,0" />
+                                    <Button Style="{StaticResource SecondaryButton}" Content="Edit"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Padding="12,5" Click="EditMachine_Click" />
+                                </Grid>
                             </Grid>
                         </Border>
                     </DataTemplate>
