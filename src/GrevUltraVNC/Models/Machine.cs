@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
+using GrevUltraVNC.Contracts;
 
 namespace GrevUltraVNC.Models;
 
@@ -18,12 +20,16 @@ public sealed class Machine : INotifyPropertyChanged
     private bool _vncAvailable;
     private bool _isFavorite;
     private DateTime? _lastCheckedAt;
+    private GrevAgentState _agentState = GrevAgentState.Unknown;
+    private AgentStatusResponse? _agentStatus;
+    private string? _agentMessage;
 
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "New PC";
     public string IpAddress { get; set; } = "192.168.1.1";
     public string MacAddress { get; set; } = string.Empty;
     public int VncPort { get; set; } = 5900;
+    public int AgentPort { get; set; } = AgentProtocol.DefaultPort;
     public string Group { get; set; } = "My PCs";
     public string Notes { get; set; } = string.Empty;
 
@@ -57,6 +63,27 @@ public sealed class Machine : INotifyPropertyChanged
         set => SetField(ref _lastCheckedAt, value);
     }
 
+    [JsonIgnore]
+    public GrevAgentState AgentState
+    {
+        get => _agentState;
+        set => SetField(ref _agentState, value);
+    }
+
+    [JsonIgnore]
+    public AgentStatusResponse? AgentStatus
+    {
+        get => _agentStatus;
+        set => SetField(ref _agentStatus, value);
+    }
+
+    [JsonIgnore]
+    public string? AgentMessage
+    {
+        get => _agentMessage;
+        set => SetField(ref _agentMessage, value);
+    }
+
     public string FavoriteGlyph => IsFavorite ? "★" : "☆";
 
     public string StatusText => Status switch
@@ -85,6 +112,37 @@ public sealed class Machine : INotifyPropertyChanged
         ? "Not checked yet"
         : $"Checked {LastCheckedAt:HH:mm:ss}";
 
+    public string AgentStatusText => AgentState switch
+    {
+        GrevAgentState.Unknown => "AGENT CHECKING",
+        GrevAgentState.Connected => "● AGENT CONNECTED",
+        GrevAgentState.ReadyToPair => "● AGENT READY TO PAIR",
+        GrevAgentState.AuthenticationFailed => "● AGENT KEY REJECTED",
+        GrevAgentState.Error => "● AGENT ERROR",
+        _ => "AGENT NOT DETECTED"
+    };
+
+    public string AgentSummaryText
+    {
+        get
+        {
+            if (AgentState == GrevAgentState.Connected && AgentStatus is not null)
+            {
+                var used = Math.Max(0, AgentStatus.TotalMemoryBytes - AgentStatus.AvailableMemoryBytes);
+                return $"CPU {AgentStatus.CpuUsagePercent:0.#}% · RAM {FormatGiB(used)}/{FormatGiB(AgentStatus.TotalMemoryBytes)} · Up {FormatUptime(AgentStatus.UptimeSeconds)}";
+            }
+
+            return AgentState switch
+            {
+                GrevAgentState.ReadyToPair => "Agent found · paste pairing key in Edit",
+                GrevAgentState.AuthenticationFailed => "Saved pairing key was rejected",
+                GrevAgentState.Error => AgentMessage ?? "Agent returned an error",
+                GrevAgentState.NotDetected => $"No response on agent TCP {AgentPort}",
+                _ => $"Checking agent TCP {AgentPort}"
+            };
+        }
+    }
+
     public Machine Clone() => new()
     {
         Id = Id,
@@ -92,13 +150,17 @@ public sealed class Machine : INotifyPropertyChanged
         IpAddress = IpAddress,
         MacAddress = MacAddress,
         VncPort = VncPort,
+        AgentPort = AgentPort,
         Group = Group,
         Notes = Notes,
         IsFavorite = IsFavorite,
         Status = Status,
         LatencyMs = LatencyMs,
         VncAvailable = VncAvailable,
-        LastCheckedAt = LastCheckedAt
+        LastCheckedAt = LastCheckedAt,
+        AgentState = AgentState,
+        AgentStatus = AgentStatus,
+        AgentMessage = AgentMessage
     };
 
     public void ApplyFrom(Machine other)
@@ -107,6 +169,7 @@ public sealed class Machine : INotifyPropertyChanged
         IpAddress = other.IpAddress;
         MacAddress = other.MacAddress;
         VncPort = other.VncPort;
+        AgentPort = other.AgentPort;
         Group = other.Group;
         Notes = other.Notes;
         IsFavorite = other.IsFavorite;
@@ -130,8 +193,24 @@ public sealed class Machine : INotifyPropertyChanged
             OnPropertyChanged(nameof(LastCheckedText));
         }
 
+        if (propertyName is nameof(AgentState) or nameof(AgentStatus) or nameof(AgentMessage))
+        {
+            OnPropertyChanged(nameof(AgentStatusText));
+            OnPropertyChanged(nameof(AgentSummaryText));
+        }
+
         if (propertyName == nameof(IsFavorite))
             OnPropertyChanged(nameof(FavoriteGlyph));
+    }
+
+    private static string FormatGiB(long bytes) => $"{bytes / 1024d / 1024d / 1024d:0.#}G";
+
+    private static string FormatUptime(long seconds)
+    {
+        var span = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        if (span.TotalDays >= 1) return $"{(int)span.TotalDays}d {span.Hours}h";
+        if (span.TotalHours >= 1) return $"{(int)span.TotalHours}h {span.Minutes}m";
+        return $"{span.Minutes}m";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
