@@ -13,6 +13,8 @@ public partial class MachineActionWindow : Window
     private readonly WakeOnLanService _wake = new();
     private readonly PowerService _power = new();
     private readonly NetworkStatusService _network = new();
+    private readonly RemoteUltraVncService _remoteVnc = new();
+    private readonly VncCredentialService _credentials = new();
 
     public bool MachineChanged { get; private set; }
     public bool MachineDeleted { get; private set; }
@@ -94,6 +96,34 @@ public partial class MachineActionWindow : Window
             result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
     }
 
+    private async void StartVncService_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var result = await _remoteVnc.StartAsync(_machine.IpAddress);
+            MessageBox.Show(this, result.Message, "UltraVNC service", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "UltraVNC service", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var result = await _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress);
+            MessageBox.Show(this, result.Message, "UltraVNC at boot", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "UltraVNC at boot", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void Shares_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -133,6 +163,17 @@ public partial class MachineActionWindow : Window
     {
         if (MessageBox.Show(this, $"Remove {_machine.Name} from GrevUltraVNC?", "Remove machine",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+
+        try
+        {
+            _credentials.Delete(_machine.Id);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"The machine will be removed, but its saved VNC credential could not be deleted:\n\n{ex.Message}",
+                "Credential cleanup", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
         MachineDeleted = true;
         Close();
     }
