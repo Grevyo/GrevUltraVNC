@@ -32,6 +32,11 @@ public partial class GrevControlPanelWindow
 
     private async void GrevCollaboration_Loaded(object sender, RoutedEventArgs e)
     {
+        // Keep the redesigned companion panel comfortably tall. The legacy docking loop still
+        // proposes a smaller height, but WPF will respect this minimum on normal desktop sizes.
+        MinHeight = 840;
+        Height = 900;
+
         // Connecting never grants remote input automatically. The named pointer is available
         // immediately; mouse/keyboard input is enabled only after Take Control succeeds.
         _vnc.SetViewOnly(_machine.Id, true);
