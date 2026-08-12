@@ -103,6 +103,13 @@ public sealed class GrevAgentClient : IDisposable
             new AgentServiceActionRequest(serviceName, action),
             cancellationToken);
 
+    public Task<AgentActionResponse> RunQuickActionAsync(Machine machine, string action, CancellationToken cancellationToken = default) =>
+        PostRequiredAuthenticatedAsync<AgentQuickActionRequest, AgentActionResponse>(
+            machine,
+            AgentProtocol.QuickActionPath,
+            new AgentQuickActionRequest(action),
+            cancellationToken);
+
     private async Task<T> GetRequiredAuthenticatedAsync<T>(Machine machine, string path, CancellationToken cancellationToken)
     {
         if (!_credentials.TryRead(machine.Id, out var sharedKey))
