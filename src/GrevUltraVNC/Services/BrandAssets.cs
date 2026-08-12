@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
@@ -22,9 +23,18 @@ public static class BrandAssets
 
             using var stream = new MemoryStream(bytes, writable: false);
             using var source = new Bitmap(stream);
-            using var bitmap = new Bitmap(source, new Size(128, 128));
-            var handle = bitmap.GetHicon();
+            using var bitmap = new Bitmap(256, 256, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                graphics.DrawImage(source, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+            }
 
+            var handle = bitmap.GetHicon();
             try
             {
                 using var temporary = Icon.FromHandle(handle);
@@ -52,6 +62,7 @@ public static class BrandAssets
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
             image.StreamSource = stream;
             image.EndInit();
             image.Freeze();
@@ -67,6 +78,10 @@ public static class BrandAssets
     {
         var candidates = new[]
         {
+            Path.Combine(AppContext.BaseDirectory, "Assets", "GrevLogo256.jpg.b64"),
+            Path.Combine(AppContext.BaseDirectory, "GrevLogo256.jpg.b64"),
+            Path.Combine(Environment.CurrentDirectory, "Assets", "GrevLogo256.jpg.b64"),
+            Path.Combine(Environment.CurrentDirectory, "src", "GrevUltraVNC", "Assets", "GrevLogo256.jpg.b64"),
             Path.Combine(AppContext.BaseDirectory, "Assets", "GrevLogo.jpg.b64"),
             Path.Combine(AppContext.BaseDirectory, "GrevLogo.jpg.b64"),
             Path.Combine(Environment.CurrentDirectory, "Assets", "GrevLogo.jpg.b64"),
