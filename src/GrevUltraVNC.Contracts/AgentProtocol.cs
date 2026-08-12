@@ -5,11 +5,14 @@ namespace GrevUltraVNC.Contracts;
 
 public static class AgentProtocol
 {
+    public const int ProtocolVersion = 2;
     public const int DefaultPort = 47820;
     public const string PingPath = "/api/v1/ping";
     public const string StatusPath = "/api/v1/status";
     public const string ProcessesPath = "/api/v1/processes";
     public const string ServicesPath = "/api/v1/services";
+    public const string ProcessActionPath = "/api/v1/process/action";
+    public const string ServiceActionPath = "/api/v1/service/action";
     public const string TimestampHeader = "X-Grev-Timestamp";
     public const string NonceHeader = "X-Grev-Nonce";
     public const string SignatureHeader = "X-Grev-Signature";
