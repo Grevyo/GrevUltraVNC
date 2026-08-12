@@ -40,23 +40,15 @@ public sealed class UltraVncSessionService
         return process;
     }
 
-    public Process OpenVirtualDisplay(Machine machine, AppSettings settings)
+    public async Task<Process> OpenVirtualDisplayAsync(
+        Machine machine,
+        AppSettings settings,
+        CancellationToken cancellationToken = default)
     {
-        if (_virtualSessions.TryGetValue(machine.Id, out var existing))
+        if (TryGetVirtualSession(machine.Id, out var existing))
         {
-            try
-            {
-                if (!existing.HasExited)
-                {
-                    FocusViewer(existing);
-                    return existing;
-                }
-            }
-            catch
-            {
-            }
-
-            _virtualSessions.Remove(machine.Id);
+            FocusViewer(existing!);
+            return existing!;
         }
 
         if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
@@ -66,11 +58,147 @@ public sealed class UltraVncSessionService
         var width = Math.Clamp(bounds?.Width ?? 1920, 800, 7680);
         var height = Math.Clamp(bounds?.Height ?? 1080, 600, 4320);
         var configPath = CreateVirtualDisplayConfig(machine.Id, width, height);
-
         var process = StartViewer(machine, settings, configPath);
         _virtualSessions[machine.Id] = process;
-        return process;
+
+        try
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(12);
+            while (DateTime.UtcNow < deadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (process.HasExited)
+                    throw new InvalidOperationException(
+                        "UltraVNC closed the Screen 2 viewer while creating the virtual display. " +
+                        "The target must run UltraVNC Server as a service/administrator, use DDengine capture, " +
+                        "and support UltraVNC virtual displays (1.3.0 or newer).");
+
+                var handle = FindPrimaryViewerWindow(process);
+                if (handle != IntPtr.Zero)
+                {
+                    FocusViewer(process);
+                    return process;
+                }
+
+                await Task.Delay(250, cancellationToken);
+            }
+
+            throw new InvalidOperationException(
+                "Screen 2 did not create a persistent UltraVNC viewer window. " +
+                "The remote display may flicker once while Windows adds the virtual monitor, but the second viewer should remain open.");
+        }
+        catch
+        {
+            _virtualSessions.Remove(machine.Id);
+            TryCloseProcess(process);
+            throw;
+        }
     }
+
+    public bool HasActiveSession(Guid machineId) => TryGetSession(machineId, out _);
+    public bool HasVirtualSession(Guid machineId) => TryGetVirtualSession(machineId, out _);
+
+    public bool TryGetViewerWindowHandle(Guid machineId, out IntPtr handle)
+    {
+        handle = IntPtr.Zero;
+        if (!TryGetSession(machineId, out var process) || process is null)
+            return false;
+
+        handle = FindPrimaryViewerWindow(process);
+        return handle != IntPtr.Zero;
+    }
+
+    public bool TryGetVirtualViewerWindowHandle(Guid machineId, out IntPtr handle)
+    {
+        handle = IntPtr.Zero;
+        if (!TryGetVirtualSession(machineId, out var process) || process is null)
+            return false;
+
+        handle = FindPrimaryViewerWindow(process);
+        return handle != IntPtr.Zero;
+    }
+
+    public void BringViewerToFront(Guid machineId) => FocusViewer(GetSession(machineId));
+    public void BringVirtualViewerToFront(Guid machineId) => FocusViewer(GetVirtualSession(machineId));
+
+    public void ToggleFullScreen(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        FocusViewer(process);
+        SendChord(VK_CONTROL, VK_MENU, VK_F12);
+    }
+
+    public void OpenFileTransfer(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        FocusViewer(process);
+        SendChord(VK_CONTROL, VK_MENU, VK_F7);
+    }
+
+    public void RequestScreenRefresh(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        SendRemoteChordWithScrollLock(process, VK_SNAPSHOT);
+    }
+
+    public void CloseVirtualDisplay(Guid machineId)
+    {
+        if (!TryGetVirtualSession(machineId, out var process) || process is null)
+            return;
+
+        _virtualSessions.Remove(machineId);
+        TryCloseProcess(process);
+    }
+
+    public void Disconnect(Guid machineId)
+    {
+        if (TryGetVirtualSession(machineId, out var virtualProcess) && virtualProcess is not null)
+        {
+            _virtualSessions.Remove(machineId);
+            TryCloseProcess(virtualProcess);
+        }
+
+        if (!TryGetSession(machineId, out var process) || process is null)
+            return;
+
+        _sessions.Remove(machineId);
+        TryCloseProcess(process);
+    }
+
+    public void SendCtrlAltDelete(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        FocusViewer(process);
+        SendChord(VK_CONTROL, VK_MENU, VK_F4);
+    }
+
+    public void SendWindowsKey(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        SendRemoteChordWithScrollLock(process, VK_CONTROL, VK_ESCAPE);
+    }
+
+    public void SendCtrlShiftEscape(Guid machineId)
+    {
+        var process = GetSession(machineId);
+        SendRemoteChordWithScrollLock(process, VK_CONTROL, VK_SHIFT, VK_ESCAPE);
+    }
+
+    public void SendAltTab(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_MENU, VK_TAB);
+
+    public void SendAltF4(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_MENU, VK_F4);
+
+    public void SendWinR(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_R);
+
+    public void SendWinE(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_E);
+
+    public void SendWinL(Guid machineId) =>
+        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_L);
 
     private Process StartViewer(Machine machine, AppSettings settings, string? configPath)
     {
@@ -113,8 +241,12 @@ public sealed class UltraVncSessionService
     {
         var directory = Path.Combine(Path.GetTempPath(), "GrevUltraVNC", "VirtualDisplays");
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, $"{machineId:N}.vnc");
+        var path = Path.Combine(directory, $"{machineId:N}-screen2.vnc");
 
+        // UltraVNC virtual-display mode:
+        // ChangeServerRes + requested resolution + extendDisplay keeps the host's physical
+        // display enabled and adds a virtual monitor for this viewer. showExtend asks this
+        // viewer to show the newly-created extended display rather than Screen 1.
         var content = $"""
                       [options]
                       shared=1
@@ -122,6 +254,8 @@ public sealed class UltraVncSessionService
                       showtoolbar=1
                       fullscreen=0
                       AutoScaling=1
+                      directx=0
+                      allowMonitorSpanning=0
                       ChangeServerRes=1
                       extendDisplay=1
                       showExtend=1
@@ -135,125 +269,69 @@ public sealed class UltraVncSessionService
         return path;
     }
 
-    public bool HasActiveSession(Guid machineId) => TryGetSession(machineId, out _);
-
-    public bool TryGetViewerWindowHandle(Guid machineId, out IntPtr handle)
-    {
-        handle = IntPtr.Zero;
-        if (!TryGetSession(machineId, out var process) || process is null)
-            return false;
-
-        handle = FindPrimaryViewerWindow(process);
-        return handle != IntPtr.Zero;
-    }
-
-    public void BringViewerToFront(Guid machineId) => FocusViewer(GetSession(machineId));
-
-    public void ToggleFullScreen(Guid machineId)
-    {
-        var process = GetSession(machineId);
-        FocusViewer(process);
-        SendChord(VK_CONTROL, VK_MENU, VK_F12);
-    }
-
-    public void OpenFileTransfer(Guid machineId)
-    {
-        var process = GetSession(machineId);
-        FocusViewer(process);
-        SendChord(VK_CONTROL, VK_MENU, VK_F7);
-    }
-
-    public void RequestScreenRefresh(Guid machineId)
-    {
-        var process = GetSession(machineId);
-        SendRemoteChordWithScrollLock(process, VK_SNAPSHOT);
-    }
-
-    public void Disconnect(Guid machineId)
-    {
-        if (!TryGetSession(machineId, out var process) || process is null)
-            return;
-
-        try
-        {
-            var handle = FindPrimaryViewerWindow(process);
-            if (handle == IntPtr.Zero || !PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero))
-            {
-                if (!process.CloseMainWindow())
-                    process.Kill(entireProcessTree: true);
-            }
-        }
-        catch
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        finally
-        {
-            _sessions.Remove(machineId);
-        }
-    }
-
-    public void SendCtrlAltDelete(Guid machineId)
-    {
-        var process = GetSession(machineId);
-        FocusViewer(process);
-        SendChord(VK_CONTROL, VK_MENU, VK_F4);
-    }
-
-    public void SendWindowsKey(Guid machineId)
-    {
-        var process = GetSession(machineId);
-        SendRemoteChordWithScrollLock(process, VK_CONTROL, VK_ESCAPE);
-    }
-
-    public void SendCtrlShiftEscape(Guid machineId)
-    {
-        var process = GetSession(machineId);
-        SendRemoteChordWithScrollLock(process, VK_CONTROL, VK_SHIFT, VK_ESCAPE);
-    }
-
-    public void SendAltTab(Guid machineId) =>
-        SendRemoteChordWithScrollLock(GetSession(machineId), VK_MENU, VK_TAB);
-
-    public void SendAltF4(Guid machineId) =>
-        SendRemoteChordWithScrollLock(GetSession(machineId), VK_MENU, VK_F4);
-
-    public void SendWinR(Guid machineId) =>
-        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_R);
-
-    public void SendWinE(Guid machineId) =>
-        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_E);
-
-    public void SendWinL(Guid machineId) =>
-        SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_L);
-
     private Process GetSession(Guid machineId) =>
         TryGetSession(machineId, out var process)
             ? process!
-            : throw new InvalidOperationException("Open a VNC session to this machine first.");
+            : throw new InvalidOperationException("Open Screen 1 to this machine first.");
 
-    private bool TryGetSession(Guid machineId, out Process? process)
+    private Process GetVirtualSession(Guid machineId) =>
+        TryGetVirtualSession(machineId, out var process)
+            ? process!
+            : throw new InvalidOperationException("Screen 2 is not open for this machine.");
+
+    private bool TryGetSession(Guid machineId, out Process? process) =>
+        TryGetTrackedSession(_sessions, machineId, out process);
+
+    private bool TryGetVirtualSession(Guid machineId, out Process? process) =>
+        TryGetTrackedSession(_virtualSessions, machineId, out process);
+
+    private static bool TryGetTrackedSession(Dictionary<Guid, Process> sessions, Guid machineId, out Process? process)
     {
         process = null;
-        if (!_sessions.TryGetValue(machineId, out var candidate)) return false;
+        if (!sessions.TryGetValue(machineId, out var candidate)) return false;
 
         try
         {
             if (candidate.HasExited)
             {
-                _sessions.Remove(machineId);
+                sessions.Remove(machineId);
                 return false;
             }
         }
         catch
         {
-            _sessions.Remove(machineId);
+            sessions.Remove(machineId);
             return false;
         }
 
         process = candidate;
         return true;
+    }
+
+    private static void TryCloseProcess(Process process)
+    {
+        try
+        {
+            if (process.HasExited) return;
+
+            var handle = FindPrimaryViewerWindow(process);
+            if (handle != IntPtr.Zero && PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero))
+                return;
+
+            if (!process.CloseMainWindow())
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+            }
+        }
     }
 
     private static void SendRemoteChordWithScrollLock(Process process, params byte[] keys)
