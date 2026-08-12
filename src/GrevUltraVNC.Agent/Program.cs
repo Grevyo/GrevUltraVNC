@@ -25,6 +25,7 @@ builder.Services.AddSingleton<SystemTelemetryService>();
 builder.Services.AddSingleton<SystemInventoryService>();
 builder.Services.AddSingleton<InteractiveSessionService>();
 builder.Services.AddSingleton<CommandExecutionService>();
+builder.Services.AddSingleton<FileManagementService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SystemTelemetryService>());
 
 var app = builder.Build();
@@ -108,6 +109,28 @@ app.MapPost(AgentProtocol.CommandPath, async (
     catch (FormatException)
     {
         return Results.BadRequest(new { error = "Encrypted Grev Agent command payload was malformed." });
+    }
+});
+
+app.MapPost(AgentProtocol.FilesPath, async (
+    AgentEncryptedEnvelope envelope,
+    FileManagementService files,
+    AgentConfiguration configuration,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var request = AgentPayloadCrypto.Decrypt<AgentFileRequest>(configuration.SharedKey, envelope);
+        var response = await files.ExecuteAsync(request, cancellationToken);
+        return Results.Json(AgentPayloadCrypto.Encrypt(configuration.SharedKey, response));
+    }
+    catch (CryptographicException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev Agent file payload was invalid." });
+    }
+    catch (FormatException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev Agent file payload was malformed." });
     }
 });
 
