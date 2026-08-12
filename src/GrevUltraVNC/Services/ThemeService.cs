@@ -8,45 +8,47 @@ public static class ThemeService
     public const string Dark = "Dark";
     public const string Light = "Light";
 
+    // Tuned against the supplied Grev logo: electric cyan/blue is the primary
+    // identity, with a deeper blue-violet used as the secondary accent.
     private static readonly IReadOnlyDictionary<string, string> DarkPalette = new Dictionary<string, string>
     {
-        ["WindowBrush"] = "#090A10",
-        ["PanelBrush"] = "#12131C",
-        ["PanelHoverBrush"] = "#1B1C2B",
-        ["SubtlePanelBrush"] = "#0D0E16",
-        ["BorderBrush"] = "#2C2E40",
-        ["TextBrush"] = "#F5F4FB",
-        ["MutedTextBrush"] = "#AAA9BC",
-        ["FaintTextBrush"] = "#6F7085",
-        ["AccentBrush"] = "#6678E8",
-        ["Accent2Brush"] = "#945EFF",
-        ["AccentSoftBrush"] = "#251E3F",
-        ["DangerBrush"] = "#FF6B7C",
+        ["WindowBrush"] = "#060912",
+        ["PanelBrush"] = "#0D1220",
+        ["PanelHoverBrush"] = "#121B2D",
+        ["SubtlePanelBrush"] = "#080D18",
+        ["BorderBrush"] = "#24324A",
+        ["TextBrush"] = "#F2F7FF",
+        ["MutedTextBrush"] = "#A3B2C8",
+        ["FaintTextBrush"] = "#60708B",
+        ["AccentBrush"] = "#32CFF0",
+        ["Accent2Brush"] = "#5155D6",
+        ["AccentSoftBrush"] = "#11183B",
+        ["DangerBrush"] = "#FF6178",
         ["PrimaryButtonTextBrush"] = "#FFFFFF",
-        ["SecondaryButtonBrush"] = "#1A1C29",
-        ["SecondaryButtonTextBrush"] = "#F4F3FA",
-        ["DangerButtonBrush"] = "#3A1E2A",
-        ["DangerButtonTextBrush"] = "#FFA5B0",
-        ["TextBoxBrush"] = "#0E0F18"
+        ["SecondaryButtonBrush"] = "#111827",
+        ["SecondaryButtonTextBrush"] = "#F0F5FF",
+        ["DangerButtonBrush"] = "#321722",
+        ["DangerButtonTextBrush"] = "#FFA0AE",
+        ["TextBoxBrush"] = "#080E19"
     };
 
     private static readonly IReadOnlyDictionary<string, string> LightPalette = new Dictionary<string, string>
     {
-        ["WindowBrush"] = "#F5F4FA",
+        ["WindowBrush"] = "#F3F7FC",
         ["PanelBrush"] = "#FFFFFF",
-        ["PanelHoverBrush"] = "#F0EDFA",
-        ["SubtlePanelBrush"] = "#F0EEF7",
-        ["BorderBrush"] = "#D8D4E5",
-        ["TextBrush"] = "#1C1B25",
-        ["MutedTextBrush"] = "#6F6B7C",
-        ["FaintTextBrush"] = "#9590A3",
-        ["AccentBrush"] = "#5369D4",
-        ["Accent2Brush"] = "#7B4FD0",
-        ["AccentSoftBrush"] = "#ECE6FA",
+        ["PanelHoverBrush"] = "#EAF4FC",
+        ["SubtlePanelBrush"] = "#EEF4FA",
+        ["BorderBrush"] = "#CBD8E7",
+        ["TextBrush"] = "#111827",
+        ["MutedTextBrush"] = "#5D6D82",
+        ["FaintTextBrush"] = "#8796A9",
+        ["AccentBrush"] = "#168CC7",
+        ["Accent2Brush"] = "#5054C7",
+        ["AccentSoftBrush"] = "#E7EDFF",
         ["DangerBrush"] = "#D84C61",
         ["PrimaryButtonTextBrush"] = "#FFFFFF",
-        ["SecondaryButtonBrush"] = "#EAE7F2",
-        ["SecondaryButtonTextBrush"] = "#1C1B25",
+        ["SecondaryButtonBrush"] = "#E8EFF7",
+        ["SecondaryButtonTextBrush"] = "#172033",
         ["DangerButtonBrush"] = "#FDE8ED",
         ["DangerButtonTextBrush"] = "#B4233A",
         ["TextBoxBrush"] = "#FFFFFF"
@@ -59,11 +61,42 @@ public static class ThemeService
     {
         if (Application.Current is null) return;
 
-        var palette = Normalize(theme) == Light ? LightPalette : DarkPalette;
+        var isLight = Normalize(theme) == Light;
+        var palette = isLight ? LightPalette : DarkPalette;
         foreach (var (key, value) in palette)
         {
             var color = (Color)ColorConverter.ConvertFromString(value)!;
             Application.Current.Resources[key] = new SolidColorBrush(color);
+        }
+
+        ApplyBrandGradient(isLight);
+    }
+
+    private static void ApplyBrandGradient(bool isLight)
+    {
+        if (Application.Current?.Resources["BrandGradientBrush"] is not LinearGradientBrush gradient)
+            return;
+
+        // StaticResource users hold this brush instance, so mutate it in place when
+        // possible. Application resources are normally mutable, but clone defensively.
+        if (gradient.IsFrozen)
+        {
+            gradient = gradient.Clone();
+            Application.Current.Resources["BrandGradientBrush"] = gradient;
+        }
+
+        gradient.GradientStops.Clear();
+        if (isLight)
+        {
+            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#258FCB")!, 0));
+            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#356FDC")!, 0.55));
+            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#514FC4")!, 1));
+        }
+        else
+        {
+            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#2D8AD7")!, 0));
+            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#3269E2")!, 0.55));
+            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#5147C8")!, 1));
         }
     }
 }
