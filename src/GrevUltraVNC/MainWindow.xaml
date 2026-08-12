@@ -11,6 +11,10 @@
     <Window.Resources>
         <conv:MachineStatusBrushConverter x:Key="StatusBrushConverter" />
         <conv:AgentStateBrushConverter x:Key="AgentStateBrushConverter" />
+        <Style x:Key="HeaderAction" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="13,8" />
+            <Setter Property="MinHeight" Value="38" />
+        </Style>
     </Window.Resources>
 
     <Grid Background="{DynamicResource WindowBrush}">
@@ -21,7 +25,9 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="30,22">
+        <!-- Product header -->
+        <Border Grid.Row="0" Background="{DynamicResource SubtlePanelBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="26,18">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -29,47 +35,60 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Border Width="70" Height="70" CornerRadius="17" Background="#030509" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Border Width="58" Height="58" CornerRadius="15" Background="#030509"
+                        BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
                     <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
                 </Border>
 
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Grev" FontSize="31" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
-                        <TextBlock Text="UltraVNC" FontSize="31" FontWeight="Bold" Margin="1,0,0,0" />
+                        <TextBlock Text="Grev" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="UltraVNC" FontSize="28" FontWeight="Bold" Margin="1,0,0,0" />
                     </StackPanel>
-                    <TextBlock Text="LAN + Grev Connect remote management" Foreground="{DynamicResource MutedTextBrush}" FontSize="13" Margin="1,3,0,0" />
+                    <TextBlock Text="One place for local and Grev Connect remote control"
+                               Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="1,2,0,0" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource SecondaryButton}" Content="↻ Refresh" Click="Refresh_Click" Margin="0,0,10,0" />
-                    <Button Style="{StaticResource SecondaryButton}" Content="⚙ Settings" Click="Settings_Click" Margin="0,0,10,0" />
-                    <Button Style="{StaticResource PrimaryButton}" Content="＋ Add PC" Click="AddMachine_Click" />
+                    <Button Style="{StaticResource HeaderAction}" Content="↻  Refresh" Click="Refresh_Click" Margin="0,0,8,0" />
+                    <Button Style="{StaticResource HeaderAction}" Content="⚙  Settings" Click="Settings_Click" Margin="0,0,8,0" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="＋  Add PC" Click="AddMachine_Click" Padding="15,8" MinHeight="38" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="30,22,30,18">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock Text="YOUR MACHINES" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Margin="1,0,0,7" />
-                <Grid MaxWidth="620" HorizontalAlignment="Left">
-                    <TextBox x:Name="SearchBox" Width="420" HorizontalAlignment="Left" TextChanged="SearchBox_TextChanged"
-                             ToolTip="Search name, Grev Connect ID, IP, group or notes" Padding="34,10,10,10" />
-                    <TextBlock Text="⌕" FontSize="19" Foreground="{DynamicResource MutedTextBrush}" Margin="10,0,0,0"
+        <!-- Machine toolbar -->
+        <Border Grid.Row="1" Margin="26,18,26,16" Background="{DynamicResource PanelBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="13" Padding="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel VerticalAlignment="Center" Margin="1,0,20,0">
+                    <TextBlock Text="MACHINES" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold" />
+                    <TextBlock x:Name="FilterSummaryText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <Grid Grid.Column="1" MaxWidth="520" HorizontalAlignment="Left">
+                    <TextBox x:Name="SearchBox" Width="460" HorizontalAlignment="Left" TextChanged="SearchBox_TextChanged"
+                             ToolTip="Search name, Grev Connect ID, IP, group or notes" Padding="34,9,10,9" />
+                    <TextBlock Text="⌕" FontSize="18" Foreground="{DynamicResource FaintTextBrush}" Margin="10,0,0,0"
                                HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
                 </Grid>
-            </StackPanel>
-            <StackPanel Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Right">
-                <CheckBox x:Name="FavoritesOnlyCheck" Content="★ Favourites only" Checked="FavoritesOnlyCheck_Changed" Unchecked="FavoritesOnlyCheck_Changed" />
-                <TextBlock x:Name="FilterSummaryText" Foreground="{DynamicResource FaintTextBrush}" HorizontalAlignment="Right" FontSize="11" Margin="0,6,0,0" />
-            </StackPanel>
-        </Grid>
 
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}" Margin="30,0,14,0">
+                <Border Grid.Column="2" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1" CornerRadius="9" Padding="11,8" VerticalAlignment="Center">
+                    <CheckBox x:Name="FavoritesOnlyCheck" Content="★  Favourites only"
+                              Checked="FavoritesOnlyCheck_Changed" Unchecked="FavoritesOnlyCheck_Changed" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Machine cards -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}" Margin="26,0,12,0">
             <ItemsControl ItemsSource="{Binding MachinesView}" Background="{DynamicResource WindowBrush}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -78,59 +97,92 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Width="350" Height="276" Margin="0,0,16,16" Padding="18"
+                        <Border Width="360" Height="258" Margin="0,0,14,14" Padding="0"
                                 Style="{StaticResource MachineCardStyle}" Cursor="Hand"
                                 MouseLeftButtonDown="MachineCard_MouseLeftButtonDown"
                                 MouseRightButtonUp="MachineCard_MouseRightButtonUp">
                             <Grid>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="3" />
                                     <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
-                                <Grid>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button Style="{StaticResource IconButton}" Content="{Binding FavoriteGlyph}" Click="FavoriteMachine_Click"
-                                                ToolTip="Toggle favourite" Margin="0,0,10,0" />
-                                        <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="7" Padding="8,4" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Group}" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" />
+                                <Border Background="{StaticResource BrandGradientBrush}" CornerRadius="13,13,0,0" />
+
+                                <Grid Grid.Row="1" Margin="16,13,16,14">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Style="{StaticResource IconButton}" Content="{Binding FavoriteGlyph}"
+                                                    Click="FavoriteMachine_Click" ToolTip="Toggle favourite"
+                                                    Padding="8,5" MinWidth="34" Margin="0,0,8,0" />
+                                            <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="7" Padding="8,4" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Group}" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="SemiBold" />
+                                            </Border>
+                                        </StackPanel>
+                                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                Background="{DynamicResource SubtlePanelBrush}" CornerRadius="7" Padding="8,4">
+                                            <TextBlock Text="{Binding StatusText}"
+                                                       Foreground="{Binding Status, Converter={StaticResource StatusBrushConverter}}"
+                                                       FontWeight="SemiBold" FontSize="9" />
+                                        </Border>
+                                    </Grid>
+
+                                    <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="2,8,2,8">
+                                        <TextBlock Text="{Binding Name}" FontSize="22" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding ConnectDisplayText}" Foreground="{DynamicResource AccentBrush}"
+                                                   FontSize="10" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+
+                                        <Grid Margin="0,10,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}"
+                                                       FontSize="11" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1" Text="{Binding LastCheckedText}" Foreground="{DynamicResource FaintTextBrush}"
+                                                       FontSize="9" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1" CornerRadius="9" Padding="10,8" Margin="0,10,0,0"
+                                                ToolTip="{Binding AgentMessage}">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Text="{Binding AgentStatusText}"
+                                                           Foreground="{Binding AgentState, Converter={StaticResource AgentStateBrushConverter}}"
+                                                           FontSize="9" FontWeight="SemiBold" />
+                                                <TextBlock Grid.Row="1" Text="{Binding AgentSummaryText}"
+                                                           Foreground="{DynamicResource MutedTextBrush}" FontSize="10"
+                                                           Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                            </Grid>
                                         </Border>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                               Foreground="{Binding Status, Converter={StaticResource StatusBrushConverter}}"
-                                               FontWeight="SemiBold" FontSize="11" />
-                                </Grid>
 
-                                <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="2,8,2,8">
-                                    <TextBlock Text="{Binding Name}" FontSize="23" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding ConnectDisplayText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,10,0,0" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding LastCheckedText}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" Margin="0,3,0,0" />
-
-                                    <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                            CornerRadius="8" Padding="9,7" Margin="0,10,0,0" ToolTip="{Binding AgentMessage}">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding AgentStatusText}"
-                                                       Foreground="{Binding AgentState, Converter={StaticResource AgentStateBrushConverter}}"
-                                                       FontSize="10" FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding AgentSummaryText}" Foreground="{DynamicResource MutedTextBrush}"
-                                                       FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-
-                                <Grid Grid.Row="2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Button Style="{StaticResource PrimaryButton}" Content="Connect" Click="ConnectMachine_Click" Margin="0,0,6,0" />
-                                    <Button Grid.Column="1" Style="{StaticResource CardActionButton}" Content="Manage" Click="ManageMachine_Click" Margin="0,0,6,0" />
-                                    <Button Grid.Column="2" Style="{StaticResource CardActionButton}" Content="Edit" Click="EditMachine_Click" Margin="0,0,6,0" />
-                                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="⋯" Click="MoreMachine_Click" ToolTip="Machine actions" />
+                                    <Grid Grid.Row="2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Style="{StaticResource PrimaryButton}" Content="Connect" Click="ConnectMachine_Click"
+                                                Margin="0,0,6,0" Padding="13,7" />
+                                        <Button Grid.Column="1" Style="{StaticResource CardActionButton}" Content="Manage"
+                                                Click="ManageMachine_Click" Margin="0,0,6,0" />
+                                        <Button Grid.Column="2" Style="{StaticResource CardActionButton}" Content="Edit"
+                                                Click="EditMachine_Click" Margin="0,0,6,0" />
+                                        <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="⋯"
+                                                Click="MoreMachine_Click" ToolTip="Machine actions" Padding="8,5" MinWidth="34" />
+                                    </Grid>
                                 </Grid>
                             </Grid>
                         </Border>
@@ -139,12 +191,13 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <Border Grid.Row="3" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="30,13">
+        <Border Grid.Row="3" Background="{DynamicResource SubtlePanelBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="26,10">
             <Grid>
-                <TextBlock x:Name="FooterStatus" Foreground="{DynamicResource MutedTextBrush}" Text="Ready" />
+                <TextBlock x:Name="FooterStatus" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" Text="Ready" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <TextBlock Text="Double-click = connect" Foreground="{DynamicResource FaintTextBrush}" Margin="0,0,18,0" />
-                    <TextBlock Text="LAN / Grev Connect" Foreground="{DynamicResource FaintTextBrush}" />
+                    <TextBlock Text="Double-click to connect" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,0,18,0" />
+                    <TextBlock Text="LAN  •  Grev Connect" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" />
                 </StackPanel>
             </Grid>
         </Border>
