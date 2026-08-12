@@ -38,12 +38,15 @@ public sealed class GrevAgentClient : IDisposable
 
     public async Task<GrevAgentProbeResult> ProbeAsync(Machine machine, CancellationToken cancellationToken = default)
     {
-        var root = Root(machine);
         using var timeout = CreateTimeout(cancellationToken, TimeSpan.FromSeconds(3));
         var token = timeout.Token;
 
         try
         {
+            if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
+                return new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: "No LAN or Grev Connect route is currently resolved for this machine.");
+
+            var root = Root(machine);
             using var ping = await _httpClient.GetAsync(root + AgentProtocol.PingPath, token);
             if (!ping.IsSuccessStatusCode)
                 return new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: $"Agent ping returned HTTP {(int)ping.StatusCode}.");
