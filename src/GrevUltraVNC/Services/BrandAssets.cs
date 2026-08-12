@@ -9,7 +9,7 @@ namespace GrevUltraVNC.Services;
 
 public static class BrandAssets
 {
-    private static readonly Lazy<byte[]?> LogoBytesLazy = new(LoadLogoBytes);
+    private static readonly Lazy<byte[]?> LogoBytesLazy = new(LoadFirstValidLogoBytes);
     private static readonly Lazy<ImageSource?> LogoLazy = new(CreateLogo);
 
     public static ImageSource? Logo => LogoLazy.Value;
@@ -53,11 +53,11 @@ public static class BrandAssets
 
     private static ImageSource? CreateLogo()
     {
+        var bytes = LogoBytesLazy.Value;
+        if (bytes is null || bytes.Length == 0) return null;
+
         try
         {
-            var bytes = LogoBytesLazy.Value;
-            if (bytes is null || bytes.Length == 0) return null;
-
             using var stream = new MemoryStream(bytes, writable: false);
             var image = new BitmapImage();
             image.BeginInit();
@@ -74,31 +74,48 @@ public static class BrandAssets
         }
     }
 
-    private static byte[]? LoadLogoBytes()
+    private static byte[]? LoadFirstValidLogoBytes()
     {
-        var candidates = new[]
+        foreach (var path in GetLogoCandidates())
         {
-            Path.Combine(AppContext.BaseDirectory, "Assets", "GrevLogo256.jpg.b64"),
-            Path.Combine(AppContext.BaseDirectory, "GrevLogo256.jpg.b64"),
-            Path.Combine(Environment.CurrentDirectory, "Assets", "GrevLogo256.jpg.b64"),
-            Path.Combine(Environment.CurrentDirectory, "src", "GrevUltraVNC", "Assets", "GrevLogo256.jpg.b64"),
-            Path.Combine(AppContext.BaseDirectory, "Assets", "GrevLogo.jpg.b64"),
-            Path.Combine(AppContext.BaseDirectory, "GrevLogo.jpg.b64"),
-            Path.Combine(Environment.CurrentDirectory, "Assets", "GrevLogo.jpg.b64"),
-            Path.Combine(Environment.CurrentDirectory, "src", "GrevUltraVNC", "Assets", "GrevLogo.jpg.b64")
-        };
+            if (!File.Exists(path)) continue;
 
-        var path = candidates.FirstOrDefault(File.Exists);
-        if (path is null) return null;
+            try
+            {
+                var bytes = Convert.FromBase64String(File.ReadAllText(path).Trim());
+                if (bytes.Length == 0) continue;
 
-        try
-        {
-            return Convert.FromBase64String(File.ReadAllText(path).Trim());
+                // Validate the decoded image before accepting it. This means a bad/new
+                // branding asset can never blank every logo in the application; the
+                // loader simply falls through to the known-good legacy asset.
+                using var stream = new MemoryStream(bytes, writable: false);
+                using var image = System.Drawing.Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: true);
+                if (image.Width <= 0 || image.Height <= 0) continue;
+
+                return bytes;
+            }
+            catch
+            {
+                // Try the next candidate.
+            }
         }
-        catch
-        {
-            return null;
-        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetLogoCandidates()
+    {
+        // Prefer the higher-resolution asset, but always keep the original supplied
+        // logo as a fallback. Both are copied beside the built application.
+        yield return Path.Combine(AppContext.BaseDirectory, "Assets", "GrevLogo256.jpg.b64");
+        yield return Path.Combine(AppContext.BaseDirectory, "GrevLogo256.jpg.b64");
+        yield return Path.Combine(Environment.CurrentDirectory, "Assets", "GrevLogo256.jpg.b64");
+        yield return Path.Combine(Environment.CurrentDirectory, "src", "GrevUltraVNC", "Assets", "GrevLogo256.jpg.b64");
+
+        yield return Path.Combine(AppContext.BaseDirectory, "Assets", "GrevLogo.jpg.b64");
+        yield return Path.Combine(AppContext.BaseDirectory, "GrevLogo.jpg.b64");
+        yield return Path.Combine(Environment.CurrentDirectory, "Assets", "GrevLogo.jpg.b64");
+        yield return Path.Combine(Environment.CurrentDirectory, "src", "GrevUltraVNC", "Assets", "GrevLogo.jpg.b64");
     }
 
     [DllImport("user32.dll")]
