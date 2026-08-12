@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using GrevUltraVNC.Agent;
 using GrevUltraVNC.Contracts;
 using Microsoft.Extensions.Hosting.WindowsServices;
@@ -88,7 +89,26 @@ app.MapPost(AgentProtocol.ServiceActionPath, (AgentServiceActionRequest request,
 app.MapPost(AgentProtocol.QuickActionPath, (AgentQuickActionRequest request, InteractiveSessionService interactiveSession) =>
     Results.Json(interactiveSession.RunQuickAction(request)));
 
-app.MapPost(AgentProtocol.CommandPath, async (AgentCommandRequest request, CommandExecutionService commands, CancellationToken cancellationToken) =>
-    Results.Json(await commands.ExecuteAsync(request, cancellationToken)));
+app.MapPost(AgentProtocol.CommandPath, async (
+    AgentEncryptedEnvelope envelope,
+    CommandExecutionService commands,
+    AgentConfiguration configuration,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var request = AgentPayloadCrypto.Decrypt<AgentCommandRequest>(configuration.SharedKey, envelope);
+        var response = await commands.ExecuteAsync(request, cancellationToken);
+        return Results.Json(AgentPayloadCrypto.Encrypt(configuration.SharedKey, response));
+    }
+    catch (CryptographicException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev Agent command payload was invalid." });
+    }
+    catch (FormatException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev Agent command payload was malformed." });
+    }
+});
 
 await app.RunAsync();
