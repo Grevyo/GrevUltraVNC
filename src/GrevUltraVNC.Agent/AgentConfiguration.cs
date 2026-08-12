@@ -10,6 +10,7 @@ public sealed class AgentConfiguration
     public int Port { get; set; } = AgentProtocol.DefaultPort;
     public int UltraVncPort { get; set; } = 5900;
     public string SharedKey { get; set; } = AgentProtocol.CreateSharedKey();
+    public string ConnectId { get; set; } = GrevConnectId.CreateDefault(Environment.MachineName);
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 
     public static string DataDirectory => Path.Combine(
@@ -32,7 +33,20 @@ public sealed class AgentConfiguration
                     existing.Port is >= 1 and <= 65535 &&
                     existing.UltraVncPort is >= 1 and <= 65535 &&
                     AgentProtocol.IsValidSharedKey(existing.SharedKey))
+                {
+                    if (!GrevConnectId.TryNormalize(existing.ConnectId, out var normalized, out _))
+                    {
+                        existing.ConnectId = GrevConnectId.CreateDefault(Environment.MachineName);
+                        Save(existing);
+                    }
+                    else if (!string.Equals(existing.ConnectId, normalized, StringComparison.Ordinal))
+                    {
+                        existing.ConnectId = normalized;
+                        Save(existing);
+                    }
+
                     return existing;
+                }
             }
             catch
             {
