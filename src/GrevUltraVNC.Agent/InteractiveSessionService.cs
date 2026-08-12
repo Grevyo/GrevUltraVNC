@@ -24,8 +24,8 @@ public sealed class InteractiveSessionService
             "restart-explorer" => RestartExplorer(),
             "lock" => LockWorkstation(),
             "sign-out" or "logoff" => SignOutInteractiveUser(),
-            "sleep" => SuspendSystem(hibernate: false),
-            "hibernate" => SuspendSystem(hibernate: true),
+            "sleep" => ScheduleSuspend(hibernate: false),
+            "hibernate" => ScheduleSuspend(hibernate: true),
             _ => new AgentActionResponse(false, $"Unsupported quick action: {request.Action}")
         };
     }
@@ -116,24 +116,39 @@ public sealed class InteractiveSessionService
         }
     }
 
-    private static AgentActionResponse SuspendSystem(bool hibernate)
+    private static AgentActionResponse ScheduleSuspend(bool hibernate)
     {
         var actionName = hibernate ? "hibernate" : "sleep";
 
         try
         {
+            // Validate the privilege before acknowledging the request. The actual
+            // power transition happens shortly afterwards so ASP.NET can flush the
+            // authenticated success response back to GrevUltraVNC first.
             EnableShutdownPrivilege();
 
-            if (!SetSuspendState(hibernate, false, false))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Windows refused to {actionName} the machine.");
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(1500);
+                try
+                {
+                    EnableShutdownPrivilege();
+                    SetSuspendState(hibernate, false, false);
+                }
+                catch
+                {
+                    // The request has already been acknowledged to the controller.
+                    // A future Agent event log will surface delayed power failures.
+                }
+            });
 
             return new AgentActionResponse(true, hibernate
-                ? "Hibernate request accepted by Windows."
-                : "Sleep request accepted by Windows.");
+                ? "Hibernate scheduled. The machine will hibernate momentarily."
+                : "Sleep scheduled. The machine will sleep momentarily.");
         }
         catch (Exception ex)
         {
-            return new AgentActionResponse(false, $"Could not {actionName} the machine: {ex.Message}");
+            return new AgentActionResponse(false, $"Could not schedule {actionName}: {ex.Message}");
         }
     }
 
