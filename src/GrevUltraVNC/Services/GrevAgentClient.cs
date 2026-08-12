@@ -12,7 +12,9 @@ namespace GrevUltraVNC.Services;
 public sealed record GrevAgentProbeResult(
     GrevAgentState State,
     AgentStatusResponse? Status = null,
-    string? Message = null);
+    string? Message = null,
+    string? ConnectId = null,
+    int ProtocolVersion = 0);
 
 public sealed class GrevAgentClient : IDisposable
 {
@@ -50,8 +52,26 @@ public sealed class GrevAgentClient : IDisposable
             if (pingBody is null || !string.Equals(pingBody.Product, "GrevUltraVNC Agent", StringComparison.OrdinalIgnoreCase))
                 return new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: "The service on the agent port is not GrevUltraVNC Agent.");
 
+            if (!string.IsNullOrWhiteSpace(machine.ConnectId) &&
+                !string.IsNullOrWhiteSpace(pingBody.ConnectId) &&
+                !GrevConnectId.Equals(machine.ConnectId, pingBody.ConnectId))
+            {
+                return new GrevAgentProbeResult(
+                    GrevAgentState.NotDetected,
+                    Message: $"This route belongs to {pingBody.ConnectId}, not {machine.ConnectId}.",
+                    ConnectId: pingBody.ConnectId,
+                    ProtocolVersion: pingBody.ProtocolVersion);
+            }
+
+            if (string.IsNullOrWhiteSpace(machine.ConnectId) && !string.IsNullOrWhiteSpace(pingBody.ConnectId))
+                machine.ConnectId = pingBody.ConnectId;
+
             if (!_credentials.TryRead(machine.Id, out var sharedKey))
-                return new GrevAgentProbeResult(GrevAgentState.ReadyToPair, Message: "Grev Agent detected. Add its pairing key in Edit Machine.");
+                return new GrevAgentProbeResult(
+                    GrevAgentState.ReadyToPair,
+                    Message: "Grev Agent detected. Add its pairing key in Edit Machine.",
+                    ConnectId: pingBody.ConnectId,
+                    ProtocolVersion: pingBody.ProtocolVersion);
 
             var status = await GetAuthenticatedAsync<AgentStatusResponse>(machine, sharedKey, AgentProtocol.StatusPath, token);
             var message = pingBody.ProtocolVersion < AgentProtocol.ProtocolVersion
@@ -59,8 +79,8 @@ public sealed class GrevAgentClient : IDisposable
                 : null;
 
             return status is null
-                ? new GrevAgentProbeResult(GrevAgentState.Error, Message: "Grev Agent returned an empty status response.")
-                : new GrevAgentProbeResult(GrevAgentState.Connected, status, message);
+                ? new GrevAgentProbeResult(GrevAgentState.Error, Message: "Grev Agent returned an empty status response.", ConnectId: pingBody.ConnectId, ProtocolVersion: pingBody.ProtocolVersion)
+                : new GrevAgentProbeResult(GrevAgentState.Connected, status, message, pingBody.ConnectId, pingBody.ProtocolVersion);
         }
         catch (AgentAuthenticationException)
         {
@@ -108,6 +128,13 @@ public sealed class GrevAgentClient : IDisposable
             machine,
             AgentProtocol.QuickActionPath,
             new AgentQuickActionRequest(action),
+            cancellationToken);
+
+    public Task<AgentIdentityResponse> SetConnectIdAsync(Machine machine, string connectId, CancellationToken cancellationToken = default) =>
+        PostRequiredAuthenticatedAsync<AgentIdentityRequest, AgentIdentityResponse>(
+            machine,
+            AgentProtocol.IdentityPath,
+            new AgentIdentityRequest(connectId),
             cancellationToken);
 
     public async Task<AgentCommandResponse> RunCommandAsync(
@@ -208,7 +235,7 @@ public sealed class GrevAgentClient : IDisposable
             throw new AgentAuthenticationException();
 
         if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new InvalidOperationException("This Grev Agent is too old for remote control actions. Use Update Agent on the target PC.");
+            throw new InvalidOperationException("This Grev Agent is too old for this remote action. Use Update Agent on the target PC.");
 
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {path}.");
@@ -231,7 +258,12 @@ public sealed class GrevAgentClient : IDisposable
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
     }
 
-    private static string Root(Machine machine) => $"http://{machine.IpAddress}:{machine.AgentPort}";
+    private static string Root(Machine machine)
+    {
+        if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
+            throw new InvalidOperationException("No network route is currently resolved for this machine.");
+        return $"http://{machine.ActiveAddress}:{machine.AgentPort}";
+    }
 
     private static CancellationTokenSource CreateTimeout(CancellationToken cancellationToken, TimeSpan timeout)
     {
