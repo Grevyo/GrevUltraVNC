@@ -27,13 +27,13 @@ public sealed class GrevAgentClient : IDisposable
 
         _httpClient = new HttpClient(handler)
         {
-            Timeout = TimeSpan.FromSeconds(2)
+            Timeout = TimeSpan.FromSeconds(3)
         };
     }
 
     public async Task<GrevAgentProbeResult> ProbeAsync(Machine machine, CancellationToken cancellationToken = default)
     {
-        var root = $"http://{machine.IpAddress}:{machine.AgentPort}";
+        var root = Root(machine);
 
         try
         {
@@ -48,19 +48,14 @@ public sealed class GrevAgentClient : IDisposable
             if (!_credentials.TryRead(machine.Id, out var sharedKey))
                 return new GrevAgentProbeResult(GrevAgentState.ReadyToPair, Message: "Grev Agent detected. Add its pairing key in Edit Machine.");
 
-            using var request = CreateAuthenticatedGet(root + AgentProtocol.StatusPath, sharedKey, AgentProtocol.StatusPath);
-            using var response = await _httpClient.SendAsync(request, cancellationToken);
-
-            if (response.StatusCode == HttpStatusCode.Unauthorized)
-                return new GrevAgentProbeResult(GrevAgentState.AuthenticationFailed, Message: "The saved Grev Agent pairing key was rejected.");
-
-            if (!response.IsSuccessStatusCode)
-                return new GrevAgentProbeResult(GrevAgentState.Error, Message: $"Agent status returned HTTP {(int)response.StatusCode}.");
-
-            var status = await response.Content.ReadFromJsonAsync<AgentStatusResponse>(cancellationToken: cancellationToken);
+            var status = await GetAuthenticatedAsync<AgentStatusResponse>(machine, sharedKey, AgentProtocol.StatusPath, cancellationToken);
             return status is null
                 ? new GrevAgentProbeResult(GrevAgentState.Error, Message: "Grev Agent returned an empty status response.")
                 : new GrevAgentProbeResult(GrevAgentState.Connected, status);
+        }
+        catch (AgentAuthenticationException)
+        {
+            return new GrevAgentProbeResult(GrevAgentState.AuthenticationFailed, Message: "The saved Grev Agent pairing key was rejected.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -76,6 +71,40 @@ public sealed class GrevAgentClient : IDisposable
         }
     }
 
+    public Task<AgentStatusResponse> GetStatusAsync(Machine machine, CancellationToken cancellationToken = default) =>
+        GetRequiredAuthenticatedAsync<AgentStatusResponse>(machine, AgentProtocol.StatusPath, cancellationToken);
+
+    public Task<IReadOnlyList<AgentProcessInfo>> GetProcessesAsync(Machine machine, CancellationToken cancellationToken = default) =>
+        GetRequiredAuthenticatedAsync<IReadOnlyList<AgentProcessInfo>>(machine, AgentProtocol.ProcessesPath, cancellationToken);
+
+    public Task<IReadOnlyList<AgentServiceInfo>> GetServicesAsync(Machine machine, CancellationToken cancellationToken = default) =>
+        GetRequiredAuthenticatedAsync<IReadOnlyList<AgentServiceInfo>>(machine, AgentProtocol.ServicesPath, cancellationToken);
+
+    private async Task<T> GetRequiredAuthenticatedAsync<T>(Machine machine, string path, CancellationToken cancellationToken)
+    {
+        if (!_credentials.TryRead(machine.Id, out var sharedKey))
+            throw new InvalidOperationException("This machine has no saved Grev Agent pairing key. Open Edit Machine and pair the Agent first.");
+
+        var value = await GetAuthenticatedAsync<T>(machine, sharedKey, path, cancellationToken);
+        return value ?? throw new InvalidOperationException("Grev Agent returned an empty response.");
+    }
+
+    private async Task<T?> GetAuthenticatedAsync<T>(Machine machine, string sharedKey, string path, CancellationToken cancellationToken)
+    {
+        using var request = CreateAuthenticatedGet(Root(machine) + path, sharedKey, path);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new AgentAuthenticationException();
+
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {path}.");
+
+        return await response.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
+    }
+
+    private static string Root(Machine machine) => $"http://{machine.IpAddress}:{machine.AgentPort}";
+
     private static HttpRequestMessage CreateAuthenticatedGet(string url, string sharedKey, string path)
     {
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -90,4 +119,6 @@ public sealed class GrevAgentClient : IDisposable
     }
 
     public void Dispose() => _httpClient.Dispose();
+
+    private sealed class AgentAuthenticationException : Exception;
 }
