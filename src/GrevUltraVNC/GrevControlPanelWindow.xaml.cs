@@ -13,6 +13,7 @@ public partial class GrevControlPanelWindow : Window
     private readonly Machine _machine;
     private readonly UltraVncSessionService _vnc;
     private readonly GrevAgentClient _agent = new();
+    private readonly AgentUpdateService _agentUpdater;
     private readonly WakeOnLanService _wake = new();
     private readonly PowerService _power = new();
     private readonly NetworkStatusService _network = new();
@@ -20,6 +21,7 @@ public partial class GrevControlPanelWindow : Window
     private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private readonly DispatcherTimer _agentTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _agentRefreshRunning;
+    private bool _agentUpdateRunning;
     private MachineOverviewWindow? _machineOverview;
 
     public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
@@ -27,9 +29,11 @@ public partial class GrevControlPanelWindow : Window
         InitializeComponent();
         _machine = machine;
         _vnc = vnc;
+        _agentUpdater = new AgentUpdateService(_agent);
 
         MachineNameText.Text = machine.Name;
         MachineAddressText.Text = $"{machine.IpAddress}  ·  VNC {machine.VncPort}";
+        UpdateAgentButton.IsEnabled = false;
 
         Loaded += GrevControlPanelWindow_Loaded;
         Closed += GrevControlPanelWindow_Closed;
@@ -68,7 +72,7 @@ public partial class GrevControlPanelWindow : Window
 
     private async Task RefreshAgentHealthAsync()
     {
-        if (_agentRefreshRunning) return;
+        if (_agentRefreshRunning || _agentUpdateRunning) return;
         _agentRefreshRunning = true;
 
         try
@@ -77,6 +81,10 @@ public partial class GrevControlPanelWindow : Window
             _machine.AgentState = result.State;
             _machine.AgentStatus = result.Status;
             _machine.AgentMessage = result.Message;
+            UpdateAgentButton.IsEnabled = result.State == GrevAgentState.Connected;
+            UpdateAgentButton.Content = result.State == GrevAgentState.Connected && !string.IsNullOrWhiteSpace(result.Message)
+                ? "⇩ Update Grev Agent · recommended"
+                : "⇩ Update Grev Agent";
 
             if (result.State == GrevAgentState.Connected && result.Status is not null)
             {
@@ -90,6 +98,7 @@ public partial class GrevControlPanelWindow : Window
                 AgentDiskText.Text = status.Disks.Count == 0
                     ? "No fixed-disk telemetry"
                     : string.Join("   ·   ", status.Disks.Take(2).Select(d => $"{d.Name.TrimEnd('\\')} {FormatGiB(d.FreeBytes)} free"));
+                AgentUpdateStatusText.Text = string.IsNullOrWhiteSpace(result.Message) ? string.Empty : result.Message;
                 return;
             }
 
@@ -108,10 +117,53 @@ public partial class GrevControlPanelWindow : Window
             AgentUserUptimeText.Text = string.Empty;
             AgentVncHealthText.Text = string.Empty;
             AgentDiskText.Text = string.Empty;
+            AgentUpdateStatusText.Text = string.Empty;
         }
         finally
         {
             _agentRefreshRunning = false;
+        }
+    }
+
+    private async void UpdateAgent_Click(object sender, RoutedEventArgs e)
+    {
+        if (_agentUpdateRunning) return;
+
+        if (MessageBox.Show(this,
+                $"Update Grev Agent on {_machine.Name} from the latest GitHub release?\n\nThe Agent service will restart. Your VNC session should remain open and the existing pairing key will be preserved.",
+                "Update Grev Agent",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        _agentUpdateRunning = true;
+        UpdateAgentButton.IsEnabled = false;
+        AgentUpdateStatusText.Text = "Preparing Agent update…";
+
+        try
+        {
+            var progress = new Progress<string>(message => AgentUpdateStatusText.Text = message);
+            var result = await _agentUpdater.UpdateFromGitHubAsync(_machine, progress);
+            _machine.AgentState = result.State;
+            _machine.AgentStatus = result.Status;
+            _machine.AgentMessage = result.Message;
+            AgentUpdateStatusText.Text = "Grev Agent updated successfully.";
+
+            MessageBox.Show(this,
+                $"Grev Agent on {_machine.Name} updated successfully and is responding again.",
+                "Grev Agent updated",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            AgentUpdateStatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "Grev Agent update", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _agentUpdateRunning = false;
+            await RefreshAgentHealthAsync();
         }
     }
 
