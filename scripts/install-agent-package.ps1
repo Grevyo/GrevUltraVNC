@@ -46,6 +46,37 @@ function Wait-ProcessExit {
     }
 }
 
+function Stop-OrphanAgentProcesses {
+    param([string]$InstalledExePath)
+
+    $expectedPath = [System.IO.Path]::GetFullPath($InstalledExePath)
+    $candidates = Get-CimInstance Win32_Process -Filter "Name='GrevUltraVNC.Agent.exe'" -ErrorAction SilentlyContinue
+
+    foreach ($candidate in $candidates) {
+        $candidatePath = $candidate.ExecutablePath
+        if (-not [string]::IsNullOrWhiteSpace($candidatePath)) {
+            try {
+                if (-not [string]::Equals(
+                        [System.IO.Path]::GetFullPath($candidatePath),
+                        $expectedPath,
+                        [StringComparison]::OrdinalIgnoreCase)) {
+                    continue
+                }
+            }
+            catch {
+                continue
+            }
+        }
+
+        $processId = [int]$candidate.ProcessId
+        if ($processId -le 0) { continue }
+
+        Write-Host "Found lingering Grev Agent process $processId; closing it before install..." -ForegroundColor Yellow
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+        Wait-ProcessExit -ProcessId $processId -TimeoutSeconds 10
+    }
+}
+
 function Wait-FileUnlocked {
     param(
         [string]$Path,
@@ -122,6 +153,7 @@ if ($existing) {
 
     # A service can report Stopped slightly before its executable/image handle is fully released.
     Wait-ProcessExit -ProcessId $oldProcessId -TimeoutSeconds 20
+    Stop-OrphanAgentProcesses -InstalledExePath $exePath
     Wait-FileUnlocked -Path $exePath -TimeoutSeconds 30
 
     try { $existing.Dispose() } catch { }
@@ -143,6 +175,8 @@ if ($existing) {
 
 Write-Host 'Installing agent files...'
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+# Also recover an orphan left behind by a previous failed update where the service was already deleted.
+Stop-OrphanAgentProcesses -InstalledExePath $exePath
 Wait-FileUnlocked -Path $exePath -TimeoutSeconds 30
 Copy-WithRetry -Source $sourceExe -Destination $exePath -TimeoutSeconds 30
 
