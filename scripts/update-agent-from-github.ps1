@@ -1,10 +1,28 @@
-#Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
     [string]$Repository = 'Grevyo/GrevUltraVNC'
 )
 
 $ErrorActionPreference = 'Stop'
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+$isAdministrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $isAdministrator) {
+    Write-Host ''
+    Write-Host 'Administrator access is required. Opening the UAC prompt...' -ForegroundColor Yellow
+
+    $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Repository `"$Repository`""
+    try {
+        Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $arguments | Out-Null
+    }
+    catch {
+        throw 'Administrator elevation was cancelled or could not be started.'
+    }
+
+    exit
+}
 
 $assetName = 'GrevUltraVNC-Agent-win-x64.zip'
 $releaseUrl = "https://github.com/$Repository/releases/download/agent-latest/$assetName"
@@ -34,7 +52,7 @@ try {
 
     $installer = Join-Path $packageDir 'Install-GrevAgent.ps1'
     if (-not (Test-Path $installer)) {
-        throw "Install-GrevAgent.ps1 was not found in the downloaded package."
+        throw 'Install-GrevAgent.ps1 was not found in the downloaded package.'
     }
 
     Write-Host 'Installing latest Agent...'
