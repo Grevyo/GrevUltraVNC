@@ -74,11 +74,11 @@ public sealed class GrevAgentClient : IDisposable
     public Task<AgentStatusResponse> GetStatusAsync(Machine machine, CancellationToken cancellationToken = default) =>
         GetRequiredAuthenticatedAsync<AgentStatusResponse>(machine, AgentProtocol.StatusPath, cancellationToken);
 
-    public Task<IReadOnlyList<AgentProcessInfo>> GetProcessesAsync(Machine machine, CancellationToken cancellationToken = default) =>
-        GetRequiredAuthenticatedAsync<IReadOnlyList<AgentProcessInfo>>(machine, AgentProtocol.ProcessesPath, cancellationToken);
+    public async Task<IReadOnlyList<AgentProcessInfo>> GetProcessesAsync(Machine machine, CancellationToken cancellationToken = default) =>
+        await GetRequiredAuthenticatedAsync<AgentProcessInfo[]>(machine, AgentProtocol.ProcessesPath, cancellationToken);
 
-    public Task<IReadOnlyList<AgentServiceInfo>> GetServicesAsync(Machine machine, CancellationToken cancellationToken = default) =>
-        GetRequiredAuthenticatedAsync<IReadOnlyList<AgentServiceInfo>>(machine, AgentProtocol.ServicesPath, cancellationToken);
+    public async Task<IReadOnlyList<AgentServiceInfo>> GetServicesAsync(Machine machine, CancellationToken cancellationToken = default) =>
+        await GetRequiredAuthenticatedAsync<AgentServiceInfo[]>(machine, AgentProtocol.ServicesPath, cancellationToken);
 
     private async Task<T> GetRequiredAuthenticatedAsync<T>(Machine machine, string path, CancellationToken cancellationToken)
     {
