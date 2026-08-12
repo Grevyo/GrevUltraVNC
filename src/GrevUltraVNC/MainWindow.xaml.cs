@@ -239,6 +239,15 @@ public partial class MainWindow : Window
             ConnectMachine(machine);
     }
 
+    private void ManageMachine_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
+
+        var overview = new MachineOverviewWindow(machine) { Owner = this };
+        overview.ShowDialog();
+    }
+
     private void ConnectMachine(Machine machine)
     {
         try
