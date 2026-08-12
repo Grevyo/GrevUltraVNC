@@ -158,6 +158,10 @@ public sealed class SystemInventoryService
         if (string.IsNullOrWhiteSpace(serviceName))
             return new AgentActionResponse(false, "No Windows service was selected.");
 
+        var action = request.Action?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(action))
+            return new AgentActionResponse(false, "No Windows service action was supplied.");
+
         if (string.Equals(serviceName, "GrevUltraVNCAgent", StringComparison.OrdinalIgnoreCase))
             return new AgentActionResponse(false, "Grev Agent cannot stop or restart its own Windows service remotely.");
 
@@ -166,7 +170,7 @@ public sealed class SystemInventoryService
             using var service = new ServiceController(serviceName);
             _ = service.DisplayName; // Forces Windows to resolve the service now.
 
-            return request.Action.Trim().ToLowerInvariant() switch
+            return action switch
             {
                 "start" => StartService(service),
                 "stop" => StopService(service),
@@ -182,6 +186,10 @@ public sealed class SystemInventoryService
         {
             return new AgentActionResponse(false, $"Windows refused the service action: {ex.Message}");
         }
+        catch (System.ServiceProcess.TimeoutException ex)
+        {
+            return new AgentActionResponse(false, $"Windows service action timed out: {ex.Message}");
+        }
         catch (Exception ex)
         {
             return new AgentActionResponse(false, $"Service action failed: {ex.Message}");
@@ -191,8 +199,28 @@ public sealed class SystemInventoryService
     private static AgentActionResponse StartService(ServiceController service)
     {
         service.Refresh();
+
         if (service.Status == ServiceControllerStatus.Running)
             return new AgentActionResponse(true, $"{service.DisplayName} is already running.");
+
+        if (service.Status == ServiceControllerStatus.StopPending)
+        {
+            service.WaitForStatus(ServiceControllerStatus.Stopped, ServiceTimeout);
+            service.Refresh();
+        }
+
+        if (service.Status == ServiceControllerStatus.PausePending)
+        {
+            service.WaitForStatus(ServiceControllerStatus.Paused, ServiceTimeout);
+            service.Refresh();
+        }
+
+        if (service.Status == ServiceControllerStatus.Paused)
+        {
+            service.Continue();
+            service.WaitForStatus(ServiceControllerStatus.Running, ServiceTimeout);
+            return new AgentActionResponse(true, $"Resumed {service.DisplayName}.");
+        }
 
         if (service.Status == ServiceControllerStatus.StartPending)
         {
@@ -208,8 +236,21 @@ public sealed class SystemInventoryService
     private static AgentActionResponse StopService(ServiceController service)
     {
         service.Refresh();
+
         if (service.Status == ServiceControllerStatus.Stopped)
             return new AgentActionResponse(true, $"{service.DisplayName} is already stopped.");
+
+        if (service.Status == ServiceControllerStatus.StopPending)
+        {
+            service.WaitForStatus(ServiceControllerStatus.Stopped, ServiceTimeout);
+            return new AgentActionResponse(true, $"{service.DisplayName} is stopped.");
+        }
+
+        if (service.Status == ServiceControllerStatus.StartPending)
+        {
+            service.WaitForStatus(ServiceControllerStatus.Running, ServiceTimeout);
+            service.Refresh();
+        }
 
         if (!service.CanStop)
             return new AgentActionResponse(false, $"Windows reports that {service.DisplayName} cannot be stopped.");
@@ -221,19 +262,15 @@ public sealed class SystemInventoryService
 
     private static AgentActionResponse RestartService(ServiceController service)
     {
+        var stopped = StopService(service);
+        if (!stopped.Success)
+            return stopped;
+
         service.Refresh();
-        if (service.Status != ServiceControllerStatus.Stopped)
-        {
-            if (!service.CanStop)
-                return new AgentActionResponse(false, $"Windows reports that {service.DisplayName} cannot be restarted because it cannot be stopped.");
-
-            service.Stop();
-            service.WaitForStatus(ServiceControllerStatus.Stopped, ServiceTimeout);
-        }
-
-        service.Start();
-        service.WaitForStatus(ServiceControllerStatus.Running, ServiceTimeout);
-        return new AgentActionResponse(true, $"Restarted {service.DisplayName}.");
+        var started = StartService(service);
+        return started.Success
+            ? new AgentActionResponse(true, $"Restarted {service.DisplayName}.")
+            : started;
     }
 
     private static string GetStartMode(string serviceName)
