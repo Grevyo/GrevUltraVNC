@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
         Title="Grev Control Panel"
-        Width="320" Height="840" MinHeight="600"
+        Width="300" Height="720" MinHeight="560"
         ResizeMode="NoResize" WindowStyle="ToolWindow"
         ShowInTaskbar="False" Topmost="True"
         Icon="{x:Static svc:BrandAssets.Logo}"
@@ -11,96 +11,78 @@
         Foreground="{DynamicResource TextBrush}">
     <Border Background="{DynamicResource WindowBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
         <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}">
-            <StackPanel Margin="16">
+            <StackPanel Margin="14">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="52" />
+                        <ColumnDefinition Width="46" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="46" Height="46" CornerRadius="11" Background="#030509" BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
+                    <Border Width="40" Height="40" CornerRadius="10" Background="#030509" BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
                         <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="2" Stretch="Uniform" />
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="9,0,0,0">
-                        <TextBlock Text="GREV CONTROL PANEL" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="Bold" />
-                        <TextBlock x:Name="MachineNameText" FontSize="19" FontWeight="Bold" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <TextBlock Text="GREV CONTROL PANEL" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold" />
+                        <TextBlock x:Name="MachineNameText" FontSize="18" FontWeight="Bold" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </Grid>
-                <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}" Margin="2,8,0,0" />
+                <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" Margin="2,6,0,0" />
 
                 <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,14,0,0">
-                    <Grid>
-                        <TextBlock Text="VNC SESSION" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" FontWeight="SemiBold" />
-                        <TextBlock x:Name="SessionStatusText" Text="● VIEWER ACTIVE" HorizontalAlignment="Right" Foreground="#50DC91" FontSize="10" FontWeight="SemiBold" />
-                    </Grid>
-                </Border>
-
-                <TextBlock Text="SYSTEM HEALTH" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="11">
+                        BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,12,0,0">
                     <StackPanel>
-                        <TextBlock x:Name="AgentConnectionText" Text="AGENT CHECKING" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" FontWeight="SemiBold" />
-                        <TextBlock x:Name="AgentCpuRamText" Text="CPU / RAM waiting for Grev Agent" FontSize="12" Margin="0,7,0,0" />
-                        <TextBlock x:Name="AgentUserUptimeText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
-                        <TextBlock x:Name="AgentVncHealthText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
-                        <TextBlock x:Name="AgentDiskText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,6,0,0" TextWrapping="Wrap" />
+                        <Grid>
+                            <TextBlock x:Name="SessionStatusText" Text="● VIEWER ACTIVE" Foreground="#50DC91" FontSize="10" FontWeight="SemiBold" />
+                            <TextBlock x:Name="AgentConnectionText" Text="AGENT CHECKING" HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" FontWeight="SemiBold" />
+                        </Grid>
+                        <TextBlock x:Name="AgentCpuRamText" Text="CPU / RAM waiting for Grev Agent" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" Margin="0,5,0,0" />
                     </StackPanel>
                 </Border>
-                <Button Style="{StaticResource PrimaryButton}" Content="Manage machine" Click="ManageMachine_Click" Margin="0,8,0,0" />
-                <Button x:Name="UpdateAgentButton" Style="{StaticResource SecondaryButton}" Content="⇩ Update Grev Agent" Click="UpdateAgent_Click" Margin="0,7,0,0" />
-                <TextBlock x:Name="AgentUpdateStatusText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,6,2,0" />
 
-                <TextBlock Text="REMOTE KEYS" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                <UniformGrid Columns="2">
-                    <Button Style="{StaticResource CardActionButton}" Content="Ctrl+Alt+Del" Click="Cad_Click" Margin="0,0,4,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Windows ⊞" Click="WindowsKey_Click" Margin="4,0,0,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Task Manager" Click="TaskManager_Click" Margin="0,0,4,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Alt+Tab" Click="AltTab_Click" Margin="4,0,0,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Alt+F4" Click="AltF4_Click" Margin="0,0,4,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Win+R" Click="WinR_Click" Margin="4,0,0,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Win+E" Click="WinE_Click" Margin="0,0,4,0" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Win+L" Click="WinL_Click" Margin="4,0,0,0" />
-                </UniformGrid>
-
-                <TextBlock Text="WINDOWS SESSION" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                <StackPanel x:Name="SessionActionPanel" IsEnabled="False">
-                    <UniformGrid Columns="2">
-                        <Button Style="{StaticResource CardActionButton}" Content="🔒 Lock" Click="LockMachine_Click" Margin="0,0,4,8" />
-                        <Button Style="{StaticResource CardActionButton}" Content="↻ Explorer" Click="RestartExplorerAgent_Click" Margin="4,0,0,8" />
-                        <Button Style="{StaticResource DangerButton}" Content="Sign out" Click="SignOutMachine_Click" Margin="0,0,4,8" Padding="12,7" />
-                        <Button Style="{StaticResource CardActionButton}" Content="Sleep" Click="SleepMachine_Click" Margin="4,0,0,8" />
-                    </UniformGrid>
-                    <Button Style="{StaticResource SecondaryButton}" Content="Hibernate machine" Click="HibernateMachine_Click" />
+                <StackPanel Visibility="Collapsed">
+                    <TextBlock x:Name="AgentUserUptimeText" />
+                    <TextBlock x:Name="AgentVncHealthText" />
+                    <TextBlock x:Name="AgentDiskText" />
+                    <Button x:Name="UpdateAgentButton" Click="UpdateAgent_Click" />
+                    <TextBlock x:Name="AgentUpdateStatusText" />
                 </StackPanel>
 
-                <TextBlock Text="VNC SESSION CONTROLS" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <TextBlock Text="VNC" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,16,0,8" />
                 <UniformGrid Columns="2">
-                    <Button Style="{StaticResource CardActionButton}" Content="Bring to front" Click="BringToFront_Click" Margin="0,0,4,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="4,0,0,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Refresh screen" Click="RefreshScreen_Click" Margin="0,0,4,0" />
-                    <Button Style="{StaticResource DangerButton}" Content="Disconnect" Click="Disconnect_Click" Margin="4,0,0,0" Padding="12,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Bring to front" Click="BringToFront_Click" Margin="0,0,4,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="4,0,0,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Refresh screen" Click="RefreshScreen_Click" Margin="0,0,4,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="File transfer" Click="FileTransfer_Click" Margin="4,0,0,7" />
+                </UniformGrid>
+                <Button Style="{StaticResource DangerButton}" Content="Disconnect VNC" Click="Disconnect_Click" Padding="12,7" />
+
+                <TextBlock Text="REMOTE KEYS" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,16,0,8" />
+                <UniformGrid Columns="2">
+                    <Button Style="{StaticResource CardActionButton}" Content="Ctrl+Alt+Del" Click="Cad_Click" Margin="0,0,4,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Windows ⊞" Click="WindowsKey_Click" Margin="4,0,0,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Task Manager" Click="TaskManager_Click" Margin="0,0,4,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Alt+Tab" Click="AltTab_Click" Margin="4,0,0,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Alt+F4" Click="AltF4_Click" Margin="0,0,4,0" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Win+R" Click="WinR_Click" Margin="4,0,0,0" />
                 </UniformGrid>
 
-                <TextBlock Text="VNC SERVICE" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                <UniformGrid Columns="3">
-                    <Button Style="{StaticResource CardActionButton}" Content="Start" Click="StartVncService_Click" Margin="0,0,4,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Restart" Click="RestartVncService_Click" Margin="4,0,4,8" />
-                    <Button Style="{StaticResource DangerButton}" Content="Stop" Click="StopVncService_Click" Margin="4,0,0,8" Padding="10,7" />
+                <TextBlock Text="SESSION" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,16,0,8" />
+                <StackPanel x:Name="SessionActionPanel" IsEnabled="False">
+                    <UniformGrid Columns="2">
+                        <Button Style="{StaticResource CardActionButton}" Content="🔒 Lock" Click="LockMachine_Click" Margin="0,0,4,0" />
+                        <Button Style="{StaticResource CardActionButton}" Content="↻ Explorer" Click="RestartExplorerAgent_Click" Margin="4,0,0,0" />
+                    </UniformGrid>
+                </StackPanel>
+
+                <TextBlock Text="POWER" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,16,0,8" />
+                <UniformGrid Columns="2">
+                    <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart" Click="Restart_Click" Margin="0,0,4,0" />
+                    <Button Style="{StaticResource DangerButton}" Content="⏻ Shut down" Click="Shutdown_Click" Margin="4,0,0,0" Padding="11,7" />
                 </UniformGrid>
-                <Button Style="{StaticResource SecondaryButton}" Content="⚙ Set VNC to start with Windows" Click="EnableVncAutoStart_Click" />
 
-                <TextBlock Text="MACHINE" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                <Button Style="{StaticResource SecondaryButton}" Content="⚡ Wake machine" Click="Wake_Click" Margin="0,0,0,8" />
-                <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart machine" Click="Restart_Click" Margin="0,0,0,8" />
-                <Button Style="{StaticResource DangerButton}" Content="⏻ Shut down machine" Click="Shutdown_Click" />
-
-                <TextBlock Text="TOOLS" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                <Button Style="{StaticResource SecondaryButton}" Content="↔ UltraVNC file transfer" Click="FileTransfer_Click" Margin="0,0,0,8" />
-                <Button Style="{StaticResource SecondaryButton}" Content="📁 Open network shares" Click="Shares_Click" Margin="0,0,0,8" />
-                <Button Style="{StaticResource SecondaryButton}" Content="📡 Ping / connection info" Click="Diagnostics_Click" />
-
-                <Button Style="{StaticResource SecondaryButton}" Content="Hide Grev Control Panel" Click="HidePanel_Click" Margin="0,20,0,4" />
-                <TextBlock Text="Docked to the active UltraVNC Viewer. It closes automatically when the VNC session ends."
-                           Foreground="{DynamicResource FaintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,6,2,0" />
+                <Button Style="{StaticResource PrimaryButton}" Content="Manage machine" Click="ManageMachine_Click" Margin="0,18,0,0" />
+                <Button Style="{StaticResource SecondaryButton}" Content="Hide panel" Click="HidePanel_Click" Margin="0,7,0,0" />
+                <TextBlock Text="Full maintenance, Agent controls, services, tools and history are in Manage."
+                           Foreground="{DynamicResource FaintTextBrush}" FontSize="9" TextWrapping="Wrap" Margin="2,7,2,0" />
             </StackPanel>
         </ScrollViewer>
     </Border>
