@@ -33,7 +33,7 @@ public partial class GrevControlPanelWindow : Window
         _agentUpdater = new AgentUpdateService(_agent);
 
         MachineNameText.Text = machine.Name;
-        MachineAddressText.Text = $"{machine.IpAddress}  ·  VNC {machine.VncPort}";
+        MachineAddressText.Text = $"{machine.ConnectDisplayText}  ·  VNC {machine.VncPort}";
         UpdateAgentButton.IsEnabled = false;
         SessionActionPanel.IsEnabled = false;
 
@@ -79,6 +79,7 @@ public partial class GrevControlPanelWindow : Window
 
         try
         {
+            MachineAddressText.Text = $"{_machine.ConnectDisplayText}  ·  VNC {_machine.VncPort}";
             var result = await _agent.ProbeAsync(_machine);
             _machine.AgentState = result.State;
             _machine.AgentStatus = result.Status;
@@ -232,7 +233,7 @@ public partial class GrevControlPanelWindow : Window
             return;
         }
 
-        var overview = new MachineOverviewWindow(_machine) { Owner = this };
+        var overview = new MachineOverviewWindow(_machine, _vnc) { Owner = this };
         _machineOverview = overview;
         overview.Closed += (_, _) => _machineOverview = null;
         overview.Show();
@@ -351,9 +352,16 @@ public partial class GrevControlPanelWindow : Window
         }
     }
 
+    private string CurrentHost()
+    {
+        if (string.IsNullOrWhiteSpace(_machine.ActiveAddress))
+            throw new InvalidOperationException("The current LAN / Grev Connect route is no longer available.");
+        return _machine.ActiveAddress;
+    }
+
     private async void StartVncService_Click(object sender, RoutedEventArgs e)
     {
-        await RunVncServiceActionAsync(() => _remoteVnc.StartAsync(_machine.IpAddress), "Start UltraVNC");
+        await RunVncServiceActionAsync(host => _remoteVnc.StartAsync(host), "Start UltraVNC");
     }
 
     private async void RestartVncService_Click(object sender, RoutedEventArgs e)
@@ -363,7 +371,7 @@ public partial class GrevControlPanelWindow : Window
                 "Restart UltraVNC service", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunVncServiceActionAsync(() => _remoteVnc.RestartAsync(_machine.IpAddress), "Restart UltraVNC");
+        await RunVncServiceActionAsync(host => _remoteVnc.RestartAsync(host), "Restart UltraVNC");
     }
 
     private async void StopVncService_Click(object sender, RoutedEventArgs e)
@@ -373,14 +381,14 @@ public partial class GrevControlPanelWindow : Window
                 "Stop UltraVNC service", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunVncServiceActionAsync(() => _remoteVnc.StopAsync(_machine.IpAddress), "Stop UltraVNC");
+        await RunVncServiceActionAsync(host => _remoteVnc.StopAsync(host), "Stop UltraVNC");
     }
 
-    private async Task RunVncServiceActionAsync(Func<Task<RemoteServiceResult>> action, string title)
+    private async Task RunVncServiceActionAsync(Func<string, Task<RemoteServiceResult>> action, string title)
     {
         try
         {
-            var result = await action();
+            var result = await action(CurrentHost());
             MessageBox.Show(this, result.Message, title, MessageBoxButton.OK,
                 result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
         }
@@ -392,7 +400,7 @@ public partial class GrevControlPanelWindow : Window
 
     private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e)
     {
-        await RunVncServiceActionAsync(() => _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress), "UltraVNC at boot");
+        await RunVncServiceActionAsync(host => _remoteVnc.EnableAutoStartAndStartAsync(host), "UltraVNC at boot");
     }
 
     private async void Restart_Click(object sender, RoutedEventArgs e)
@@ -400,9 +408,16 @@ public partial class GrevControlPanelWindow : Window
         if (MessageBox.Show(this, $"Restart {_machine.Name} now?", "Confirm restart", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
-        var result = await _power.RestartAsync(_machine.IpAddress);
-        MessageBox.Show(this, result.Message, "Restart", MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        try
+        {
+            var result = await _power.RestartAsync(CurrentHost());
+            MessageBox.Show(this, result.Message, "Restart", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Restart", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async void Shutdown_Click(object sender, RoutedEventArgs e)
@@ -410,9 +425,16 @@ public partial class GrevControlPanelWindow : Window
         if (MessageBox.Show(this, $"Shut down {_machine.Name} now?", "Confirm shutdown", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
-        var result = await _power.ShutdownAsync(_machine.IpAddress);
-        MessageBox.Show(this, result.Message, "Shut down", MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        try
+        {
+            var result = await _power.ShutdownAsync(CurrentHost());
+            MessageBox.Show(this, result.Message, "Shut down", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Shut down", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void Shares_Click(object sender, RoutedEventArgs e)
@@ -422,7 +444,7 @@ public partial class GrevControlPanelWindow : Window
             Process.Start(new ProcessStartInfo
             {
                 FileName = "explorer.exe",
-                Arguments = $"\\\\{_machine.IpAddress}\\",
+                Arguments = $"\\\\{CurrentHost()}\\",
                 UseShellExecute = true
             });
         }
@@ -435,7 +457,9 @@ public partial class GrevControlPanelWindow : Window
     private async void Diagnostics_Click(object sender, RoutedEventArgs e)
     {
         var networkResult = await _network.ProbeAsync(_machine);
-        var serviceResult = await _remoteVnc.QueryAsync(_machine.IpAddress);
+        var serviceResult = string.IsNullOrWhiteSpace(_machine.ActiveAddress)
+            ? new RemoteServiceResult(false, "No current route")
+            : await _remoteVnc.QueryAsync(_machine.ActiveAddress);
         var agentResult = await _agent.ProbeAsync(_machine);
         var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
         var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
@@ -445,7 +469,7 @@ public partial class GrevControlPanelWindow : Window
             : $"Connected · CPU {agentResult.Status.CpuUsagePercent:0.#}% · RAM {FormatGiB(agentResult.Status.TotalMemoryBytes - agentResult.Status.AvailableMemoryBytes)}/{FormatGiB(agentResult.Status.TotalMemoryBytes)}";
 
         MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nUltraVNC service: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
+            $"Machine: {_machine.Name}\nGrev Connect ID: {(_machine.ConnectId.Length == 0 ? "Not assigned" : _machine.ConnectId)}\nRoute: {_machine.ConnectDisplayText}\nPing: {latency}\nVNC port: {vnc}\nUltraVNC service: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
             "Connection info", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
