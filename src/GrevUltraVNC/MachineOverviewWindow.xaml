@@ -143,7 +143,10 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="ProcessSearchBox" Width="360" HorizontalAlignment="Left" TextChanged="ProcessSearchBox_TextChanged" ToolTip="Filter processes by name or PID" />
-                    <TextBlock x:Name="ProcessCountText" Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="ProcessCountText" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,14,0" />
+                        <Button Style="{StaticResource DangerButton}" Content="End selected process" Click="EndProcess_Click" Padding="12,7" />
+                    </StackPanel>
                 </Grid>
                 <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="14">
                     <ListView x:Name="ProcessesList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextBrush}">
@@ -182,7 +185,12 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="ServiceSearchBox" Width="360" HorizontalAlignment="Left" TextChanged="ServiceSearchBox_TextChanged" ToolTip="Filter services by name, display name or state" />
-                    <TextBlock x:Name="ServiceCountText" Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="ServiceCountText" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,14,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Start" Click="StartService_Click" Padding="11,7" Margin="0,0,6,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Restart" Click="RestartService_Click" Padding="11,7" Margin="0,0,6,0" />
+                        <Button Style="{StaticResource DangerButton}" Content="Stop" Click="StopService_Click" Padding="11,7" />
+                    </StackPanel>
                 </Grid>
                 <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="14">
                     <ListView x:Name="ServicesList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextBrush}">
@@ -212,7 +220,7 @@
         <Border Grid.Row="3" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,11">
             <Grid>
                 <TextBlock x:Name="StatusText" Text="Ready" Foreground="{DynamicResource MutedTextBrush}" />
-                <TextBlock Text="Read-only Agent management · process/service controls come next" HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" />
+                <TextBlock Text="Authenticated Agent controls · destructive actions require confirmation" HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" />
             </Grid>
         </Border>
     </Grid>
