@@ -2,7 +2,7 @@
 
 A LAN-first Windows remote-management app built around UltraVNC plus the optional **GrevUltraVNC Agent**.
 
-UltraVNC remains the remote-desktop engine. GrevUltraVNC adds machine organisation, saved credentials, status monitoring, power/service actions, machine management, an authenticated terminal and a docked Grev Control Panel.
+UltraVNC remains the remote-desktop engine. GrevUltraVNC adds machine organisation, saved credentials, status monitoring, power/service actions, machine management, an authenticated terminal, self-updating Agents and a docked Grev Control Panel.
 
 ## Current app features
 
@@ -26,7 +26,7 @@ UltraVNC remains the remote-desktop engine. GrevUltraVNC adds machine organisati
 - Light and Dark themes, with Dark as default
 - Start GrevUltraVNC with Windows
 - Minimise GrevUltraVNC to the system tray
-- Grev-branded dashboard/control panel
+- Grev-branded blue/violet dashboard and control panel
 
 ## Machine Management
 
@@ -100,6 +100,24 @@ The Grev Control Panel follows the UltraVNC Viewer window and provides:
 - Wake / restart / shut down machine
 - Network shares and diagnostics
 - live Grev Agent system-health telemetry when paired
+- direct **Update Grev Agent** action from GitHub
+- direct **Manage machine** access
+
+## In-app Agent updates
+
+Once a machine has the current management-capable Agent installed, GrevUltraVNC can update it without opening PowerShell on the target.
+
+The update action is available from **Machine Actions** and the docked **Grev Control Panel**.
+
+The controller:
+
+1. uses the authenticated/encrypted Agent terminal channel to download the repository updater script
+2. launches the updater independently of the Agent service
+3. waits while the Agent service stops, replaces itself and starts again
+4. verifies a success/failure marker after the Agent returns
+5. preserves the machine's existing pairing configuration
+
+GitHub Actions publishes the current self-contained package to the stable `agent-latest` release tag.
 
 ## Grev Agent
 
@@ -146,9 +164,27 @@ Or double-click:
 run-dev.cmd
 ```
 
-## Build a deployable Grev Agent package
+## Agent packages and GitHub delivery
 
-Run this on the development/control PC:
+Every push to `main` is built on GitHub Actions. The workflow builds the full solution and publishes/replaces:
+
+```text
+agent-latest / GrevUltraVNC-Agent-win-x64.zip
+```
+
+The Agent is self-contained, so target PCs do not need the .NET runtime or SDK.
+
+For a machine that already has a management-capable Agent, use **Update Grev Agent** inside GrevUltraVNC.
+
+The standalone updater remains available for bootstrap/recovery:
+
+```text
+scripts\update-agent-from-github.ps1
+```
+
+### Manual package build
+
+For development or recovery, the package can still be built locally:
 
 ```powershell
 .\scripts\build-agent-package.ps1
@@ -160,20 +196,9 @@ It creates:
 dist\GrevUltraVNC-Agent-win-x64.zip
 ```
 
-The Agent is published self-contained, so the target PC does not need the .NET runtime or SDK.
+### Install or upgrade from an extracted package
 
-### Install or upgrade on a target PC
-
-1. Copy the newly generated ZIP to the target PC.
-2. Extract it.
-3. Open PowerShell as Administrator in the extracted folder.
-4. Run:
-
-```powershell
-.\Install-GrevAgent.ps1
-```
-
-The installer:
+Run `Install-GrevAgent.ps1` as Administrator. The installer:
 
 - stops/replaces an older Grev Agent service if present
 - copies the Agent to `C:\Program Files\GrevUltraVNC Agent`
@@ -182,9 +207,7 @@ The installer:
 - preserves an existing `%ProgramData%\GrevUltraVNC\Agent\agent.json` pairing configuration
 - secures `%ProgramData%\GrevUltraVNC\Agent`
 - opens the Agent port only to `LocalSubnet`
-- prints the machine's pairing key
-
-For an existing paired machine, reinstalling/upgrading the Agent preserves the existing pairing key unless its ProgramData configuration is deliberately purged.
+- prints the machine's pairing key for first-time pairing
 
 For a new machine, paste the displayed key into **Edit machine → Grev Agent → Pairing key** and refresh the dashboard.
 
@@ -222,7 +245,10 @@ VNC is one machine capability, not the whole GrevUltraVNC architecture. Logical 
 - event and connection history
 - notifications and health alerts
 - native file browser and file operations
-- automatic Agent deployment/update
+- first-time Agent deployment from the controller
 - per-machine custom icons and richer group management
 - bulk actions across machine groups
+- multi-monitor controls
+- import/export and backup
 - optional application PIN / Windows Hello protection for dangerous controls
+- proper packaged GrevUltraVNC Windows releases and installer
