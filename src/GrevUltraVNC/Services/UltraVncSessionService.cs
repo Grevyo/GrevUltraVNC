@@ -81,20 +81,17 @@ public sealed class UltraVncSessionService
                     throw new InvalidOperationException(
                         "UltraVNC closed the Screen 2 viewer while creating the virtual display. " +
                         "The target must run UltraVNC Server as a service/administrator, use DDengine capture, " +
-                        "and support UltraVNC virtual displays.");
+                        "and have the UltraVNC virtual-display driver installed.");
 
                 var handle = FindPrimaryViewerWindow(process);
                 if (handle != IntPtr.Zero)
                 {
-                    // Requesting Extend Display creates the virtual monitor. Some UltraVNC builds
-                    // still open the new viewer on monitor 1, so explicitly invoke UltraVNC's own
-                    // Switch Monitor command once to select the newly-added monitor.
+                    // showExtend=1 makes UltraVNC request dmExtendOnly: keep the physical desktop
+                    // and bind this viewer directly to the virtual display it creates.
                     await Task.Delay(900, cancellationToken);
                     if (process.HasExited)
                         throw new InvalidOperationException("The Screen 2 viewer closed after the display topology changed.");
 
-                    PostMessage(handle, TB_WM_SWITCHMONITOR, IntPtr.Zero, IntPtr.Zero);
-                    await Task.Delay(250, cancellationToken);
                     SetProcessViewOnly(process, true);
                     FocusViewer(process);
                     return process;
@@ -177,6 +174,26 @@ public sealed class UltraVncSessionService
 
         if (TryGetVirtualSession(machineId, out var secondary) && secondary is not null)
             SetProcessViewOnly(secondary, viewOnly);
+    }
+
+    public void SetScale(Guid machineId, int percent)
+    {
+        percent = Math.Clamp(percent, 25, 300);
+
+        if (TryGetSession(machineId, out var primary) && primary is not null)
+            SetProcessScale(primary, percent);
+
+        if (TryGetVirtualSession(machineId, out var secondary) && secondary is not null)
+            SetProcessScale(secondary, percent);
+    }
+
+    public void FitToWindow(Guid machineId)
+    {
+        if (TryGetSession(machineId, out var primary) && primary is not null)
+            SendViewerMessage(primary, TB_WM_FITSCREEN, IntPtr.Zero, IntPtr.Zero);
+
+        if (TryGetVirtualSession(machineId, out var secondary) && secondary is not null)
+            SendViewerMessage(secondary, TB_WM_FITSCREEN, IntPtr.Zero, IntPtr.Zero);
     }
 
     public void BringViewerToFront(Guid machineId) => FocusViewer(GetSession(machineId));
@@ -304,10 +321,8 @@ public sealed class UltraVncSessionService
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, $"{machineId:N}-screen2.vnc");
 
-        // Extend display creates a real extra Windows display while leaving the host's physical
-        // display enabled. We deliberately start on the normal monitor, then use UltraVNC's own
-        // Switch Monitor command after the connection is established so Screen 2 selection is
-        // explicit instead of relying on version-dependent auto-selection behaviour.
+        // showExtend=1 is important. UltraVNC sends dmExtendOnly for this viewer: the host's
+        // physical display stays enabled and this viewer receives its own extended virtual display.
         var content = $"""
                       [options]
                       shared=1
@@ -319,7 +334,7 @@ public sealed class UltraVncSessionService
                       allowMonitorSpanning=0
                       ChangeServerRes=1
                       extendDisplay=1
-                      showExtend=0
+                      showExtend=1
                       use_virt=0
                       useAllMonitors=0
                       requestedWidth={width}
@@ -381,15 +396,22 @@ public sealed class UltraVncSessionService
 
     private static void SetProcessViewOnly(Process process, bool viewOnly)
     {
-        var main = FindPrimaryViewerWindow(process);
-        if (main == IntPtr.Zero) return;
-
         var value = viewOnly ? new IntPtr(1) : IntPtr.Zero;
-        PostMessage(main, WM_SETVIEWONLY, value, IntPtr.Zero);
+        SendViewerMessage(process, WM_SETVIEWONLY, value, IntPtr.Zero);
+    }
+
+    private static void SetProcessScale(Process process, int percent) =>
+        SendViewerMessage(process, WM_SETSCALING, new IntPtr(percent), new IntPtr(100));
+
+    private static void SendViewerMessage(Process process, uint message, IntPtr wParam, IntPtr lParam)
+    {
+        var main = FindPrimaryViewerWindow(process);
+        if (main != IntPtr.Zero)
+            PostMessage(main, message, wParam, lParam);
 
         var surface = FindViewerContentWindow(process);
         if (surface != IntPtr.Zero && surface != main)
-            PostMessage(surface, WM_SETVIEWONLY, value, IntPtr.Zero);
+            PostMessage(surface, message, wParam, lParam);
     }
 
     private static void TryCloseProcess(Process process)
@@ -612,8 +634,9 @@ public sealed class UltraVncSessionService
     private const uint GW_OWNER = 4;
     private const uint WM_CLOSE = 0x0010;
     private const uint WM_USER = 0x0400;
+    private const uint WM_SETSCALING = WM_USER + 101;
     private const uint WM_SETVIEWONLY = WM_USER + 102;
-    private const uint TB_WM_SWITCHMONITOR = WM_USER + 1006;
+    private const uint TB_WM_FITSCREEN = WM_USER + 1003;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const byte VK_CONTROL = 0x11;
     private const byte VK_SHIFT = 0x10;
