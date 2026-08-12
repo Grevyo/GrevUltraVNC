@@ -29,14 +29,18 @@ public sealed class AgentUpdateService
 
         progress?.Report("Starting Agent update from GitHub…");
 
-        var childCommand = $"Start-Sleep -Seconds 3; try {{ & '{UpdaterScriptPath}' *>&1 | Out-File -LiteralPath '{UpdateLogPath}' -Encoding UTF8; ('SUCCESS|' + (Get-Date).ToString('O')) | Set-Content -LiteralPath '{UpdateStatusPath}' -Encoding UTF8 }} catch {{ ('FAILED|' + $_.Exception.Message) | Set-Content -LiteralPath '{UpdateStatusPath}' -Encoding UTF8 }}";
+        var childCommand =
+            $"$ErrorActionPreference='Stop'; Start-Sleep -Seconds 3; try {{ & '{UpdaterScriptPath}' *>&1 | Out-File -LiteralPath '{UpdateLogPath}' -Encoding UTF8; ('SUCCESS|' + (Get-Date).ToString('O')) | Set-Content -LiteralPath '{UpdateStatusPath}' -Encoding UTF8 }} catch {{ ('FAILED|' + $_.Exception.Message) | Set-Content -LiteralPath '{UpdateStatusPath}' -Encoding UTF8 }}";
         var encodedChildCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(childCommand));
 
         var bootstrapCommand =
+            "$ErrorActionPreference='Stop'; " +
             $"$u='{UpdaterUrl}'; " +
             $"$p='{UpdaterScriptPath}'; " +
             $"$s='{UpdateStatusPath}'; " +
+            $"$l='{UpdateLogPath}'; " +
             "Remove-Item -LiteralPath $s -Force -ErrorAction SilentlyContinue; " +
+            "Remove-Item -LiteralPath $l -Force -ErrorAction SilentlyContinue; " +
             "Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $p; " +
             $"Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','{encodedChildCommand}')";
 
