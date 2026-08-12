@@ -22,6 +22,7 @@ builder.Services.AddSingleton(serviceConfiguration);
 builder.Services.AddSingleton<AgentRequestAuthenticator>();
 builder.Services.AddSingleton<SystemTelemetryService>();
 builder.Services.AddSingleton<SystemInventoryService>();
+builder.Services.AddSingleton<InteractiveSessionService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SystemTelemetryService>());
 
 var app = builder.Build();
@@ -82,5 +83,8 @@ app.MapPost(AgentProtocol.ProcessActionPath, (AgentProcessActionRequest request,
 
 app.MapPost(AgentProtocol.ServiceActionPath, (AgentServiceActionRequest request, SystemInventoryService inventory) =>
     Results.Json(inventory.ControlService(request)));
+
+app.MapPost(AgentProtocol.QuickActionPath, (AgentQuickActionRequest request, InteractiveSessionService interactiveSession) =>
+    Results.Json(interactiveSession.RunQuickAction(request)));
 
 await app.RunAsync();
