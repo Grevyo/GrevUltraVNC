@@ -20,6 +20,7 @@
     <Using Include="System.Threading" />
     <Using Include="System.Threading.Tasks" />
     <!-- BrandAssets decodes the supplied Grev logo at runtime for window/taskbar/tray branding. -->
+    <None Update="Assets\GrevLogo256.jpg.b64" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Assets\GrevLogo.jpg.b64" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
