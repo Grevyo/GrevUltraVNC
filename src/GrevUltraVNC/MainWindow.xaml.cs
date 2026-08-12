@@ -14,6 +14,7 @@ namespace GrevUltraVNC;
 public partial class MainWindow : Window
 {
     private readonly JsonStorage _storage = new();
+    private readonly AdminWorkspaceStorage _workspace = new();
     private readonly NetworkStatusService _network = new();
     private readonly GrevAgentClient _agent = new();
     private readonly UltraVncSessionService _vnc = new();
@@ -244,7 +245,7 @@ public partial class MainWindow : Window
         e.Handled = true;
         if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
 
-        var overview = new MachineOverviewWindow(machine) { Owner = this };
+        var overview = new MachineOverviewWindow(machine, _vnc) { Owner = this };
         overview.ShowDialog();
     }
 
@@ -252,7 +253,11 @@ public partial class MainWindow : Window
     {
         try
         {
+            var alreadyConnected = _vnc.HasActiveSession(machine.Id);
             _vnc.Launch(machine, _settings);
+
+            if (!alreadyConnected)
+                _ = RecordActivityAsync(machine, "VNC", "Connect", $"Connected to {machine.IpAddress}:{machine.VncPort}", true);
 
             if (_controlPanels.TryGetValue(machine.Id, out var existing))
             {
@@ -270,7 +275,29 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _ = RecordActivityAsync(machine, "VNC", "Connect", ex.Message, false);
             MessageBox.Show(this, ex.Message, "Could not open VNC", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task RecordActivityAsync(Machine machine, string category, string action, string detail, bool success)
+    {
+        try
+        {
+            await _workspace.AppendActivityAsync(new ActivityEntry
+            {
+                MachineId = machine.Id,
+                MachineName = machine.Name,
+                TimestampUtc = DateTime.UtcNow,
+                Category = category,
+                Action = action,
+                Detail = detail,
+                Success = success
+            });
+        }
+        catch
+        {
+            // History must never prevent a connection or dashboard action.
         }
     }
 
