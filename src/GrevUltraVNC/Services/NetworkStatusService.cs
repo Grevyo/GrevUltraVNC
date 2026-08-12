@@ -10,8 +10,12 @@ public sealed class NetworkStatusService
 {
     public async Task<MachineProbeResult> ProbeAsync(Machine machine, CancellationToken cancellationToken = default)
     {
-        var pingTask = PingAsync(machine.IpAddress, cancellationToken);
-        var vncTask = IsPortOpenAsync(machine.IpAddress, machine.VncPort, cancellationToken);
+        var host = machine.ActiveAddress;
+        if (string.IsNullOrWhiteSpace(host))
+            return new MachineProbeResult(MachineStatus.Offline, null, false);
+
+        var pingTask = PingAsync(host, cancellationToken);
+        var vncTask = IsPortOpenAsync(host, machine.VncPort, cancellationToken);
         await Task.WhenAll(pingTask, vncTask);
 
         var (pingOk, latency) = await pingTask;
