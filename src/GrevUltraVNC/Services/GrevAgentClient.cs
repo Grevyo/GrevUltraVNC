@@ -150,78 +150,92 @@ public sealed class GrevAgentClient : IDisposable
             new AgentIdentityRequest(connectId),
             cancellationToken);
 
-    public async Task<AgentCommandResponse> RunCommandAsync(
+    public Task<AgentCommandResponse> RunCommandAsync(
         Machine machine,
         string shell,
         string command,
         int timeoutSeconds = 30,
-        CancellationToken cancellationToken = default)
-    {
-        if (!_credentials.TryRead(machine.Id, out var sharedKey))
-            throw new InvalidOperationException("This machine has no saved Grev Agent pairing key. Open Edit Machine and pair the Agent first.");
-
-        var encrypted = AgentPayloadCrypto.Encrypt(
-            sharedKey,
-            new AgentCommandRequest(shell, command, timeoutSeconds));
-        var body = JsonSerializer.SerializeToUtf8Bytes(encrypted, JsonOptions);
-
-        using var request = CreateAuthenticatedRequest(
-            HttpMethod.Post,
-            Root(machine) + AgentProtocol.CommandPath,
-            sharedKey,
+        CancellationToken cancellationToken = default) =>
+        PostEncryptedAsync<AgentCommandRequest, AgentCommandResponse>(
+            machine,
             AgentProtocol.CommandPath,
-            body);
-        using var timeout = CreateTimeout(cancellationToken, TimeSpan.FromSeconds(45));
-        using var response = await _httpClient.SendAsync(request, timeout.Token);
+            new AgentCommandRequest(shell, command, timeoutSeconds),
+            TimeSpan.FromSeconds(45),
+            "encrypted terminal",
+            cancellationToken);
 
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
-            throw new AgentAuthenticationException();
-
-        if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new InvalidOperationException("This Grev Agent is too old for the encrypted terminal. Use Update Agent on the target PC.");
-
-        if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {AgentProtocol.CommandPath}.");
-
-        var responseEnvelope = await response.Content.ReadFromJsonAsync<AgentEncryptedEnvelope>(cancellationToken: timeout.Token)
-                               ?? throw new InvalidOperationException("Grev Agent returned an empty encrypted terminal response.");
-
-        return AgentPayloadCrypto.Decrypt<AgentCommandResponse>(sharedKey, responseEnvelope);
-    }
-
-    public async Task<AgentFileResponse> RunFileRequestAsync(
+    public Task<AgentFileResponse> RunFileRequestAsync(
         Machine machine,
         AgentFileRequest fileRequest,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        PostEncryptedAsync<AgentFileRequest, AgentFileResponse>(
+            machine,
+            AgentProtocol.FilesPath,
+            fileRequest,
+            TimeSpan.FromMinutes(10),
+            "native file management",
+            cancellationToken);
+
+    public Task<AgentCollaborationResponse> RunCollaborationAsync(
+        Machine machine,
+        AgentCollaborationRequest collaborationRequest,
+        CancellationToken cancellationToken = default) =>
+        PostEncryptedAsync<AgentCollaborationRequest, AgentCollaborationResponse>(
+            machine,
+            AgentProtocol.CollaborationPath,
+            collaborationRequest,
+            TimeSpan.FromSeconds(8),
+            "Grev Collaboration",
+            cancellationToken);
+
+    public Task<AgentAudioResponse> RunAudioAsync(
+        Machine machine,
+        AgentAudioRequest audioRequest,
+        CancellationToken cancellationToken = default) =>
+        PostEncryptedAsync<AgentAudioRequest, AgentAudioResponse>(
+            machine,
+            AgentProtocol.AudioPath,
+            audioRequest,
+            TimeSpan.FromSeconds(8),
+            "remote computer audio",
+            cancellationToken);
+
+    private async Task<TResponse> PostEncryptedAsync<TRequest, TResponse>(
+        Machine machine,
+        string path,
+        TRequest payload,
+        TimeSpan timeoutDuration,
+        string featureName,
+        CancellationToken cancellationToken)
     {
         if (!_credentials.TryRead(machine.Id, out var sharedKey))
             throw new InvalidOperationException("This machine has no saved Grev Agent pairing key. Open Edit Machine and pair the Agent first.");
 
-        var encrypted = AgentPayloadCrypto.Encrypt(sharedKey, fileRequest);
+        var encrypted = AgentPayloadCrypto.Encrypt(sharedKey, payload);
         var body = JsonSerializer.SerializeToUtf8Bytes(encrypted, JsonOptions);
 
         using var request = CreateAuthenticatedRequest(
             HttpMethod.Post,
-            Root(machine) + AgentProtocol.FilesPath,
+            Root(machine) + path,
             sharedKey,
-            AgentProtocol.FilesPath,
+            path,
             body);
-        using var timeout = CreateTimeout(cancellationToken, TimeSpan.FromMinutes(10));
+        using var timeout = CreateTimeout(cancellationToken, timeoutDuration);
         using var response = await _httpClient.SendAsync(request, timeout.Token);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
             throw new AgentAuthenticationException();
 
         if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new InvalidOperationException("This Grev Agent is too old for native file management. Use Update Agent on the target PC.");
+            throw new InvalidOperationException($"This Grev Agent is too old for {featureName}. Use Update Agent on the target PC.");
 
         if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {AgentProtocol.FilesPath}.");
+            throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {path}.");
 
         var responseEnvelope = await response.Content.ReadFromJsonAsync<AgentEncryptedEnvelope>(cancellationToken: timeout.Token)
-                               ?? throw new InvalidOperationException("Grev Agent returned an empty encrypted file response.");
+                               ?? throw new InvalidOperationException($"Grev Agent returned an empty encrypted {featureName} response.");
 
-        return AgentPayloadCrypto.Decrypt<AgentFileResponse>(sharedKey, responseEnvelope);
+        return AgentPayloadCrypto.Decrypt<TResponse>(sharedKey, responseEnvelope);
     }
 
     private async Task<T> GetRequiredAuthenticatedAsync<T>(Machine machine, string path, CancellationToken cancellationToken)
