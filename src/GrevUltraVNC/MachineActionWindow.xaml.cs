@@ -17,6 +17,7 @@ public partial class MachineActionWindow : Window
     private readonly VncCredentialService _credentials = new();
     private readonly AgentCredentialService _agentCredentials = new();
     private readonly GrevAgentClient _agent = new();
+    private readonly GrevConnectResolver _connectResolver = new();
     private readonly AgentUpdateService _agentUpdater;
     private bool _agentUpdateRunning;
 
@@ -30,20 +31,33 @@ public partial class MachineActionWindow : Window
         _settings = settings;
         _vnc = vnc;
         _agentUpdater = new AgentUpdateService(_agent);
-        Closed += (_, _) => _agent.Dispose();
+        Closed += (_, _) =>
+        {
+            _agent.Dispose();
+            _connectResolver.Dispose();
+        };
         RefreshHeader();
     }
 
     private void RefreshHeader()
     {
         MachineNameText.Text = _machine.Name;
-        MachineAddressText.Text = $"{_machine.IpAddress}  ·  VNC {_machine.VncPort}";
+        MachineAddressText.Text = $"{_machine.ConnectDisplayText}  ·  VNC {_machine.VncPort}";
     }
 
-    private void Vnc_Click(object sender, RoutedEventArgs e)
+    private async Task EnsureRouteAsync()
+    {
+        await _connectResolver.ResolveAsync(_machine);
+        RefreshHeader();
+        if (string.IsNullOrWhiteSpace(_machine.ActiveAddress))
+            throw new InvalidOperationException($"{_machine.ConnectId} could not be found on the current LAN or Grev Connect networks.");
+    }
+
+    private async void Vnc_Click(object sender, RoutedEventArgs e)
     {
         try
         {
+            await EnsureRouteAsync();
             _vnc.Launch(_machine, _settings);
             var controlPanel = new GrevControlPanelWindow(_machine, _vnc);
             controlPanel.Show();
@@ -88,22 +102,40 @@ public partial class MachineActionWindow : Window
     {
         if (MessageBox.Show(this, $"Restart {_machine.Name} now?", "Confirm restart", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        var result = await _power.RestartAsync(_machine.IpAddress);
-        MessageBox.Show(this, result.Message, "Restart", MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+
+        try
+        {
+            await EnsureRouteAsync();
+            var result = await _power.RestartAsync(_machine.ActiveAddress);
+            MessageBox.Show(this, result.Message, "Restart", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Restart", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async void Shutdown_Click(object sender, RoutedEventArgs e)
     {
         if (MessageBox.Show(this, $"Shut down {_machine.Name} now?", "Confirm shutdown", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        var result = await _power.ShutdownAsync(_machine.IpAddress);
-        MessageBox.Show(this, result.Message, "Shut down", MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+
+        try
+        {
+            await EnsureRouteAsync();
+            var result = await _power.ShutdownAsync(_machine.ActiveAddress);
+            MessageBox.Show(this, result.Message, "Shut down", MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Shut down", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async void StartVncService_Click(object sender, RoutedEventArgs e) =>
-        await RunVncServiceActionAsync(() => _remoteVnc.StartAsync(_machine.IpAddress), "Start UltraVNC");
+        await RunVncServiceActionAsync(host => _remoteVnc.StartAsync(host), "Start UltraVNC");
 
     private async void RestartVncService_Click(object sender, RoutedEventArgs e)
     {
@@ -112,7 +144,7 @@ public partial class MachineActionWindow : Window
                 "Restart UltraVNC", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunVncServiceActionAsync(() => _remoteVnc.RestartAsync(_machine.IpAddress), "Restart UltraVNC");
+        await RunVncServiceActionAsync(host => _remoteVnc.RestartAsync(host), "Restart UltraVNC");
     }
 
     private async void StopVncService_Click(object sender, RoutedEventArgs e)
@@ -122,14 +154,15 @@ public partial class MachineActionWindow : Window
                 "Stop UltraVNC", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunVncServiceActionAsync(() => _remoteVnc.StopAsync(_machine.IpAddress), "Stop UltraVNC");
+        await RunVncServiceActionAsync(host => _remoteVnc.StopAsync(host), "Stop UltraVNC");
     }
 
-    private async Task RunVncServiceActionAsync(Func<Task<RemoteServiceResult>> action, string title)
+    private async Task RunVncServiceActionAsync(Func<string, Task<RemoteServiceResult>> action, string title)
     {
         try
         {
-            var result = await action();
+            await EnsureRouteAsync();
+            var result = await action(_machine.ActiveAddress);
             MessageBox.Show(this, result.Message, title, MessageBoxButton.OK,
                 result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
         }
@@ -140,11 +173,11 @@ public partial class MachineActionWindow : Window
     }
 
     private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e) =>
-        await RunVncServiceActionAsync(() => _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress), "UltraVNC at boot");
+        await RunVncServiceActionAsync(host => _remoteVnc.EnableAutoStartAndStartAsync(host), "UltraVNC at boot");
 
     private void Overview_Click(object sender, RoutedEventArgs e)
     {
-        var overview = new MachineOverviewWindow(_machine) { Owner = this };
+        var overview = new MachineOverviewWindow(_machine, _vnc) { Owner = this };
         overview.ShowDialog();
     }
 
@@ -165,6 +198,7 @@ public partial class MachineActionWindow : Window
 
         try
         {
+            await EnsureRouteAsync();
             var progress = new Progress<string>(message => AgentUpdateStatusText.Text = message);
             var result = await _agentUpdater.UpdateFromGitHubAsync(_machine, progress);
             _machine.AgentState = result.State;
@@ -190,14 +224,15 @@ public partial class MachineActionWindow : Window
         }
     }
 
-    private void Shares_Click(object sender, RoutedEventArgs e)
+    private async void Shares_Click(object sender, RoutedEventArgs e)
     {
         try
         {
+            await EnsureRouteAsync();
             Process.Start(new ProcessStartInfo
             {
                 FileName = "explorer.exe",
-                Arguments = $"\\\\{_machine.IpAddress}\\",
+                Arguments = $"\\\\{_machine.ActiveAddress}\\",
                 UseShellExecute = true
             });
         }
@@ -209,19 +244,31 @@ public partial class MachineActionWindow : Window
 
     private async void Diagnostics_Click(object sender, RoutedEventArgs e)
     {
-        var networkResult = await _network.ProbeAsync(_machine);
-        var serviceResult = await _remoteVnc.QueryAsync(_machine.IpAddress);
-        var agentResult = await _agent.ProbeAsync(_machine);
-        var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
-        var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
-        var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
-        var agent = agentResult.Status is null
-            ? $"{agentResult.State}: {agentResult.Message}"
-            : $"Connected · Agent {agentResult.Status.AgentVersion} · CPU {agentResult.Status.CpuUsagePercent:0.#}%";
+        try
+        {
+            await _connectResolver.ResolveAsync(_machine);
+            var networkResult = await _network.ProbeAsync(_machine);
+            var serviceResult = string.IsNullOrWhiteSpace(_machine.ActiveAddress)
+                ? new RemoteServiceResult(false, "No current route")
+                : await _remoteVnc.QueryAsync(_machine.ActiveAddress);
+            var agentResult = string.IsNullOrWhiteSpace(_machine.ActiveAddress)
+                ? new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: "No current route")
+                : await _agent.ProbeAsync(_machine);
+            var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
+            var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
+            var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
+            var agent = agentResult.Status is null
+                ? $"{agentResult.State}: {agentResult.Message}"
+                : $"Connected · Agent {agentResult.Status.AgentVersion} · CPU {agentResult.Status.CpuUsagePercent:0.#}%";
 
-        MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
-            "Connection diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this,
+                $"Machine: {_machine.Name}\nGrev Connect ID: {(_machine.ConnectId.Length == 0 ? "Not assigned" : _machine.ConnectId)}\nRoute: {(_machine.ActiveAddress.Length == 0 ? "Unavailable" : $"{_machine.ResolvedRoute} · {_machine.ActiveAddress}")}\nLAN IP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
+                "Connection diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Connection diagnostics", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void Edit_Click(object sender, RoutedEventArgs e)
