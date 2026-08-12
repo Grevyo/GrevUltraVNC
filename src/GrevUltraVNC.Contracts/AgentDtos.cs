@@ -5,7 +5,16 @@ public sealed record AgentPingResponse(
     string AgentVersion,
     string MachineName,
     bool AuthenticationRequired,
-    int ProtocolVersion);
+    int ProtocolVersion,
+    string? ConnectId = null);
+
+public sealed record AgentIdentityRequest(
+    string ConnectId);
+
+public sealed record AgentIdentityResponse(
+    bool Success,
+    string Message,
+    string ConnectId);
 
 public sealed record AgentDiskStatus(
     string Name,
