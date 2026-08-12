@@ -43,11 +43,11 @@ public partial class MachineDialog : Window
         _hadSavedAgentKey = _agentCredentials.HasSavedKey(_working.Id);
         AgentKeyStateText.Text = _hadSavedAgentKey
             ? "This machine is paired with Grev Agent. Leave the key blank to keep the saved pairing, or paste a new key to replace it."
-            : "No Grev Agent pairing key is saved. Install the agent on the target PC, then paste the pairing key printed by its installer here.";
+            : "No Grev Agent pairing key is saved. Paste the key for this Agent when you want this controller authorised to manage it.";
 
         ConnectIdStateText.Text = string.IsNullOrWhiteSpace(_working.ConnectId)
-            ? "Protocol 6 Agents create a permanent ID automatically, normally GC- followed by the Windows PC name. Update the Agent first if this is blank."
-            : $"Current Agent identity: {_working.ConnectId}. Edit the field and use Set on Agent to deliberately rename it.";
+            ? "Enter an existing ID such as GC-GrevoServer and choose Find Agent, or update a local Agent to protocol 6 to create its ID automatically."
+            : $"Current identity: {_working.ConnectId}. Find Agent locates its current route; Set on Agent deliberately renames the real Agent identity.";
 
         Closed += (_, _) =>
         {
@@ -74,6 +74,67 @@ public partial class MachineDialog : Window
             : "No Grev Agent pairing key is currently saved.";
     }
 
+    private async void FindConnectId_Click(object sender, RoutedEventArgs e)
+    {
+        if (!GrevConnectId.TryNormalize(ConnectIdBox.Text, out var normalized, out var validationError))
+        {
+            MessageBox.Show(this, validationError, "Grev Connect ID", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!int.TryParse(AgentPortBox.Text, out var agentPort) || agentPort is < 1 or > 65535)
+        {
+            MessageBox.Show(this, "Enter a valid Grev Agent port before searching.", "Grev Connect", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        FindConnectIdButton.IsEnabled = false;
+        ApplyConnectIdButton.IsEnabled = false;
+        ConnectIdStateText.Text = $"Searching current LAN / Grev Connect networks for {normalized}…";
+
+        try
+        {
+            var candidate = new Machine
+            {
+                Name = NameBox.Text.Trim(),
+                IpAddress = string.Empty,
+                ConnectId = normalized,
+                AgentPort = agentPort,
+                VncPort = int.TryParse(PortBox.Text, out var vncPort) && vncPort is >= 1 and <= 65535 ? vncPort : 5900
+            };
+
+            var resolution = await _connectResolver.ResolveAsync(candidate);
+            if (resolution is null || string.IsNullOrWhiteSpace(candidate.ResolvedAddress))
+                throw new InvalidOperationException($"{normalized} was not found on the current LAN or Grev Connect networks.");
+
+            _target.ConnectId = normalized;
+            _target.ResolvedAddress = candidate.ResolvedAddress;
+            _target.ResolvedRoute = candidate.ResolvedRoute;
+            _working.ConnectId = normalized;
+            _working.ResolvedAddress = candidate.ResolvedAddress;
+            _working.ResolvedRoute = candidate.ResolvedRoute;
+            ConnectIdBox.Text = normalized;
+
+            if (_target.Name == "New PC" && _target.IpAddress == "192.168.1.1")
+            {
+                IpBox.Clear();
+                _working.IpAddress = string.Empty;
+            }
+
+            ConnectIdStateText.Text = $"Found {normalized} via {candidate.ResolvedRoute} · {candidate.ResolvedAddress}. Pairing credentials are still required for control.";
+        }
+        catch (Exception ex)
+        {
+            ConnectIdStateText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "Find Grev Connect Agent", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        finally
+        {
+            FindConnectIdButton.IsEnabled = true;
+            ApplyConnectIdButton.IsEnabled = true;
+        }
+    }
+
     private async void ApplyConnectId_Click(object sender, RoutedEventArgs e)
     {
         if (!GrevConnectId.TryNormalize(ConnectIdBox.Text, out var normalized, out var validationError))
@@ -82,6 +143,7 @@ public partial class MachineDialog : Window
             return;
         }
 
+        FindConnectIdButton.IsEnabled = false;
         ApplyConnectIdButton.IsEnabled = false;
         ConnectIdStateText.Text = "Finding the current Agent route…";
 
@@ -108,6 +170,7 @@ public partial class MachineDialog : Window
         }
         finally
         {
+            FindConnectIdButton.IsEnabled = true;
             ApplyConnectIdButton.IsEnabled = true;
         }
     }
@@ -126,7 +189,7 @@ public partial class MachineDialog : Window
         }
         if (string.IsNullOrWhiteSpace(ip) && string.IsNullOrWhiteSpace(_target.ConnectId))
         {
-            MessageBox.Show(this, "Enter a LAN IP, or first assign a Grev Connect ID to the Agent.", "GrevUltraVNC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Enter a LAN IP, or use Find Agent to assign an existing Grev Connect ID.", "GrevUltraVNC", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (!string.IsNullOrWhiteSpace(ip) && !IPAddress.TryParse(ip, out _))
@@ -178,6 +241,8 @@ public partial class MachineDialog : Window
         _working.Notes = NotesBox.Text.Trim();
         _working.IsFavorite = FavoriteCheck.IsChecked == true;
         _target.ApplyFrom(_working);
+        _target.ResolvedAddress = _working.ResolvedAddress;
+        _target.ResolvedRoute = _working.ResolvedRoute;
         DialogResult = true;
     }
 }
