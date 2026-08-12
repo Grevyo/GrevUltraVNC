@@ -23,16 +23,17 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border Width="50" Height="50" CornerRadius="12" Background="#030509" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Border Width="50" Height="50" CornerRadius="12" Background="#030509" BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
                     <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
-                    <TextBlock Text="MACHINE MANAGEMENT" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock Text="MACHINE MANAGEMENT" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="Bold" />
                     <TextBlock x:Name="MachineNameText" FontSize="27" FontWeight="Bold" Margin="0,2,0,0" />
                     <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="AgentStateText" Text="● CHECKING AGENT" Foreground="{DynamicResource MutedTextBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <Button x:Name="UpdateAgentButton" Style="{StaticResource SecondaryButton}" Content="⇩ Update Agent" Click="UpdateAgent_Click" IsEnabled="False" Margin="0,0,8,0" />
                     <Button Style="{StaticResource SecondaryButton}" Content="↻ Refresh" Click="Refresh_Click" />
                 </StackPanel>
             </Grid>
@@ -93,7 +94,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,7,0">
                         <StackPanel>
-                            <TextBlock Text="SYSTEM" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock Text="SYSTEM" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" />
                             <TextBlock x:Name="OsText" Text="Waiting for Grev Agent…" FontSize="15" FontWeight="SemiBold" Margin="0,10,0,0" TextWrapping="Wrap" />
                             <TextBlock x:Name="HostText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,0" />
                             <TextBlock x:Name="AgentVersionText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />
@@ -110,7 +111,7 @@
 
                 <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="DISKS" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,10" />
+                        <TextBlock DockPanel.Dock="Top" Text="DISKS" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,10" />
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="DiskItems">
                                 <ItemsControl.ItemTemplate>
