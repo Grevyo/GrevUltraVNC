@@ -12,16 +12,19 @@ public partial class MachineOverviewWindow : Window
 {
     private readonly Machine _machine;
     private readonly GrevAgentClient _agent = new();
+    private readonly AgentUpdateService _agentUpdater;
     private IReadOnlyList<AgentProcessInfo> _processes = [];
     private IReadOnlyList<AgentServiceInfo> _services = [];
     private bool _refreshing;
     private bool _actionRunning;
     private bool _commandRunning;
+    private bool _agentUpdateRunning;
 
     public MachineOverviewWindow(Machine machine)
     {
         InitializeComponent();
         _machine = machine;
+        _agentUpdater = new AgentUpdateService(_agent);
 
         MachineNameText.Text = machine.Name;
         MachineAddressText.Text = $"{machine.IpAddress}  ·  Agent {machine.AgentPort}  ·  VNC {machine.VncPort}";
@@ -40,31 +43,51 @@ public partial class MachineOverviewWindow : Window
         StatusText.Text = "Refreshing live Agent data…";
         AgentStateText.Text = "● CHECKING AGENT";
         AgentStateText.Foreground = (Brush)FindResource("MutedTextBrush");
+        UpdateAgentButton.IsEnabled = false;
 
         try
         {
-            var statusTask = _agent.GetStatusAsync(_machine);
+            var probeTask = _agent.ProbeAsync(_machine);
             var processesTask = _agent.GetProcessesAsync(_machine);
             var servicesTask = _agent.GetServicesAsync(_machine);
 
-            await Task.WhenAll(statusTask, processesTask, servicesTask);
+            await Task.WhenAll(probeTask, processesTask, servicesTask);
 
-            var status = await statusTask;
+            var probe = await probeTask;
+            if (probe.State != GrevAgentState.Connected || probe.Status is null)
+                throw new InvalidOperationException(probe.Message ?? "Grev Agent is not connected.");
+
+            var status = probe.Status;
             _processes = await processesTask;
             _services = await servicesTask;
+
+            _machine.AgentState = probe.State;
+            _machine.AgentStatus = probe.Status;
+            _machine.AgentMessage = probe.Message;
 
             RenderOverview(status);
             RenderProcesses();
             RenderServices();
 
-            AgentStateText.Text = "● AGENT CONNECTED";
-            AgentStateText.Foreground = new SolidColorBrush(Color.FromRgb(80, 220, 145));
-            StatusText.Text = $"Live data refreshed {DateTime.Now:HH:mm:ss}";
+            AgentStateText.Text = string.IsNullOrWhiteSpace(probe.Message)
+                ? "● AGENT CONNECTED"
+                : "● AGENT UPDATE RECOMMENDED";
+            AgentStateText.Foreground = string.IsNullOrWhiteSpace(probe.Message)
+                ? new SolidColorBrush(Color.FromRgb(80, 220, 145))
+                : (Brush)FindResource("Accent2Brush");
+            UpdateAgentButton.Content = string.IsNullOrWhiteSpace(probe.Message)
+                ? "⇩ Update Agent"
+                : "⇩ Update Agent · recommended";
+            UpdateAgentButton.IsEnabled = !_agentUpdateRunning;
+            StatusText.Text = string.IsNullOrWhiteSpace(probe.Message)
+                ? $"Live data refreshed {DateTime.Now:HH:mm:ss}"
+                : probe.Message;
         }
         catch (Exception ex)
         {
             AgentStateText.Text = "● AGENT UNAVAILABLE";
             AgentStateText.Foreground = (Brush)FindResource("DangerBrush");
+            UpdateAgentButton.IsEnabled = false;
             StatusText.Text = ex.Message;
         }
         finally
@@ -153,6 +176,51 @@ public partial class MachineOverviewWindow : Window
             ? $"{_services.Count} services"
             : $"Showing {rows.Length} of {_services.Count}";
         ServiceSummaryText.Text = $"Services: {_services.Count}";
+    }
+
+    private async void UpdateAgent_Click(object sender, RoutedEventArgs e)
+    {
+        if (_agentUpdateRunning) return;
+
+        if (MessageBox.Show(this,
+                $"Update Grev Agent on {_machine.Name} from the latest GitHub release?\n\nThe Agent service will restart and the existing pairing key will be preserved.",
+                "Update Grev Agent",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        _agentUpdateRunning = true;
+        UpdateAgentButton.IsEnabled = false;
+
+        try
+        {
+            var progress = new Progress<string>(message => StatusText.Text = message);
+            var result = await _agentUpdater.UpdateFromGitHubAsync(_machine, progress);
+            _machine.AgentState = result.State;
+            _machine.AgentStatus = result.Status;
+            _machine.AgentMessage = result.Message;
+
+            _agentUpdateRunning = false;
+            await RefreshAllAsync();
+            StatusText.Text = "Grev Agent updated successfully and is responding again.";
+
+            MessageBox.Show(this,
+                $"Grev Agent on {_machine.Name} updated successfully.",
+                "Grev Agent updated",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "Grev Agent update", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _agentUpdateRunning = false;
+            if (_machine.AgentState == GrevAgentState.Connected)
+                UpdateAgentButton.IsEnabled = true;
+        }
     }
 
     private async void EndProcess_Click(object sender, RoutedEventArgs e)
