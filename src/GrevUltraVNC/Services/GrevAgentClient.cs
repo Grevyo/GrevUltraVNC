@@ -43,10 +43,11 @@ public sealed class GrevAgentClient : IDisposable
 
         try
         {
-            if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
+            var probeAddress = machine.ActiveAddress;
+            if (string.IsNullOrWhiteSpace(probeAddress))
                 return new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: "No LAN or Grev Connect route is currently resolved for this machine.");
 
-            var root = Root(machine);
+            var root = $"http://{probeAddress}:{machine.AgentPort}";
             using var ping = await _httpClient.GetAsync(root + AgentProtocol.PingPath, token);
             if (!ping.IsSuccessStatusCode)
                 return new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: $"Agent ping returned HTTP {(int)ping.StatusCode}.");
@@ -67,7 +68,16 @@ public sealed class GrevAgentClient : IDisposable
             }
 
             if (string.IsNullOrWhiteSpace(machine.ConnectId) && !string.IsNullOrWhiteSpace(pingBody.ConnectId))
+            {
+                if (string.IsNullOrWhiteSpace(machine.ResolvedAddress))
+                {
+                    machine.ResolvedAddress = probeAddress;
+                    machine.ResolvedRoute = string.Equals(probeAddress, machine.IpAddress, StringComparison.OrdinalIgnoreCase)
+                        ? "LAN"
+                        : "Grev Connect";
+                }
                 machine.ConnectId = pingBody.ConnectId;
+            }
 
             if (!_credentials.TryRead(machine.Id, out var sharedKey))
                 return new GrevAgentProbeResult(
