@@ -108,3 +108,53 @@ public sealed record AgentFileResponse(
     string? DataBase64 = null,
     long NextOffset = 0,
     bool Complete = true);
+
+public sealed record AgentPresenceInfo(
+    string ControllerId,
+    string DisplayName,
+    DateTimeOffset ConnectedAtUtc,
+    DateTimeOffset LastSeenUtc);
+
+public sealed record AgentWhiteboardPoint(
+    double X,
+    double Y);
+
+public sealed record AgentWhiteboardEvent(
+    long EventId,
+    string ControllerId,
+    string DisplayName,
+    string Kind,
+    string StrokeId,
+    string Color,
+    double Thickness,
+    IReadOnlyList<AgentWhiteboardPoint> Points,
+    DateTimeOffset CreatedAtUtc);
+
+public sealed record AgentCollaborationRequest(
+    string Operation,
+    string ControllerId,
+    string DisplayName,
+    long LastEventId = 0,
+    AgentWhiteboardEvent? WhiteboardEvent = null);
+
+public sealed record AgentCollaborationResponse(
+    bool Success,
+    string Message,
+    IReadOnlyList<AgentPresenceInfo> Participants,
+    IReadOnlyList<AgentWhiteboardEvent> WhiteboardEvents,
+    long LastEventId);
+
+public sealed record AgentAudioRequest(
+    string Operation,
+    string ControllerId,
+    long LastSequence = 0);
+
+public sealed record AgentAudioResponse(
+    bool Success,
+    string Message,
+    bool Active,
+    int SampleRate,
+    int Channels,
+    int BitsPerSample,
+    string DataBase64,
+    long LastSequence);
