@@ -8,6 +8,7 @@ namespace GrevUltraVNC.Services;
 public sealed class UltraVncSessionService
 {
     private readonly Dictionary<Guid, Process> _sessions = [];
+    private readonly Dictionary<Guid, Process> _virtualSessions = [];
     private readonly VncCredentialService _credentials = new();
 
     public string? FindViewer(string configuredPath)
@@ -34,6 +35,45 @@ public sealed class UltraVncSessionService
             return existing!;
         }
 
+        var process = StartViewer(machine, settings, configPath: null);
+        _sessions[machine.Id] = process;
+        return process;
+    }
+
+    public Process OpenVirtualDisplay(Machine machine, AppSettings settings)
+    {
+        if (_virtualSessions.TryGetValue(machine.Id, out var existing))
+        {
+            try
+            {
+                if (!existing.HasExited)
+                {
+                    FocusViewer(existing);
+                    return existing;
+                }
+            }
+            catch
+            {
+            }
+
+            _virtualSessions.Remove(machine.Id);
+        }
+
+        if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
+            throw new InvalidOperationException("No LAN or Grev Connect route is currently available for this machine.");
+
+        var bounds = System.Windows.Forms.Screen.PrimaryScreen?.Bounds;
+        var width = Math.Clamp(bounds?.Width ?? 1920, 800, 7680);
+        var height = Math.Clamp(bounds?.Height ?? 1080, 600, 4320);
+        var configPath = CreateVirtualDisplayConfig(machine.Id, width, height);
+
+        var process = StartViewer(machine, settings, configPath);
+        _virtualSessions[machine.Id] = process;
+        return process;
+    }
+
+    private Process StartViewer(Machine machine, AppSettings settings, string? configPath)
+    {
         if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
             throw new InvalidOperationException("No LAN or Grev Connect route is currently available for this machine.");
 
@@ -45,8 +85,16 @@ public sealed class UltraVncSessionService
             FileName = viewer,
             UseShellExecute = true
         };
+
+        if (!string.IsNullOrWhiteSpace(configPath))
+        {
+            psi.ArgumentList.Add("-config");
+            psi.ArgumentList.Add(configPath);
+        }
+
         psi.ArgumentList.Add("-connect");
         psi.ArgumentList.Add($"{machine.ActiveAddress}::{machine.VncPort}");
+        psi.ArgumentList.Add("-shared");
 
         if (_credentials.TryRead(machine.Id, out var password) && !string.IsNullOrEmpty(password))
         {
@@ -55,11 +103,36 @@ public sealed class UltraVncSessionService
         }
 
         if (settings.AutoScaling) psi.ArgumentList.Add("-autoscaling");
-        if (settings.FullScreenByDefault) psi.ArgumentList.Add("-fullscreen");
+        if (settings.FullScreenByDefault && string.IsNullOrWhiteSpace(configPath))
+            psi.ArgumentList.Add("-fullscreen");
 
-        var process = Process.Start(psi) ?? throw new InvalidOperationException("UltraVNC Viewer did not start.");
-        _sessions[machine.Id] = process;
-        return process;
+        return Process.Start(psi) ?? throw new InvalidOperationException("UltraVNC Viewer did not start.");
+    }
+
+    private static string CreateVirtualDisplayConfig(Guid machineId, int width, int height)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "GrevUltraVNC", "VirtualDisplays");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, $"{machineId:N}.vnc");
+
+        var content = $"""
+                      [options]
+                      shared=1
+                      viewonly=0
+                      showtoolbar=1
+                      fullscreen=0
+                      AutoScaling=1
+                      ChangeServerRes=1
+                      extendDisplay=1
+                      showExtend=1
+                      use_virt=0
+                      useAllMonitors=0
+                      requestedWidth={width}
+                      requestedHeight={height}
+                      """;
+
+        File.WriteAllText(path, content);
+        return path;
     }
 
     public bool HasActiveSession(Guid machineId) => TryGetSession(machineId, out _);
