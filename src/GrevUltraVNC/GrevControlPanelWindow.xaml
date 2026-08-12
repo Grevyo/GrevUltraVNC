@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
         Title="Grev Control Panel"
-        Width="306" Height="690" MinHeight="560" MaxHeight="720"
+        Width="306" Height="770" MinHeight="620" MaxHeight="810"
         ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True"
         ShowInTaskbar="False" Topmost="True"
         Icon="{x:Static svc:BrandAssets.Logo}"
@@ -21,6 +21,11 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="MinHeight" Value="36" />
         </Style>
+        <Style x:Key="CollabActionButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
+            <Setter Property="Padding" Value="7,6" />
+            <Setter Property="FontSize" Value="9" />
+            <Setter Property="MinHeight" Value="32" />
+        </Style>
     </Window.Resources>
 
     <Border Margin="8" CornerRadius="18"
@@ -34,6 +39,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
@@ -94,14 +100,12 @@
                     <TextBlock Text="VIEWER" Style="{StaticResource PanelSectionLabel}" />
                     <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1" CornerRadius="12" Padding="8">
-                        <StackPanel>
-                            <UniformGrid Columns="2">
-                                <Button Style="{StaticResource PanelActionButton}" Content="Bring forward" Click="BringToFront_Click" Margin="0,0,4,6" />
-                                <Button Style="{StaticResource PanelActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="4,0,0,6" />
-                                <Button Style="{StaticResource PanelActionButton}" Content="Refresh screen" Click="RefreshScreen_Click" Margin="0,0,4,0" />
-                                <Button Style="{StaticResource PanelActionButton}" Content="File transfer" Click="FileTransfer_Click" Margin="4,0,0,0" />
-                            </UniformGrid>
-                        </StackPanel>
+                        <UniformGrid Columns="2">
+                            <Button Style="{StaticResource PanelActionButton}" Content="Bring forward" Click="BringToFront_Click" Margin="0,0,4,6" />
+                            <Button Style="{StaticResource PanelActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="4,0,0,6" />
+                            <Button Style="{StaticResource PanelActionButton}" Content="Refresh screen" Click="RefreshScreen_Click" Margin="0,0,4,0" />
+                            <Button Style="{StaticResource PanelActionButton}" Content="File transfer" Click="FileTransfer_Click" Margin="4,0,0,0" />
+                        </UniformGrid>
                     </Border>
 
                     <TextBlock Text="REMOTE KEYS" Style="{StaticResource PanelSectionLabel}" Margin="2,13,0,8" />
@@ -136,7 +140,43 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <Border Grid.Row="3" Padding="12,10,12,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <!-- Grev Collaboration stays compact at the bottom instead of bloating the main controls. -->
+            <Border Grid.Row="3" Margin="12,3,12,10" Padding="9" CornerRadius="12"
+                    Background="{DynamicResource SubtlePanelBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <StackPanel>
+                    <Grid Margin="1,0,1,7">
+                        <TextBlock x:Name="ParticipantsHeaderText" Text="CONNECTED · checking"
+                                   Foreground="{DynamicResource AccentBrush}" FontSize="9" FontWeight="SemiBold" />
+                        <TextBlock x:Name="CollaborationStatusText" Text="Grev Collaboration"
+                                   HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
+                    </Grid>
+                    <UniformGrid Columns="3">
+                        <Button x:Name="AudioButton" Style="{StaticResource CollabActionButton}"
+                                Content="🔊 Sound" Click="Audio_Click" Margin="0,0,3,0" IsEnabled="False" />
+                        <Button x:Name="WhiteboardButton" Style="{StaticResource CollabActionButton}"
+                                Content="✎ Whiteboard" Click="Whiteboard_Click" Margin="3,0" IsEnabled="False" />
+                        <Button x:Name="VirtualDisplayButton" Style="{StaticResource CollabActionButton}"
+                                Content="▣ Screen 2" Click="VirtualDisplay_Click" Margin="3,0,0,0" />
+                    </UniformGrid>
+                    <ItemsControl x:Name="ParticipantsItems" Margin="1,7,1,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource PanelBrush}" CornerRadius="7" Padding="7,3" Margin="0,0,5,4">
+                                    <TextBlock Text="{Binding}" Foreground="{DynamicResource MutedTextBrush}" FontSize="8" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="4" Padding="12,10,12,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
