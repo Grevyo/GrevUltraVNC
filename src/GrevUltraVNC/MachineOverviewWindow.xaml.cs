@@ -171,6 +171,18 @@ public partial class MachineOverviewWindow : Window
         await RunAgentActionAsync(() => _agent.EndProcessAsync(_machine, selected.ProcessId));
     }
 
+    private async void RestartExplorer_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                $"Restart Windows Explorer on {_machine.Name}?\n\nThe taskbar and desktop may disappear briefly while the shell restarts.",
+                "Restart Windows Explorer",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "restart-explorer"));
+    }
+
     private async void StartService_Click(object sender, RoutedEventArgs e) =>
         await RunSelectedServiceActionAsync("start", requiresConfirmation: false);
 
@@ -188,9 +200,10 @@ public partial class MachineOverviewWindow : Window
             return;
         }
 
+        var actionTitle = char.ToUpperInvariant(action[0]) + action[1..];
         if (requiresConfirmation && MessageBox.Show(this,
-                $"{char.ToUpperInvariant(action[0]) + action[1..]} {selected.DisplayName} ({selected.ServiceName}) on {_machine.Name}?",
-                $"{action} remote service",
+                $"{actionTitle} {selected.DisplayName} ({selected.ServiceName}) on {_machine.Name}?",
+                $"{actionTitle} remote service",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
