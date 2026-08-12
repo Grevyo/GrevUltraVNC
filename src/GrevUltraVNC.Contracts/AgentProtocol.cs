@@ -5,7 +5,7 @@ namespace GrevUltraVNC.Contracts;
 
 public static class AgentProtocol
 {
-    public const int ProtocolVersion = 3;
+    public const int ProtocolVersion = 4;
     public const int DefaultPort = 47820;
     public const string PingPath = "/api/v1/ping";
     public const string StatusPath = "/api/v1/status";
