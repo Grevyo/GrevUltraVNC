@@ -1,0 +1,209 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using GrevUltraVNC.Contracts;
+using GrevUltraVNC.Models;
+using GrevUltraVNC.Services;
+
+namespace GrevUltraVNC;
+
+public partial class MachineOverviewWindow : Window
+{
+    private readonly Machine _machine;
+    private readonly GrevAgentClient _agent = new();
+    private IReadOnlyList<AgentProcessInfo> _processes = [];
+    private IReadOnlyList<AgentServiceInfo> _services = [];
+    private bool _refreshing;
+
+    public MachineOverviewWindow(Machine machine)
+    {
+        InitializeComponent();
+        _machine = machine;
+
+        MachineNameText.Text = machine.Name;
+        MachineAddressText.Text = $"{machine.IpAddress}  ·  Agent {machine.AgentPort}  ·  VNC {machine.VncPort}";
+
+        Loaded += MachineOverviewWindow_Loaded;
+        Closed += (_, _) => _agent.Dispose();
+    }
+
+    private async void MachineOverviewWindow_Loaded(object sender, RoutedEventArgs e) => await RefreshAllAsync();
+    private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAllAsync();
+
+    private async Task RefreshAllAsync()
+    {
+        if (_refreshing) return;
+        _refreshing = true;
+        StatusText.Text = "Refreshing live Agent data…";
+        AgentStateText.Text = "● CHECKING AGENT";
+        AgentStateText.Foreground = (Brush)FindResource("MutedTextBrush");
+
+        try
+        {
+            var statusTask = _agent.GetStatusAsync(_machine);
+            var processesTask = _agent.GetProcessesAsync(_machine);
+            var servicesTask = _agent.GetServicesAsync(_machine);
+
+            await Task.WhenAll(statusTask, processesTask, servicesTask);
+
+            var status = await statusTask;
+            _processes = await processesTask;
+            _services = await servicesTask;
+
+            RenderOverview(status);
+            RenderProcesses();
+            RenderServices();
+
+            AgentStateText.Text = "● AGENT CONNECTED";
+            AgentStateText.Foreground = new SolidColorBrush(Color.FromRgb(80, 220, 145));
+            StatusText.Text = $"Live data refreshed {DateTime.Now:HH:mm:ss}";
+        }
+        catch (Exception ex)
+        {
+            AgentStateText.Text = "● AGENT UNAVAILABLE";
+            AgentStateText.Foreground = (Brush)FindResource("DangerBrush");
+            StatusText.Text = ex.Message;
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private void RenderOverview(AgentStatusResponse status)
+    {
+        CpuUsageText.Text = $"{status.CpuUsagePercent:0.#}%";
+        CpuNameText.Text = status.CpuName;
+
+        var usedMemory = Math.Max(0, status.TotalMemoryBytes - status.AvailableMemoryBytes);
+        var memoryPercent = status.TotalMemoryBytes > 0
+            ? usedMemory * 100.0 / status.TotalMemoryBytes
+            : 0;
+        MemoryUsageText.Text = $"{memoryPercent:0.#}%";
+        MemoryDetailText.Text = $"{FormatBytes(usedMemory)} / {FormatBytes(status.TotalMemoryBytes)}";
+
+        UptimeText.Text = FormatUptime(status.UptimeSeconds);
+        UserText.Text = string.IsNullOrWhiteSpace(status.InteractiveUser)
+            ? "No interactive user"
+            : status.InteractiveUser;
+
+        VncServiceText.Text = status.UltraVncServiceStatus;
+        VncPortText.Text = status.UltraVncPortListening
+            ? $"TCP {status.UltraVncPort} listening"
+            : $"TCP {status.UltraVncPort} not listening";
+
+        OsText.Text = status.OsDescription;
+        HostText.Text = $"Host: {status.MachineName}";
+        AgentVersionText.Text = $"Grev Agent {status.AgentVersion}";
+        ProcessSummaryText.Text = $"Processes: {_processes.Count}";
+        ServiceSummaryText.Text = $"Services: {_services.Count}";
+
+        DiskItems.ItemsSource = status.Disks.Select(disk => new DiskRow(
+            disk.Name,
+            string.IsNullOrWhiteSpace(disk.Label) ? "Local disk" : disk.Label,
+            $"{FormatBytes(disk.FreeBytes)} free / {FormatBytes(disk.TotalBytes)}")).ToArray();
+    }
+
+    private void RenderProcesses()
+    {
+        var search = ProcessSearchBox.Text.Trim();
+        var rows = _processes
+            .Where(process => string.IsNullOrWhiteSpace(search)
+                || process.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || process.Id.ToString().Contains(search, StringComparison.OrdinalIgnoreCase))
+            .Select(process => new ProcessRow(
+                process.Name,
+                process.Id.ToString(),
+                FormatBytes(process.WorkingSetBytes),
+                FormatCpuTime(process.CpuTimeMilliseconds),
+                process.SessionId < 0 ? "—" : process.SessionId.ToString(),
+                process.StartedAtUtc?.ToLocalTime().ToString("dd MMM HH:mm:ss") ?? "—"))
+            .ToArray();
+
+        ProcessesList.ItemsSource = rows;
+        ProcessCountText.Text = rows.Length == _processes.Count
+            ? $"{_processes.Count} processes"
+            : $"Showing {rows.Length} of {_processes.Count}";
+    }
+
+    private void RenderServices()
+    {
+        var search = ServiceSearchBox.Text.Trim();
+        var rows = _services
+            .Where(service => string.IsNullOrWhiteSpace(search)
+                || service.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || service.ServiceName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || service.Status.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || service.StartMode.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .Select(service => new ServiceRow(
+                service.DisplayName,
+                service.ServiceName,
+                service.Status,
+                service.StartMode,
+                service.CanStop ? "Controllable" : "Protected"))
+            .ToArray();
+
+        ServicesList.ItemsSource = rows;
+        ServiceCountText.Text = rows.Length == _services.Count
+            ? $"{_services.Count} services"
+            : $"Showing {rows.Length} of {_services.Count}";
+    }
+
+    private void ProcessSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderProcesses();
+    private void ServiceSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderServices();
+
+    private void OverviewTab_Click(object sender, RoutedEventArgs e) => ShowSection(OverviewPanel, OverviewButton);
+    private void ProcessesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ProcessesPanel, ProcessesButton);
+    private void ServicesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ServicesPanel, ServicesButton);
+
+    private void ShowSection(FrameworkElement section, Button activeButton)
+    {
+        OverviewPanel.Visibility = Visibility.Collapsed;
+        ProcessesPanel.Visibility = Visibility.Collapsed;
+        ServicesPanel.Visibility = Visibility.Collapsed;
+        section.Visibility = Visibility.Visible;
+
+        OverviewButton.Style = (Style)FindResource("SecondaryButton");
+        ProcessesButton.Style = (Style)FindResource("SecondaryButton");
+        ServicesButton.Style = (Style)FindResource("SecondaryButton");
+        activeButton.Style = (Style)FindResource("PrimaryButton");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0) return "0 B";
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = (double)bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+        return $"{value:0.#} {units[unit]}";
+    }
+
+    private static string FormatCpuTime(long milliseconds)
+    {
+        var time = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
+        return time.TotalHours >= 1
+            ? $"{(int)time.TotalHours}h {time.Minutes}m"
+            : time.TotalMinutes >= 1
+                ? $"{time.Minutes}m {time.Seconds}s"
+                : $"{time.Seconds}s";
+    }
+
+    private static string FormatUptime(long seconds)
+    {
+        var time = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return time.TotalDays >= 1
+            ? $"{(int)time.TotalDays}d {time.Hours}h"
+            : time.TotalHours >= 1
+                ? $"{(int)time.TotalHours}h {time.Minutes}m"
+                : $"{time.Minutes}m";
+    }
+
+    private sealed record DiskRow(string Name, string Label, string Space);
+    private sealed record ProcessRow(string Name, string Pid, string Memory, string CpuTime, string Session, string Started);
+    private sealed record ServiceRow(string DisplayName, string ServiceName, string Status, string StartMode, string Control);
+}
