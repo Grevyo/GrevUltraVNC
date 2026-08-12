@@ -45,6 +45,7 @@
                 <Button x:Name="ProcessesButton" Style="{StaticResource SecondaryButton}" Content="Processes" Click="ProcessesTab_Click" Margin="0,0,7,0" Padding="13,7" />
                 <Button x:Name="ServicesButton" Style="{StaticResource SecondaryButton}" Content="Services" Click="ServicesTab_Click" Margin="0,0,7,0" Padding="13,7" />
                 <Button x:Name="SessionButton" Style="{StaticResource SecondaryButton}" Content="Session" Click="SessionTab_Click" Margin="0,0,7,0" Padding="13,7" />
+                <Button Style="{StaticResource SecondaryButton}" Content="Files" Click="Files_Click" Margin="0,0,7,0" Padding="13,7" />
                 <Button x:Name="ToolsButton" Style="{StaticResource SecondaryButton}" Content="Tools" Click="ToolsTab_Click" Margin="0,0,7,0" Padding="13,7" />
                 <Button x:Name="TerminalButton" Style="{StaticResource SecondaryButton}" Content="Terminal" Click="TerminalTab_Click" Margin="0,0,7,0" Padding="13,7" />
                 <Button x:Name="ActivityButton" Style="{StaticResource SecondaryButton}" Content="Activity" Click="ActivityTab_Click" Padding="13,7" />
