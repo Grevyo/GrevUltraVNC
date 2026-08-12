@@ -69,7 +69,8 @@ app.MapGet(AgentProtocol.PingPath, () =>
         version,
         Environment.MachineName,
         true,
-        AgentProtocol.ProtocolVersion));
+        AgentProtocol.ProtocolVersion,
+        serviceConfiguration.ConnectId));
 });
 
 app.MapGet(AgentProtocol.StatusPath, async (SystemTelemetryService telemetry, CancellationToken cancellationToken) =>
@@ -89,6 +90,16 @@ app.MapPost(AgentProtocol.ServiceActionPath, (AgentServiceActionRequest request,
 
 app.MapPost(AgentProtocol.QuickActionPath, (AgentQuickActionRequest request, InteractiveSessionService interactiveSession) =>
     Results.Json(interactiveSession.RunQuickAction(request)));
+
+app.MapPost(AgentProtocol.IdentityPath, (AgentIdentityRequest request, AgentConfiguration configuration) =>
+{
+    if (!GrevConnectId.TryNormalize(request.ConnectId, out var normalized, out var error))
+        return Results.Json(new AgentIdentityResponse(false, error, configuration.ConnectId));
+
+    configuration.ConnectId = normalized;
+    AgentConfiguration.Save(configuration);
+    return Results.Json(new AgentIdentityResponse(true, $"Grev Connect ID set to {normalized}.", normalized));
+});
 
 app.MapPost(AgentProtocol.CommandPath, async (
     AgentEncryptedEnvelope envelope,
