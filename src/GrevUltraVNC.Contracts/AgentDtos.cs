@@ -113,7 +113,12 @@ public sealed record AgentPresenceInfo(
     string ControllerId,
     string DisplayName,
     DateTimeOffset ConnectedAtUtc,
-    DateTimeOffset LastSeenUtc);
+    DateTimeOffset LastSeenUtc,
+    double? CursorX = null,
+    double? CursorY = null,
+    bool CursorVisible = false,
+    string CursorSurface = "screen1",
+    bool HasControl = false);
 
 public sealed record AgentWhiteboardPoint(
     double X,
@@ -135,14 +140,20 @@ public sealed record AgentCollaborationRequest(
     string ControllerId,
     string DisplayName,
     long LastEventId = 0,
-    AgentWhiteboardEvent? WhiteboardEvent = null);
+    AgentWhiteboardEvent? WhiteboardEvent = null,
+    double? CursorX = null,
+    double? CursorY = null,
+    bool CursorVisible = false,
+    string CursorSurface = "screen1");
 
 public sealed record AgentCollaborationResponse(
     bool Success,
     string Message,
     IReadOnlyList<AgentPresenceInfo> Participants,
     IReadOnlyList<AgentWhiteboardEvent> WhiteboardEvents,
-    long LastEventId);
+    long LastEventId,
+    string? ControlOwnerId = null,
+    string? ControlOwnerName = null);
 
 public sealed record AgentAudioRequest(
     string Operation,
