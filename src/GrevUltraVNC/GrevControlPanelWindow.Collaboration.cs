@@ -10,13 +10,16 @@ public partial class GrevControlPanelWindow
 {
     private AppSettings _collaborationSettings = new();
     private readonly GrevAgentClient _collaborationClient = new();
-    private readonly DispatcherTimer _collaborationTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _collaborationTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly List<AgentWhiteboardEvent> _whiteboardHistory = [];
     private bool _collaborationRefreshRunning;
     private bool _virtualDisplayStarting;
     private long _lastWhiteboardEventId;
+    private string? _controlOwnerId;
     private RemoteAudioPlaybackService? _remoteAudio;
     private WhiteboardOverlayWindow? _whiteboardOverlay;
+    private NamedCursorOverlayWindow? _screen1CursorOverlay;
+    private NamedCursorOverlayWindow? _screen2CursorOverlay;
 
     public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc, AppSettings settings)
         : this(machine, vnc)
@@ -29,24 +32,45 @@ public partial class GrevControlPanelWindow
 
     private async void GrevCollaboration_Loaded(object sender, RoutedEventArgs e)
     {
+        // Connecting never grants remote input automatically. The named pointer is available
+        // immediately; mouse/keyboard input is enabled only after Take Control succeeds.
+        _vnc.SetViewOnly(_machine.Id, true);
+        EnsureCursorOverlays();
         UpdateDisplayState();
         _collaborationTimer.Start();
         await RefreshCollaborationAsync();
     }
 
-    private void GrevCollaboration_Closed(object? sender, EventArgs e)
+    private async void GrevCollaboration_Closed(object? sender, EventArgs e)
     {
         _collaborationTimer.Stop();
+        try { _vnc.SetViewOnly(_machine.Id, true); } catch { }
         try { _whiteboardOverlay?.Close(); } catch { }
         _whiteboardOverlay = null;
+        CloseCursorOverlays();
         try { _remoteAudio?.Dispose(); } catch { }
         _remoteAudio = null;
-        _collaborationClient.Dispose();
+
+        try
+        {
+            await _collaborationClient.RunCollaborationAsync(
+                _machine,
+                BuildCollaborationRequest("leave"));
+        }
+        catch
+        {
+            // The Agent also expires presence/control automatically if a controller disappears.
+        }
+        finally
+        {
+            _collaborationClient.Dispose();
+        }
     }
 
     private async void CollaborationTimer_Tick(object? sender, EventArgs e)
     {
         UpdateDisplayState();
+        EnsureCursorOverlays();
         await RefreshCollaborationAsync();
     }
 
@@ -59,23 +83,20 @@ public partial class GrevControlPanelWindow
         {
             var response = await _collaborationClient.RunCollaborationAsync(
                 _machine,
-                new AgentCollaborationRequest(
-                    "heartbeat",
-                    _collaborationSettings.ControllerId,
-                    _collaborationSettings.GrevName,
-                    _lastWhiteboardEventId));
+                BuildCollaborationRequest("heartbeat"));
 
             if (!response.Success)
                 throw new InvalidOperationException(response.Message);
 
-            UpdateParticipants(response.Participants);
-            ConsumeWhiteboardEvents(response.WhiteboardEvents);
-            _lastWhiteboardEventId = Math.Max(_lastWhiteboardEventId, response.LastEventId);
+            ApplyCollaborationResponse(response);
             AudioButton.IsEnabled = true;
             WhiteboardButton.IsEnabled = true;
+            TakeControlButton.IsEnabled = true;
 
             if (_remoteAudio?.IsRunning != true && !_virtualDisplayStarting)
-                CollaborationStatusText.Text = "Collaboration ready";
+                CollaborationStatusText.Text = response.ControlOwnerName is null
+                    ? "No controller"
+                    : $"Control · {response.ControlOwnerName}";
         }
         catch (Exception ex)
         {
@@ -83,6 +104,10 @@ public partial class GrevControlPanelWindow
             ParticipantsItems.ItemsSource = Array.Empty<string>();
             AudioButton.IsEnabled = false;
             WhiteboardButton.IsEnabled = false;
+            TakeControlButton.IsEnabled = false;
+            ControlStatusText.Text = "VIEW ONLY · collaboration unavailable";
+            RemoteKeysPanel.IsEnabled = false;
+            try { _vnc.SetViewOnly(_machine.Id, true); } catch { }
             CollaborationStatusText.Text = ex.Message.Contains("too old", StringComparison.OrdinalIgnoreCase)
                 ? "Update Agent"
                 : "Unavailable";
@@ -93,17 +118,141 @@ public partial class GrevControlPanelWindow
         }
     }
 
+    private AgentCollaborationRequest BuildCollaborationRequest(
+        string operation,
+        AgentWhiteboardEvent? whiteboardEvent = null)
+    {
+        var cursorVisible = _vnc.TryGetLocalPointer(
+            _machine.Id,
+            out var surface,
+            out var cursorX,
+            out var cursorY);
+
+        return new AgentCollaborationRequest(
+            operation,
+            _collaborationSettings.ControllerId,
+            _collaborationSettings.GrevName,
+            _lastWhiteboardEventId,
+            whiteboardEvent,
+            cursorVisible ? cursorX : null,
+            cursorVisible ? cursorY : null,
+            cursorVisible,
+            cursorVisible ? surface : "screen1");
+    }
+
+    private void ApplyCollaborationResponse(AgentCollaborationResponse response)
+    {
+        _controlOwnerId = response.ControlOwnerId;
+        UpdateParticipants(response.Participants);
+        ConsumeWhiteboardEvents(response.WhiteboardEvents);
+        _lastWhiteboardEventId = Math.Max(_lastWhiteboardEventId, response.LastEventId);
+        _screen1CursorOverlay?.UpdateParticipants(response.Participants, _collaborationSettings.ControllerId);
+        _screen2CursorOverlay?.UpdateParticipants(response.Participants, _collaborationSettings.ControllerId);
+
+        var localHasControl = string.Equals(
+            response.ControlOwnerId,
+            _collaborationSettings.ControllerId,
+            StringComparison.OrdinalIgnoreCase);
+
+        _vnc.SetViewOnly(_machine.Id, !localHasControl);
+        RemoteKeysPanel.IsEnabled = localHasControl;
+        TakeControlButton.IsEnabled = true;
+        TakeControlButton.Content = localHasControl ? "Release control" : "Take control";
+        ControlStatusText.Text = localHasControl
+            ? "CONTROL · YOU · remote mouse + keyboard enabled"
+            : response.ControlOwnerName is null
+                ? "VIEW ONLY · move your pointer freely · no one has control"
+                : $"VIEW ONLY · {response.ControlOwnerName} has control";
+    }
+
     private void UpdateParticipants(IReadOnlyList<AgentPresenceInfo> participants)
     {
         ParticipantsHeaderText.Text = $"CONNECTED · {participants.Count}";
         ParticipantsItems.ItemsSource = participants
-            .Select(participant => string.Equals(
+            .Select(participant =>
+            {
+                var mine = string.Equals(
                     participant.ControllerId,
                     _collaborationSettings.ControllerId,
-                    StringComparison.OrdinalIgnoreCase)
-                ? $"● {participant.DisplayName} · YOU"
-                : $"● {participant.DisplayName}")
+                    StringComparison.OrdinalIgnoreCase);
+                var role = participant.HasControl ? " · CONTROL" : " · VIEWING";
+                return $"● {participant.DisplayName}{(mine ? " · YOU" : string.Empty)}{role}";
+            })
             .ToArray();
+    }
+
+    private async void TakeControl_Click(object sender, RoutedEventArgs e)
+    {
+        TakeControlButton.IsEnabled = false;
+        try
+        {
+            var localHasControl = string.Equals(
+                _controlOwnerId,
+                _collaborationSettings.ControllerId,
+                StringComparison.OrdinalIgnoreCase);
+            var operation = localHasControl ? "release-control" : "take-control";
+
+            var response = await _collaborationClient.RunCollaborationAsync(
+                _machine,
+                BuildCollaborationRequest(operation));
+            if (!response.Success)
+                throw new InvalidOperationException(response.Message);
+
+            ApplyCollaborationResponse(response);
+            CollaborationStatusText.Text = localHasControl ? "Control released" : "You have control";
+        }
+        catch (Exception ex)
+        {
+            try { _vnc.SetViewOnly(_machine.Id, true); } catch { }
+            RemoteKeysPanel.IsEnabled = false;
+            ControlStatusText.Text = "VIEW ONLY · could not change control owner";
+            MessageBox.Show(this, ex.Message, "Remote control", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            TakeControlButton.IsEnabled = true;
+        }
+    }
+
+    private void EnsureCursorOverlays()
+    {
+        if (_screen1CursorOverlay is null && _vnc.HasActiveSession(_machine.Id))
+        {
+            var overlay = new NamedCursorOverlayWindow(_machine, _vnc, virtualDisplay: false);
+            _screen1CursorOverlay = overlay;
+            overlay.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_screen1CursorOverlay, overlay))
+                    _screen1CursorOverlay = null;
+            };
+            overlay.Show();
+        }
+
+        var needsScreen2 = _vnc.HasVirtualSession(_machine.Id);
+        if (needsScreen2 && _screen2CursorOverlay is null)
+        {
+            var overlay = new NamedCursorOverlayWindow(_machine, _vnc, virtualDisplay: true);
+            _screen2CursorOverlay = overlay;
+            overlay.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_screen2CursorOverlay, overlay))
+                    _screen2CursorOverlay = null;
+            };
+            overlay.Show();
+        }
+        else if (!needsScreen2 && _screen2CursorOverlay is not null)
+        {
+            try { _screen2CursorOverlay.Close(); } catch { }
+            _screen2CursorOverlay = null;
+        }
+    }
+
+    private void CloseCursorOverlays()
+    {
+        try { _screen1CursorOverlay?.Close(); } catch { }
+        try { _screen2CursorOverlay?.Close(); } catch { }
+        _screen1CursorOverlay = null;
+        _screen2CursorOverlay = null;
     }
 
     private void ConsumeWhiteboardEvents(IReadOnlyList<AgentWhiteboardEvent> events)
@@ -211,19 +360,12 @@ public partial class GrevControlPanelWindow
         {
             var response = await _collaborationClient.RunCollaborationAsync(
                 _machine,
-                new AgentCollaborationRequest(
-                    "publish",
-                    _collaborationSettings.ControllerId,
-                    _collaborationSettings.GrevName,
-                    _lastWhiteboardEventId,
-                    item));
+                BuildCollaborationRequest("publish", item));
 
             if (!response.Success)
                 throw new InvalidOperationException(response.Message);
 
-            UpdateParticipants(response.Participants);
-            ConsumeWhiteboardEvents(response.WhiteboardEvents);
-            _lastWhiteboardEventId = Math.Max(_lastWhiteboardEventId, response.LastEventId);
+            ApplyCollaborationResponse(response);
         }
         catch (Exception ex)
         {
@@ -253,12 +395,18 @@ public partial class GrevControlPanelWindow
         _virtualDisplayStarting = true;
         VirtualDisplayButton.IsEnabled = false;
         VirtualDisplayButton.Content = "Creating Screen 2…";
-        DisplayStatusText.Text = "Adding a virtual Windows display…";
+        DisplayStatusText.Text = "Adding virtual display + selecting Screen 2…";
         CollaborationStatusText.Text = "Creating Screen 2";
 
         try
         {
             await _vnc.OpenVirtualDisplayAsync(_machine, _collaborationSettings);
+            EnsureCursorOverlays();
+            var localHasControl = string.Equals(
+                _controlOwnerId,
+                _collaborationSettings.ControllerId,
+                StringComparison.OrdinalIgnoreCase);
+            _vnc.SetViewOnly(_machine.Id, !localHasControl);
             UpdateDisplayState();
             CollaborationStatusText.Text = "Screen 2 ready";
         }
@@ -267,7 +415,7 @@ public partial class GrevControlPanelWindow
             UpdateDisplayState();
             CollaborationStatusText.Text = "Screen 2 unavailable";
             MessageBox.Show(this,
-                $"{ex.Message}\n\nScreen 1 has been left open. A brief physical-screen flash can occur while Windows changes display topology, but Screen 2 should remain as a separate viewer when creation succeeds.",
+                $"{ex.Message}\n\nScreen 1 has been left open. Grev now explicitly asks the second UltraVNC viewer to switch away from Screen 1 after creating the virtual display.",
                 "Virtual Screen 2",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -284,6 +432,11 @@ public partial class GrevControlPanelWindow
         try
         {
             _vnc.CloseVirtualDisplay(_machine.Id);
+            if (_screen2CursorOverlay is not null)
+            {
+                try { _screen2CursorOverlay.Close(); } catch { }
+                _screen2CursorOverlay = null;
+            }
             CollaborationStatusText.Text = "Screen 2 closed";
         }
         catch (Exception ex)
