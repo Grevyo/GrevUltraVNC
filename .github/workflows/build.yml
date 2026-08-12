@@ -5,6 +5,9 @@ on:
     branches: ["main"]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -17,3 +20,22 @@ jobs:
         run: dotnet restore GrevUltraVNC.slnx
       - name: Build solution
         run: dotnet build GrevUltraVNC.slnx --configuration Release --no-restore
+
+      - name: Build Grev Agent package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: powershell
+        run: .\scripts\build-agent-package.ps1
+
+      - name: Publish latest Grev Agent release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'agent-latest'
+          $asset = 'dist\GrevUltraVNC-Agent-win-x64.zip'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC Agent - Latest' --notes 'Automatically built from the latest main branch.' --prerelease
+          }
+          gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
