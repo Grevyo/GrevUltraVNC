@@ -11,29 +11,39 @@ namespace GrevUltraVNC;
 public partial class MachineOverviewWindow : Window
 {
     private readonly Machine _machine;
+    private readonly UltraVncSessionService? _vnc;
     private readonly GrevAgentClient _agent = new();
     private readonly AgentUpdateService _agentUpdater;
+    private readonly AdminWorkspaceStorage _workspace = new();
     private IReadOnlyList<AgentProcessInfo> _processes = [];
     private IReadOnlyList<AgentServiceInfo> _services = [];
+    private List<SavedCommand> _savedCommands = [];
     private bool _refreshing;
     private bool _actionRunning;
     private bool _commandRunning;
     private bool _agentUpdateRunning;
 
-    public MachineOverviewWindow(Machine machine)
+    public MachineOverviewWindow(Machine machine, UltraVncSessionService? vnc = null)
     {
         InitializeComponent();
         _machine = machine;
+        _vnc = vnc;
         _agentUpdater = new AgentUpdateService(_agent);
 
         MachineNameText.Text = machine.Name;
         MachineAddressText.Text = $"{machine.IpAddress}  ·  Agent {machine.AgentPort}  ·  VNC {machine.VncPort}";
+        RefreshScreenButton.IsEnabled = _vnc?.HasActiveSession(machine.Id) == true;
 
         Loaded += MachineOverviewWindow_Loaded;
         Closed += (_, _) => _agent.Dispose();
     }
 
-    private async void MachineOverviewWindow_Loaded(object sender, RoutedEventArgs e) => await RefreshAllAsync();
+    private async void MachineOverviewWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        await LoadSavedCommandsAsync();
+        await RefreshAllAsync();
+    }
+
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAllAsync();
 
     private async Task RefreshAllAsync()
@@ -46,6 +56,7 @@ public partial class MachineOverviewWindow : Window
         UpdateAgentButton.IsEnabled = false;
         SessionActionsPanel.IsEnabled = false;
         SessionFeatureStatusText.Text = "Checking Agent capability…";
+        RefreshScreenButton.IsEnabled = _vnc?.HasActiveSession(_machine.Id) == true;
 
         try
         {
@@ -215,6 +226,7 @@ public partial class MachineOverviewWindow : Window
             _agentUpdateRunning = false;
             await RefreshAllAsync();
             StatusText.Text = "Grev Agent updated successfully and is responding again.";
+            await LogActivityAsync("Agent", "Update Agent", "Updated from agent-latest", true);
 
             MessageBox.Show(this,
                 $"Grev Agent on {_machine.Name} updated successfully.",
@@ -225,6 +237,7 @@ public partial class MachineOverviewWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = ex.Message;
+            await LogActivityAsync("Agent", "Update Agent", ex.Message, false);
             MessageBox.Show(this, ex.Message, "Grev Agent update", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -232,6 +245,25 @@ public partial class MachineOverviewWindow : Window
             _agentUpdateRunning = false;
             if (_machine.AgentState == GrevAgentState.Connected)
                 UpdateAgentButton.IsEnabled = true;
+        }
+    }
+
+    private async void RefreshScreen_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_vnc is null || !_vnc.HasActiveSession(_machine.Id))
+                throw new InvalidOperationException("Open a VNC session to this machine first.");
+
+            _vnc.RequestScreenRefresh(_machine.Id);
+            StatusText.Text = "UltraVNC screen refresh requested.";
+            await LogActivityAsync("VNC", "Refresh screen", "Requested a full remote screen refresh", true);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+            await LogActivityAsync("VNC", "Refresh screen", ex.Message, false);
+            MessageBox.Show(this, ex.Message, "Refresh screen", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -250,7 +282,11 @@ public partial class MachineOverviewWindow : Window
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunAgentActionAsync(() => _agent.EndProcessAsync(_machine, selected.ProcessId));
+        await RunAgentActionAsync(
+            () => _agent.EndProcessAsync(_machine, selected.ProcessId),
+            "Process",
+            "End process",
+            $"{selected.Name} · PID {selected.ProcessId}");
     }
 
     private async void RestartExplorer_Click(object sender, RoutedEventArgs e)
@@ -262,11 +298,20 @@ public partial class MachineOverviewWindow : Window
                 MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
-        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "restart-explorer"));
+        await RunAgentActionAsync(
+            () => _agent.RunQuickActionAsync(_machine, "restart-explorer"),
+            "Session",
+            "Restart Explorer",
+            "Active interactive Windows session");
     }
 
     private async void LockSession_Click(object sender, RoutedEventArgs e) =>
-        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "lock"), refreshAfterSuccess: false);
+        await RunAgentActionAsync(
+            () => _agent.RunQuickActionAsync(_machine, "lock"),
+            "Session",
+            "Lock workstation",
+            "Active interactive Windows session",
+            refreshAfterSuccess: false);
 
     private async void SignOutSession_Click(object sender, RoutedEventArgs e)
     {
@@ -277,7 +322,12 @@ public partial class MachineOverviewWindow : Window
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "sign-out"), refreshAfterSuccess: false);
+        await RunAgentActionAsync(
+            () => _agent.RunQuickActionAsync(_machine, "sign-out"),
+            "Session",
+            "Sign out",
+            "Active interactive Windows session",
+            refreshAfterSuccess: false);
     }
 
     private async void SleepSession_Click(object sender, RoutedEventArgs e)
@@ -289,7 +339,12 @@ public partial class MachineOverviewWindow : Window
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "sleep"), refreshAfterSuccess: false);
+        await RunAgentActionAsync(
+            () => _agent.RunQuickActionAsync(_machine, "sleep"),
+            "Power",
+            "Sleep machine",
+            "Suspend requested",
+            refreshAfterSuccess: false);
     }
 
     private async void HibernateSession_Click(object sender, RoutedEventArgs e)
@@ -301,7 +356,12 @@ public partial class MachineOverviewWindow : Window
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "hibernate"), refreshAfterSuccess: false);
+        await RunAgentActionAsync(
+            () => _agent.RunQuickActionAsync(_machine, "hibernate"),
+            "Power",
+            "Hibernate machine",
+            "Hibernate requested",
+            refreshAfterSuccess: false);
     }
 
     private async void StartService_Click(object sender, RoutedEventArgs e) =>
@@ -329,10 +389,19 @@ public partial class MachineOverviewWindow : Window
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
-        await RunAgentActionAsync(() => _agent.ControlServiceAsync(_machine, selected.ServiceName, action));
+        await RunAgentActionAsync(
+            () => _agent.ControlServiceAsync(_machine, selected.ServiceName, action),
+            "Service",
+            $"{actionTitle} service",
+            $"{selected.DisplayName} · {selected.ServiceName}");
     }
 
-    private async Task RunAgentActionAsync(Func<Task<AgentActionResponse>> action, bool refreshAfterSuccess = true)
+    private async Task RunAgentActionAsync(
+        Func<Task<AgentActionResponse>> action,
+        string category,
+        string activityAction,
+        string detail,
+        bool refreshAfterSuccess = true)
     {
         if (_actionRunning) return;
         _actionRunning = true;
@@ -347,21 +416,244 @@ public partial class MachineOverviewWindow : Window
                     await RefreshAllAsync();
 
                 StatusText.Text = result.Message;
+                await LogActivityAsync(category, activityAction, detail, true);
             }
             else
             {
                 StatusText.Text = result.Message;
+                await LogActivityAsync(category, activityAction, result.Message, false);
                 MessageBox.Show(this, result.Message, "Grev Agent action", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
         catch (Exception ex)
         {
             StatusText.Text = ex.Message;
+            await LogActivityAsync(category, activityAction, ex.Message, false);
             MessageBox.Show(this, ex.Message, "Grev Agent action", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             _actionRunning = false;
+        }
+    }
+
+    private async void FlushDns_Click(object sender, RoutedEventArgs e) =>
+        await RunToolCommandAsync("cmd", "ipconfig /flushdns", "Flush DNS", "Network");
+
+    private async void RestartSpooler_Click(object sender, RoutedEventArgs e) =>
+        await RunToolCommandAsync(
+            "powershell",
+            "Restart-Service -Name Spooler -Force; Get-Service -Name Spooler | Select-Object Name, Status | Format-Table -AutoSize",
+            "Restart Print Spooler",
+            "Service");
+
+    private async void NetworkConfig_Click(object sender, RoutedEventArgs e) =>
+        await RunToolCommandAsync("cmd", "ipconfig /all", "Network configuration", "Network");
+
+    private async void DiskSpace_Click(object sender, RoutedEventArgs e) =>
+        await RunToolCommandAsync(
+            "powershell",
+            "Get-CimInstance Win32_LogicalDisk -Filter \"DriveType=3\" | Select-Object DeviceID,@{N='FreeGB';E={[math]::Round($_.FreeSpace/1GB,1)}},@{N='SizeGB';E={[math]::Round($_.Size/1GB,1)}} | Format-Table -AutoSize",
+            "Disk space",
+            "System");
+
+    private async void WindowsUpdateScan_Click(object sender, RoutedEventArgs e) =>
+        await RunToolCommandAsync("cmd", "UsoClient.exe StartScan", "Windows Update scan", "Windows Update");
+
+    private async void RestartVncTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                "Restart UltraVNC on the remote machine? An active VNC session may disconnect.",
+                "Restart UltraVNC",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunAgentActionAsync(
+            () => _agent.ControlServiceAsync(_machine, "uvnc_service", "restart"),
+            "VNC",
+            "Restart UltraVNC",
+            "uvnc_service");
+    }
+
+    private async void TaskManagerTool_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_vnc is null || !_vnc.HasActiveSession(_machine.Id))
+                throw new InvalidOperationException("Open a VNC session to this machine first.");
+
+            _vnc.SendCtrlShiftEscape(_machine.Id);
+            StatusText.Text = "Task Manager shortcut sent to the VNC session.";
+            await LogActivityAsync("VNC", "Open Task Manager", "Ctrl+Shift+Esc sent through UltraVNC", true);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+            await LogActivityAsync("VNC", "Open Task Manager", ex.Message, false);
+            MessageBox.Show(this, ex.Message, "Task Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private async Task RunToolCommandAsync(string shell, string command, string title, string category)
+    {
+        if (_commandRunning) return;
+        _commandRunning = true;
+        StatusText.Text = $"{title} on {_machine.Name}…";
+        AppendToolOutput($"[{DateTime.Now:HH:mm:ss}] {title}");
+
+        try
+        {
+            var result = await _agent.RunCommandAsync(_machine, shell, command, 30);
+            AppendCommandResult(ToolOutputBox, result);
+            StatusText.Text = result.Success
+                ? $"{title} completed."
+                : result.TimedOut
+                    ? $"{title} timed out."
+                    : $"{title} finished with exit code {result.ExitCode}.";
+
+            await LogActivityAsync(category, title, $"{ShellLabel(shell)} · exit {result.ExitCode}", result.Success);
+        }
+        catch (Exception ex)
+        {
+            AppendToolOutput($"[Grev Agent error] {ex.Message}");
+            StatusText.Text = ex.Message;
+            await LogActivityAsync(category, title, ex.Message, false);
+        }
+        finally
+        {
+            _commandRunning = false;
+        }
+    }
+
+    private async Task LoadSavedCommandsAsync()
+    {
+        _savedCommands = await _workspace.LoadSavedCommandsAsync();
+        RenderSavedCommands();
+    }
+
+    private void RenderSavedCommands()
+    {
+        SavedCommandsList.ItemsSource = _savedCommands
+            .OrderBy(command => command.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private void SavedCommandsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SavedCommandsList.SelectedItem is not SavedCommand selected) return;
+
+        SavedCommandNameBox.Text = selected.Name;
+        SavedCommandTextBox.Text = selected.Command;
+        SelectShell(SavedCommandShellBox, selected.Shell);
+    }
+
+    private void NewSavedCommand_Click(object sender, RoutedEventArgs e)
+    {
+        SavedCommandsList.SelectedItem = null;
+        SavedCommandNameBox.Clear();
+        SavedCommandTextBox.Clear();
+        SavedCommandShellBox.SelectedIndex = 0;
+        SavedCommandNameBox.Focus();
+        StatusText.Text = "New saved command.";
+    }
+
+    private async void SaveSavedCommand_Click(object sender, RoutedEventArgs e)
+    {
+        var name = SavedCommandNameBox.Text.Trim();
+        var commandText = SavedCommandTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(commandText))
+        {
+            StatusText.Text = "Give the saved command a name and command text first.";
+            return;
+        }
+
+        var shell = GetSelectedShell(SavedCommandShellBox);
+        if (SavedCommandsList.SelectedItem is SavedCommand existing)
+        {
+            existing.Name = name;
+            existing.Shell = shell;
+            existing.Command = commandText;
+            existing.UpdatedAtUtc = DateTime.UtcNow;
+        }
+        else
+        {
+            var saved = new SavedCommand
+            {
+                Name = name,
+                Shell = shell,
+                Command = commandText
+            };
+            _savedCommands.Add(saved);
+            SavedCommandsList.SelectedItem = saved;
+        }
+
+        await _workspace.SaveSavedCommandsAsync(_savedCommands);
+        RenderSavedCommands();
+        StatusText.Text = $"Saved command '{name}'.";
+    }
+
+    private async void DeleteSavedCommand_Click(object sender, RoutedEventArgs e)
+    {
+        if (SavedCommandsList.SelectedItem is not SavedCommand selected)
+        {
+            StatusText.Text = "Select a saved command first.";
+            return;
+        }
+
+        if (MessageBox.Show(this,
+                $"Delete the saved command '{selected.Name}'?",
+                "Delete saved command",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        _savedCommands.RemoveAll(command => command.Id == selected.Id);
+        await _workspace.SaveSavedCommandsAsync(_savedCommands);
+        RenderSavedCommands();
+        NewSavedCommand_Click(sender, e);
+        StatusText.Text = $"Deleted saved command '{selected.Name}'.";
+    }
+
+    private async void RunSavedCommand_Click(object sender, RoutedEventArgs e)
+    {
+        var name = SavedCommandNameBox.Text.Trim();
+        var commandText = SavedCommandTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(commandText))
+        {
+            StatusText.Text = "Select or enter a command first.";
+            return;
+        }
+
+        var shell = GetSelectedShell(SavedCommandShellBox);
+        await RunSavedCommandAsync(shell, commandText, string.IsNullOrWhiteSpace(name) ? "Unsaved command" : name);
+    }
+
+    private async Task RunSavedCommandAsync(string shell, string command, string name)
+    {
+        if (_commandRunning) return;
+        _commandRunning = true;
+        StatusText.Text = $"Running '{name}' on {_machine.Name}…";
+        AppendToolOutput($"[{DateTime.Now:HH:mm:ss}] Saved command: {name} ({ShellLabel(shell)})");
+
+        try
+        {
+            var result = await _agent.RunCommandAsync(_machine, shell, command, 30);
+            AppendCommandResult(ToolOutputBox, result);
+            StatusText.Text = result.Success
+                ? $"'{name}' completed."
+                : $"'{name}' finished with exit code {result.ExitCode}.";
+            await LogActivityAsync("Saved command", name, $"{ShellLabel(shell)} · exit {result.ExitCode}", result.Success);
+        }
+        catch (Exception ex)
+        {
+            AppendToolOutput($"[Grev Agent error] {ex.Message}");
+            StatusText.Text = ex.Message;
+            await LogActivityAsync("Saved command", name, ex.Message, false);
+        }
+        finally
+        {
+            _commandRunning = false;
         }
     }
 
@@ -385,9 +677,8 @@ public partial class MachineOverviewWindow : Window
             return;
         }
 
-        var shellItem = TerminalShellBox.SelectedItem as ComboBoxItem;
-        var shell = shellItem?.Tag?.ToString() ?? "powershell";
-        var shellLabel = string.Equals(shell, "cmd", StringComparison.OrdinalIgnoreCase) ? "CMD" : "PowerShell";
+        var shell = GetSelectedShell(TerminalShellBox);
+        var shellLabel = ShellLabel(shell);
 
         _commandRunning = true;
         RunCommandButton.IsEnabled = false;
@@ -399,25 +690,7 @@ public partial class MachineOverviewWindow : Window
         try
         {
             var result = await _agent.RunCommandAsync(_machine, shell, command, 30);
-
-            if (!string.IsNullOrEmpty(result.StandardOutput))
-            {
-                TerminalOutputBox.AppendText(result.StandardOutput);
-                if (!result.StandardOutput.EndsWith(Environment.NewLine, StringComparison.Ordinal))
-                    TerminalOutputBox.AppendText(Environment.NewLine);
-            }
-
-            if (!string.IsNullOrEmpty(result.StandardError))
-            {
-                TerminalOutputBox.AppendText("[stderr]" + Environment.NewLine);
-                TerminalOutputBox.AppendText(result.StandardError);
-                if (!result.StandardError.EndsWith(Environment.NewLine, StringComparison.Ordinal))
-                    TerminalOutputBox.AppendText(Environment.NewLine);
-            }
-
-            var timeoutText = result.TimedOut ? " · TIMED OUT" : string.Empty;
-            TerminalOutputBox.AppendText($"[exit {result.ExitCode} · {result.DurationMilliseconds} ms{timeoutText}]{Environment.NewLine}{Environment.NewLine}");
-            TerminalOutputBox.ScrollToEnd();
+            AppendCommandResult(TerminalOutputBox, result);
 
             StatusText.Text = result.Success
                 ? $"Command completed with exit code {result.ExitCode}."
@@ -425,6 +698,7 @@ public partial class MachineOverviewWindow : Window
                     ? "Command timed out and was terminated by Grev Agent."
                     : $"Command finished with exit code {result.ExitCode}.";
 
+            await LogActivityAsync("Terminal", $"Run {shellLabel} command", $"Exit {result.ExitCode}", result.Success);
             TerminalCommandBox.Clear();
         }
         catch (Exception ex)
@@ -432,6 +706,7 @@ public partial class MachineOverviewWindow : Window
             TerminalOutputBox.AppendText($"[Grev Agent error] {ex.Message}{Environment.NewLine}{Environment.NewLine}");
             TerminalOutputBox.ScrollToEnd();
             StatusText.Text = ex.Message;
+            await LogActivityAsync("Terminal", $"Run {shellLabel} command", ex.Message, false);
         }
         finally
         {
@@ -442,6 +717,88 @@ public partial class MachineOverviewWindow : Window
         }
     }
 
+    private static void AppendCommandResult(TextBox output, AgentCommandResponse result)
+    {
+        if (!string.IsNullOrEmpty(result.StandardOutput))
+        {
+            output.AppendText(result.StandardOutput);
+            if (!result.StandardOutput.EndsWith(Environment.NewLine, StringComparison.Ordinal))
+                output.AppendText(Environment.NewLine);
+        }
+
+        if (!string.IsNullOrEmpty(result.StandardError))
+        {
+            output.AppendText("[stderr]" + Environment.NewLine);
+            output.AppendText(result.StandardError);
+            if (!result.StandardError.EndsWith(Environment.NewLine, StringComparison.Ordinal))
+                output.AppendText(Environment.NewLine);
+        }
+
+        var timeoutText = result.TimedOut ? " · TIMED OUT" : string.Empty;
+        output.AppendText($"[exit {result.ExitCode} · {result.DurationMilliseconds} ms{timeoutText}]{Environment.NewLine}{Environment.NewLine}");
+        output.ScrollToEnd();
+    }
+
+    private void AppendToolOutput(string text)
+    {
+        ToolOutputBox.AppendText(text + Environment.NewLine);
+        ToolOutputBox.ScrollToEnd();
+    }
+
+    private async Task LoadActivityAsync()
+    {
+        var entries = await _workspace.LoadActivityAsync(_machine.Id);
+        ActivityList.ItemsSource = entries.Select(entry => new ActivityRow(
+            entry.TimestampUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss"),
+            entry.Category,
+            entry.Action,
+            entry.Detail,
+            entry.Success ? "Success" : "Failed")).ToArray();
+        ActivitySummaryText.Text = entries.Count == 0
+            ? "No recorded activity for this machine yet."
+            : $"{entries.Count} recorded action{(entries.Count == 1 ? string.Empty : "s")} for {_machine.Name}";
+    }
+
+    private async Task LogActivityAsync(string category, string action, string detail, bool success)
+    {
+        try
+        {
+            await _workspace.AppendActivityAsync(new ActivityEntry
+            {
+                MachineId = _machine.Id,
+                MachineName = _machine.Name,
+                TimestampUtc = DateTime.UtcNow,
+                Category = category,
+                Action = action,
+                Detail = detail,
+                Success = success
+            });
+
+            if (ActivityPanel.Visibility == Visibility.Visible)
+                await LoadActivityAsync();
+        }
+        catch
+        {
+            // Activity logging must never block a management action.
+        }
+    }
+
+    private async void RefreshActivity_Click(object sender, RoutedEventArgs e) => await LoadActivityAsync();
+
+    private async void ClearActivity_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                $"Clear all recorded GrevUltraVNC activity for {_machine.Name}?",
+                "Clear activity history",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        await _workspace.ClearActivityAsync(_machine.Id);
+        await LoadActivityAsync();
+        StatusText.Text = "Machine activity history cleared.";
+    }
+
     private void ProcessSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderProcesses();
     private void ServiceSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderServices();
 
@@ -449,10 +806,17 @@ public partial class MachineOverviewWindow : Window
     private void ProcessesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ProcessesPanel, ProcessesButton);
     private void ServicesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ServicesPanel, ServicesButton);
     private void SessionTab_Click(object sender, RoutedEventArgs e) => ShowSection(SessionPanel, SessionButton);
+    private void ToolsTab_Click(object sender, RoutedEventArgs e) => ShowSection(ToolsPanel, ToolsButton);
     private void TerminalTab_Click(object sender, RoutedEventArgs e)
     {
         ShowSection(TerminalPanel, TerminalButton);
         TerminalCommandBox.Focus();
+    }
+
+    private async void ActivityTab_Click(object sender, RoutedEventArgs e)
+    {
+        ShowSection(ActivityPanel, ActivityButton);
+        await LoadActivityAsync();
     }
 
     private void ShowSection(FrameworkElement section, Button activeButton)
@@ -461,16 +825,42 @@ public partial class MachineOverviewWindow : Window
         ProcessesPanel.Visibility = Visibility.Collapsed;
         ServicesPanel.Visibility = Visibility.Collapsed;
         SessionPanel.Visibility = Visibility.Collapsed;
+        ToolsPanel.Visibility = Visibility.Collapsed;
         TerminalPanel.Visibility = Visibility.Collapsed;
+        ActivityPanel.Visibility = Visibility.Collapsed;
         section.Visibility = Visibility.Visible;
 
         OverviewButton.Style = (Style)FindResource("SecondaryButton");
         ProcessesButton.Style = (Style)FindResource("SecondaryButton");
         ServicesButton.Style = (Style)FindResource("SecondaryButton");
         SessionButton.Style = (Style)FindResource("SecondaryButton");
+        ToolsButton.Style = (Style)FindResource("SecondaryButton");
         TerminalButton.Style = (Style)FindResource("SecondaryButton");
+        ActivityButton.Style = (Style)FindResource("SecondaryButton");
         activeButton.Style = (Style)FindResource("PrimaryButton");
     }
+
+    private static string GetSelectedShell(ComboBox comboBox)
+    {
+        var item = comboBox.SelectedItem as ComboBoxItem;
+        return item?.Tag?.ToString() ?? "powershell";
+    }
+
+    private static void SelectShell(ComboBox comboBox, string shell)
+    {
+        foreach (var candidate in comboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(candidate.Tag?.ToString(), shell, StringComparison.OrdinalIgnoreCase))
+            {
+                comboBox.SelectedItem = candidate;
+                return;
+            }
+        }
+        comboBox.SelectedIndex = 0;
+    }
+
+    private static string ShellLabel(string shell) =>
+        string.Equals(shell, "cmd", StringComparison.OrdinalIgnoreCase) ? "CMD" : "PowerShell";
 
     private static string FormatBytes(long bytes)
     {
@@ -509,4 +899,5 @@ public partial class MachineOverviewWindow : Window
     private sealed record DiskRow(string Name, string Label, string Space);
     private sealed record ProcessRow(int ProcessId, string Name, string Pid, string Memory, string CpuTime, string Session, string Started);
     private sealed record ServiceRow(string DisplayName, string ServiceName, string Status, string StartMode, string Control);
+    private sealed record ActivityRow(string Time, string Category, string Action, string Detail, string Result);
 }
