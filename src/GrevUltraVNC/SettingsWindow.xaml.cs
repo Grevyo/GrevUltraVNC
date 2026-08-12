@@ -20,6 +20,10 @@ public partial class SettingsWindow : Window
         _vnc = vnc;
         _originalTheme = ThemeService.Normalize(settings.Theme);
 
+        GrevNameBox.Text = settings.GrevName;
+        ControllerIdText.Text = string.IsNullOrWhiteSpace(settings.ControllerId)
+            ? "A private controller identity will be created when you save."
+            : $"Private controller ID · {settings.ControllerId[..Math.Min(12, settings.ControllerId.Length)]}";
         ViewerPathBox.Text = settings.UltraVncViewerPath;
         AutoScaleCheck.IsChecked = settings.AutoScaling;
         FullScreenCheck.IsChecked = settings.FullScreenByDefault;
@@ -79,6 +83,14 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        var grevName = GrevNameBox.Text.Trim();
+        if (grevName.Length is < 1 or > 40)
+        {
+            MessageBox.Show(this, "Grev Name must be between 1 and 40 characters.", "GrevUltraVNC",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var path = ViewerPathBox.Text.Trim();
         if (!string.IsNullOrWhiteSpace(path) && !File.Exists(path))
         {
@@ -87,6 +99,9 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        _settings.GrevName = grevName;
+        if (string.IsNullOrWhiteSpace(_settings.ControllerId))
+            _settings.ControllerId = Guid.NewGuid().ToString("N");
         _settings.UltraVncViewerPath = path;
         _settings.AutoScaling = AutoScaleCheck.IsChecked == true;
         _settings.FullScreenByDefault = FullScreenCheck.IsChecked == true;
