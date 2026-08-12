@@ -29,9 +29,10 @@ public static class GrevConnectId
             text = Prefix + text;
 
         var suffix = text[Prefix.Length..];
-        if (suffix.Length is < 1 or > MaxLength - Prefix.Length)
+        var maxSuffixLength = MaxLength - Prefix.Length;
+        if (suffix.Length < 1 || suffix.Length > maxSuffixLength)
         {
-            error = $"The part after {Prefix} must be 1-{MaxLength - Prefix.Length} characters.";
+            error = $"The part after {Prefix} must be 1-{maxSuffixLength} characters.";
             return false;
         }
 
