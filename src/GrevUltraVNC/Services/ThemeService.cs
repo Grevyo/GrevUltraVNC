@@ -61,42 +61,16 @@ public static class ThemeService
     {
         if (Application.Current is null) return;
 
-        var isLight = Normalize(theme) == Light;
-        var palette = isLight ? LightPalette : DarkPalette;
+        var palette = Normalize(theme) == Light ? LightPalette : DarkPalette;
         foreach (var (key, value) in palette)
         {
             var color = (Color)ColorConverter.ConvertFromString(value)!;
             Application.Current.Resources[key] = new SolidColorBrush(color);
         }
 
-        ApplyBrandGradient(isLight);
-    }
-
-    private static void ApplyBrandGradient(bool isLight)
-    {
-        if (Application.Current?.Resources["BrandGradientBrush"] is not LinearGradientBrush gradient)
-            return;
-
-        // StaticResource users hold this brush instance, so mutate it in place when
-        // possible. Application resources are normally mutable, but clone defensively.
-        if (gradient.IsFrozen)
-        {
-            gradient = gradient.Clone();
-            Application.Current.Resources["BrandGradientBrush"] = gradient;
-        }
-
-        gradient.GradientStops.Clear();
-        if (isLight)
-        {
-            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#258FCB")!, 0));
-            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#356FDC")!, 0.55));
-            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#514FC4")!, 1));
-        }
-        else
-        {
-            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#2D8AD7")!, 0));
-            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#3269E2")!, 0.55));
-            gradient.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#5147C8")!, 1));
-        }
+        // BrandGradientBrush is defined in App.xaml and intentionally left alone here.
+        // WPF may freeze StaticResource Freezables; mutating that shared gradient during
+        // startup can be fragile. The logo-matched dark gradient remains the stable
+        // primary-button treatment while the solid theme resources switch dynamically.
     }
 }
