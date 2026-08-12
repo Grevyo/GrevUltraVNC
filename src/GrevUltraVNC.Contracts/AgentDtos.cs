@@ -73,3 +73,29 @@ public sealed record AgentCommandResponse(
 public sealed record AgentActionResponse(
     bool Success,
     string Message);
+
+public sealed record AgentFileEntry(
+    string Name,
+    string FullPath,
+    bool IsDirectory,
+    long SizeBytes,
+    DateTimeOffset? LastWriteTimeUtc,
+    string Detail);
+
+public sealed record AgentFileRequest(
+    string Operation,
+    string? Path = null,
+    string? DestinationDirectory = null,
+    string? Name = null,
+    long Offset = 0,
+    string? DataBase64 = null,
+    bool Truncate = false);
+
+public sealed record AgentFileResponse(
+    bool Success,
+    string Message,
+    string? CurrentPath = null,
+    IReadOnlyList<AgentFileEntry>? Entries = null,
+    string? DataBase64 = null,
+    long NextOffset = 0,
+    bool Complete = true);
