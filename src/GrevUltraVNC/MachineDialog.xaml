@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
-        Title="GrevUltraVNC · Machine" Width="560" Height="820" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        Title="GrevUltraVNC · Machine" Width="560" Height="880" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}">
@@ -23,7 +23,7 @@
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
                 <TextBlock Text="Machine details" FontSize="25" FontWeight="Bold" />
-                <TextBlock Text="VNC, Wake-on-LAN and Grev Agent connection settings." Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,0,0" />
+                <TextBlock Text="VNC, Grev Connect and Agent settings." Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,0,0" />
             </StackPanel>
         </Grid>
 
@@ -31,8 +31,10 @@
             <StackPanel Margin="0,0,10,0">
                 <TextBlock Text="Name" Margin="0,0,0,6" />
                 <TextBox x:Name="NameBox" />
-                <TextBlock Text="Static IP" Margin="0,16,0,6" />
+                <TextBlock Text="LAN / fallback IP" Margin="0,16,0,6" />
                 <TextBox x:Name="IpBox" />
+                <TextBlock Text="Used first when on the local network. Grev Connect can discover a different current route when the Agent has a Connect ID."
+                           Foreground="{DynamicResource FaintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,5,2,0" />
                 <TextBlock Text="MAC address (for Wake-on-LAN)" Margin="0,16,0,6" />
                 <TextBox x:Name="MacBox" />
 
@@ -68,6 +70,20 @@
                             Click="ForgetAgentKey_Click" Margin="10,0,0,0" />
                 </Grid>
                 <TextBlock x:Name="AgentKeyStateText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11"
+                           TextWrapping="Wrap" Margin="2,6,0,0" />
+
+                <TextBlock Text="GREV CONNECT" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,24,0,8" />
+                <TextBlock Text="Grev Connect ID" Margin="0,0,0,6" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ConnectIdBox" />
+                    <Button x:Name="ApplyConnectIdButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="Set on Agent"
+                            Click="ApplyConnectId_Click" Margin="10,0,0,0" />
+                </Grid>
+                <TextBlock x:Name="ConnectIdStateText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11"
                            TextWrapping="Wrap" Margin="2,6,0,0" />
 
                 <TextBlock Text="ORGANISATION" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,24,0,8" />
