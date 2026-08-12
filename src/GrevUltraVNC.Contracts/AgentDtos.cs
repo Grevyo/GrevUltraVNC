@@ -54,6 +54,9 @@ public sealed record AgentServiceActionRequest(
     string ServiceName,
     string Action);
 
+public sealed record AgentQuickActionRequest(
+    string Action);
+
 public sealed record AgentActionResponse(
     bool Success,
     string Message);
