@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
         Title="Grev Control Panel"
-        Width="310" Height="840" MinHeight="600"
+        Width="320" Height="840" MinHeight="600"
         ResizeMode="NoResize" WindowStyle="ToolWindow"
         ShowInTaskbar="False" Topmost="True"
         Icon="{x:Static svc:BrandAssets.Logo}"
@@ -17,11 +17,11 @@
                         <ColumnDefinition Width="52" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="46" Height="46" CornerRadius="11" Background="#030509" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <Border Width="46" Height="46" CornerRadius="11" Background="#030509" BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
                         <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="2" Stretch="Uniform" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="9,0,0,0">
-                        <TextBlock Text="GREV CONTROL PANEL" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="Bold" />
+                        <TextBlock Text="GREV CONTROL PANEL" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="Bold" />
                         <TextBlock x:Name="MachineNameText" FontSize="19" FontWeight="Bold" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </Grid>
@@ -35,7 +35,7 @@
                     </Grid>
                 </Border>
 
-                <TextBlock Text="SYSTEM HEALTH" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <TextBlock Text="SYSTEM HEALTH" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="11">
                     <StackPanel>
                         <TextBlock x:Name="AgentConnectionText" Text="AGENT CHECKING" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" FontWeight="SemiBold" />
@@ -46,6 +46,8 @@
                     </StackPanel>
                 </Border>
                 <Button Style="{StaticResource PrimaryButton}" Content="Manage machine" Click="ManageMachine_Click" Margin="0,8,0,0" />
+                <Button x:Name="UpdateAgentButton" Style="{StaticResource SecondaryButton}" Content="⇩ Update Grev Agent" Click="UpdateAgent_Click" Margin="0,7,0,0" />
+                <TextBlock x:Name="AgentUpdateStatusText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,6,2,0" />
 
                 <TextBlock Text="REMOTE KEYS" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <UniformGrid Columns="2">
@@ -59,7 +61,7 @@
                     <Button Style="{StaticResource CardActionButton}" Content="Win+L" Click="WinL_Click" Margin="4,0,0,0" />
                 </UniformGrid>
 
-                <TextBlock Text="SESSION" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <TextBlock Text="SESSION" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <UniformGrid Columns="2">
                     <Button Style="{StaticResource CardActionButton}" Content="Bring to front" Click="BringToFront_Click" Margin="0,0,4,8" />
                     <Button Style="{StaticResource CardActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="4,0,0,8" />
@@ -75,7 +77,7 @@
                 </UniformGrid>
                 <Button Style="{StaticResource SecondaryButton}" Content="⚙ Set VNC to start with Windows" Click="EnableVncAutoStart_Click" />
 
-                <TextBlock Text="MACHINE" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <TextBlock Text="MACHINE" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <Button Style="{StaticResource SecondaryButton}" Content="⚡ Wake machine" Click="Wake_Click" Margin="0,0,0,8" />
                 <Button Style="{StaticResource SecondaryButton}" Content="↻ Restart machine" Click="Restart_Click" Margin="0,0,0,8" />
                 <Button Style="{StaticResource DangerButton}" Content="⏻ Shut down machine" Click="Shutdown_Click" />
