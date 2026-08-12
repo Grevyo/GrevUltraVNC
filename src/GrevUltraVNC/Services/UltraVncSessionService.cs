@@ -70,8 +70,7 @@ public sealed class UltraVncSessionService
         if (!TryGetSession(machineId, out var process) || process is null)
             return false;
 
-        process.Refresh();
-        handle = process.MainWindowHandle;
+        handle = FindPrimaryViewerWindow(process);
         return handle != IntPtr.Zero;
     }
 
@@ -104,8 +103,12 @@ public sealed class UltraVncSessionService
 
         try
         {
-            if (!process.CloseMainWindow())
-                process.Kill(entireProcessTree: true);
+            var handle = FindPrimaryViewerWindow(process);
+            if (handle == IntPtr.Zero || !PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero))
+            {
+                if (!process.CloseMainWindow())
+                    process.Kill(entireProcessTree: true);
+            }
         }
         catch
         {
@@ -207,8 +210,7 @@ public sealed class UltraVncSessionService
 
     private static void FocusViewer(Process process)
     {
-        process.Refresh();
-        var handle = process.MainWindowHandle;
+        var handle = FindPrimaryViewerWindow(process);
         if (handle == IntPtr.Zero) return;
 
         if (IsIconic(handle)) ShowWindow(handle, SW_RESTORE);
@@ -216,8 +218,95 @@ public sealed class UltraVncSessionService
         SetForegroundWindow(handle);
     }
 
-    private static Process? StartExisting(string processName) =>
-        Process.GetProcessesByName(processName).FirstOrDefault(process => !process.HasExited);
+    // UltraVNC creates transient top-level toolbar/tooltip windows. Process.MainWindowHandle
+    // can briefly follow one of those, which made the Grev Control Panel jump around when
+    // hovering the viewer toolbar. Always resolve the largest visible top-level window owned
+    // by the viewer process instead. That remains the actual desktop viewer in windowed and
+    // fullscreen modes while ignoring tiny controls and popups.
+    private static IntPtr FindPrimaryViewerWindow(Process process)
+    {
+        try
+        {
+            if (process.HasExited) return IntPtr.Zero;
+
+            var processId = (uint)process.Id;
+            var bestHandle = IntPtr.Zero;
+            long bestArea = 0;
+
+            EnumWindows((window, _) =>
+            {
+                GetWindowThreadProcessId(window, out var ownerProcessId);
+                if (ownerProcessId != processId || !IsWindowVisible(window))
+                    return true;
+
+                if (GetWindow(window, GW_OWNER) != IntPtr.Zero)
+                    return true;
+
+                if (!GetWindowRect(window, out var rect))
+                    return true;
+
+                var width = Math.Max(0, rect.Right - rect.Left);
+                var height = Math.Max(0, rect.Bottom - rect.Top);
+                if (width < 320 || height < 220)
+                    return true;
+
+                var area = (long)width * height;
+                if (area <= bestArea)
+                    return true;
+
+                bestArea = area;
+                bestHandle = window;
+                return true;
+            }, IntPtr.Zero);
+
+            if (bestHandle != IntPtr.Zero)
+                return bestHandle;
+
+            process.Refresh();
+            return process.MainWindowHandle;
+        }
+        catch
+        {
+            try
+            {
+                process.Refresh();
+                return process.MainWindowHandle;
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+        }
+    }
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -232,10 +321,16 @@ public sealed class UltraVncSessionService
     private static extern bool IsIconic(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
     private const int SW_SHOW = 5;
     private const int SW_RESTORE = 9;
+    private const uint GW_OWNER = 4;
+    private const uint WM_CLOSE = 0x0010;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const byte VK_CONTROL = 0x11;
     private const byte VK_SHIFT = 0x10;
