@@ -34,6 +34,9 @@ public sealed class UltraVncSessionService
             return existing!;
         }
 
+        if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
+            throw new InvalidOperationException("No LAN or Grev Connect route is currently available for this machine.");
+
         var viewer = FindViewer(settings.UltraVncViewerPath)
             ?? throw new FileNotFoundException("UltraVNC Viewer was not found. Set its path in Settings.");
 
@@ -43,7 +46,7 @@ public sealed class UltraVncSessionService
             UseShellExecute = true
         };
         psi.ArgumentList.Add("-connect");
-        psi.ArgumentList.Add($"{machine.IpAddress}::{machine.VncPort}");
+        psi.ArgumentList.Add($"{machine.ActiveAddress}::{machine.VncPort}");
 
         if (_credentials.TryRead(machine.Id, out var password) && !string.IsNullOrEmpty(password))
         {
@@ -179,80 +182,73 @@ public sealed class UltraVncSessionService
 
     private static void SendRemoteChordWithScrollLock(Process process, params byte[] keys)
     {
-        var scrollWasOn = (GetKeyState(VK_SCROLL) & 1) != 0;
-        if (!scrollWasOn) TapKey(VK_SCROLL);
         FocusViewer(process);
+        KeyPress(VK_SCROLL);
+        Thread.Sleep(35);
         SendChord(keys);
-        if (!scrollWasOn) TapKey(VK_SCROLL);
-    }
-
-    private static void FocusViewer(Process process)
-    {
-        process.Refresh();
-        var handle = process.MainWindowHandle;
-        if (handle == IntPtr.Zero)
-        {
-            try
-            {
-                process.WaitForInputIdle(3000);
-            }
-            catch
-            {
-                // Viewer may still be starting; refresh below and report a clean error if no window exists yet.
-            }
-
-            process.Refresh();
-            handle = process.MainWindowHandle;
-        }
-
-        if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not locate the UltraVNC Viewer window yet.");
-        ShowWindow(handle, SW_RESTORE);
-        SetForegroundWindow(handle);
-        Thread.Sleep(120);
     }
 
     private static void SendChord(params byte[] keys)
     {
         foreach (var key in keys) KeyDown(key);
+        Thread.Sleep(25);
         for (var i = keys.Length - 1; i >= 0; i--) KeyUp(keys[i]);
     }
 
-    private static void TapKey(byte key)
+    private static void KeyPress(byte key)
     {
         KeyDown(key);
+        Thread.Sleep(20);
         KeyUp(key);
-        Thread.Sleep(60);
     }
 
     private static void KeyDown(byte key) => keybd_event(key, 0, 0, UIntPtr.Zero);
     private static void KeyUp(byte key) => keybd_event(key, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
 
+    private static void FocusViewer(Process process)
+    {
+        process.Refresh();
+        var handle = process.MainWindowHandle;
+        if (handle == IntPtr.Zero) return;
+
+        if (IsIconic(handle)) ShowWindow(handle, SW_RESTORE);
+        ShowWindow(handle, SW_SHOW);
+        SetForegroundWindow(handle);
+    }
+
+    private static Process? StartExisting(string processName) =>
+        Process.GetProcessesByName(processName).FirstOrDefault(process => !process.HasExited);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    private const int SW_SHOW = 5;
     private const int SW_RESTORE = 9;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const byte VK_CONTROL = 0x11;
     private const byte VK_SHIFT = 0x10;
     private const byte VK_MENU = 0x12;
-    private const byte VK_TAB = 0x09;
     private const byte VK_ESCAPE = 0x1B;
-    private const byte VK_SCROLL = 0x91;
-    private const byte VK_SNAPSHOT = 0x2C;
-    private const byte VK_LWIN = 0x5B;
+    private const byte VK_TAB = 0x09;
     private const byte VK_F4 = 0x73;
     private const byte VK_F7 = 0x76;
     private const byte VK_F12 = 0x7B;
+    private const byte VK_LWIN = 0x5B;
     private const byte VK_R = 0x52;
     private const byte VK_E = 0x45;
     private const byte VK_L = 0x4C;
-
-    [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [DllImport("user32.dll")]
-    private static extern short GetKeyState(int nVirtKey);
-
-    [DllImport("user32.dll")]
-    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+    private const byte VK_SCROLL = 0x91;
+    private const byte VK_SNAPSHOT = 0x2C;
 }
