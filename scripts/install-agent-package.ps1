@@ -13,6 +13,94 @@ $exePath = Join-Path $installDir 'GrevUltraVNC.Agent.exe'
 $dataDir = Join-Path $env:ProgramData 'GrevUltraVNC\Agent'
 $configPath = Join-Path $dataDir 'agent.json'
 
+function Wait-ProcessExit {
+    param(
+        [int]$ProcessId,
+        [int]$TimeoutSeconds = 20
+    )
+
+    if ($ProcessId -le 0) { return }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) {
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    }
+
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if ($process) {
+        Write-Host "Old Agent process $ProcessId is still running; forcing it to close..." -ForegroundColor Yellow
+        Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
+
+        $deadline = (Get-Date).AddSeconds(10)
+        while ((Get-Date) -lt $deadline) {
+            if (-not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) {
+                return
+            }
+            Start-Sleep -Milliseconds 250
+        }
+
+        throw "The old Grev Agent process $ProcessId could not be stopped."
+    }
+}
+
+function Wait-FileUnlocked {
+    param(
+        [string]$Path,
+        [int]$TimeoutSeconds = 30
+    )
+
+    if (-not (Test-Path $Path)) { return }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $stream = $null
+        try {
+            $stream = [System.IO.File]::Open(
+                $Path,
+                [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::ReadWrite,
+                [System.IO.FileShare]::None)
+            return
+        }
+        catch [System.IO.IOException] {
+            Start-Sleep -Milliseconds 400
+        }
+        finally {
+            if ($stream) { $stream.Dispose() }
+        }
+    }
+
+    throw "Timed out waiting for the old Agent executable to be released: $Path"
+}
+
+function Copy-WithRetry {
+    param(
+        [string]$Source,
+        [string]$Destination,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastError = $null
+
+    while ((Get-Date) -lt $deadline) {
+        try {
+            Copy-Item -LiteralPath $Source -Destination $Destination -Force
+            return
+        }
+        catch {
+            $lastError = $_
+            Start-Sleep -Milliseconds 500
+        }
+    }
+
+    if ($lastError) { throw $lastError }
+    throw "Timed out copying the Grev Agent executable to $Destination"
+}
+
 Write-Host ''
 Write-Host '=== GrevUltraVNC Agent Setup ===' -ForegroundColor Cyan
 Write-Host ''
@@ -23,18 +111,40 @@ if (-not (Test-Path $sourceExe)) {
 
 $existing = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if ($existing) {
+    $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
+    $oldProcessId = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }
+
     Write-Host 'Stopping existing Grev agent service...'
     if ($existing.Status -ne 'Stopped') {
         Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-        (Get-Service -Name $serviceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(15))
+        (Get-Service -Name $serviceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
     }
+
+    # A service can report Stopped slightly before its executable/image handle is fully released.
+    Wait-ProcessExit -ProcessId $oldProcessId -TimeoutSeconds 20
+    Wait-FileUnlocked -Path $exePath -TimeoutSeconds 30
+
+    try { $existing.Dispose() } catch { }
+
     & sc.exe delete $serviceName | Out-Null
-    Start-Sleep -Seconds 1
+
+    $deleteDeadline = (Get-Date).AddSeconds(20)
+    while ((Get-Date) -lt $deleteDeadline) {
+        if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) {
+            break
+        }
+        Start-Sleep -Milliseconds 300
+    }
+
+    if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+        throw 'The old Grev Agent service is still marked for deletion. Wait a few seconds and try the update again.'
+    }
 }
 
 Write-Host 'Installing agent files...'
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-Copy-Item $sourceExe $exePath -Force
+Wait-FileUnlocked -Path $exePath -TimeoutSeconds 30
+Copy-WithRetry -Source $sourceExe -Destination $exePath -TimeoutSeconds 30
 
 Write-Host 'Securing agent configuration folder...'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
