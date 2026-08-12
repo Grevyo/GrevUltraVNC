@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using GrevUltraVNC.Contracts;
 using GrevUltraVNC.Models;
@@ -15,6 +16,7 @@ public partial class MachineOverviewWindow : Window
     private IReadOnlyList<AgentServiceInfo> _services = [];
     private bool _refreshing;
     private bool _actionRunning;
+    private bool _commandRunning;
 
     public MachineOverviewWindow(Machine machine)
     {
@@ -242,23 +244,107 @@ public partial class MachineOverviewWindow : Window
         }
     }
 
+    private async void RunCommand_Click(object sender, RoutedEventArgs e) => await RunTerminalCommandAsync();
+
+    private async void TerminalCommandBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        await RunTerminalCommandAsync();
+    }
+
+    private async Task RunTerminalCommandAsync()
+    {
+        if (_commandRunning) return;
+
+        var command = TerminalCommandBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            StatusText.Text = "Enter a command first.";
+            return;
+        }
+
+        var shellItem = TerminalShellBox.SelectedItem as ComboBoxItem;
+        var shell = shellItem?.Tag?.ToString() ?? "powershell";
+        var shellLabel = string.Equals(shell, "cmd", StringComparison.OrdinalIgnoreCase) ? "CMD" : "PowerShell";
+
+        _commandRunning = true;
+        RunCommandButton.IsEnabled = false;
+        TerminalCommandBox.IsEnabled = false;
+        StatusText.Text = $"Running {shellLabel} command on {_machine.Name}…";
+        TerminalOutputBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {shellLabel}> {command}{Environment.NewLine}");
+        TerminalOutputBox.ScrollToEnd();
+
+        try
+        {
+            var result = await _agent.RunCommandAsync(_machine, shell, command, 30);
+
+            if (!string.IsNullOrEmpty(result.StandardOutput))
+            {
+                TerminalOutputBox.AppendText(result.StandardOutput);
+                if (!result.StandardOutput.EndsWith(Environment.NewLine, StringComparison.Ordinal))
+                    TerminalOutputBox.AppendText(Environment.NewLine);
+            }
+
+            if (!string.IsNullOrEmpty(result.StandardError))
+            {
+                TerminalOutputBox.AppendText("[stderr]" + Environment.NewLine);
+                TerminalOutputBox.AppendText(result.StandardError);
+                if (!result.StandardError.EndsWith(Environment.NewLine, StringComparison.Ordinal))
+                    TerminalOutputBox.AppendText(Environment.NewLine);
+            }
+
+            var timeoutText = result.TimedOut ? " · TIMED OUT" : string.Empty;
+            TerminalOutputBox.AppendText($"[exit {result.ExitCode} · {result.DurationMilliseconds} ms{timeoutText}]{Environment.NewLine}{Environment.NewLine}");
+            TerminalOutputBox.ScrollToEnd();
+
+            StatusText.Text = result.Success
+                ? $"Command completed with exit code {result.ExitCode}."
+                : result.TimedOut
+                    ? "Command timed out and was terminated by Grev Agent."
+                    : $"Command finished with exit code {result.ExitCode}.";
+
+            TerminalCommandBox.Clear();
+        }
+        catch (Exception ex)
+        {
+            TerminalOutputBox.AppendText($"[Grev Agent error] {ex.Message}{Environment.NewLine}{Environment.NewLine}");
+            TerminalOutputBox.ScrollToEnd();
+            StatusText.Text = ex.Message;
+        }
+        finally
+        {
+            _commandRunning = false;
+            RunCommandButton.IsEnabled = true;
+            TerminalCommandBox.IsEnabled = true;
+            TerminalCommandBox.Focus();
+        }
+    }
+
     private void ProcessSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderProcesses();
     private void ServiceSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderServices();
 
     private void OverviewTab_Click(object sender, RoutedEventArgs e) => ShowSection(OverviewPanel, OverviewButton);
     private void ProcessesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ProcessesPanel, ProcessesButton);
     private void ServicesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ServicesPanel, ServicesButton);
+    private void TerminalTab_Click(object sender, RoutedEventArgs e)
+    {
+        ShowSection(TerminalPanel, TerminalButton);
+        TerminalCommandBox.Focus();
+    }
 
     private void ShowSection(FrameworkElement section, Button activeButton)
     {
         OverviewPanel.Visibility = Visibility.Collapsed;
         ProcessesPanel.Visibility = Visibility.Collapsed;
         ServicesPanel.Visibility = Visibility.Collapsed;
+        TerminalPanel.Visibility = Visibility.Collapsed;
         section.Visibility = Visibility.Visible;
 
         OverviewButton.Style = (Style)FindResource("SecondaryButton");
         ProcessesButton.Style = (Style)FindResource("SecondaryButton");
         ServicesButton.Style = (Style)FindResource("SecondaryButton");
+        TerminalButton.Style = (Style)FindResource("SecondaryButton");
         activeButton.Style = (Style)FindResource("PrimaryButton");
     }
 
