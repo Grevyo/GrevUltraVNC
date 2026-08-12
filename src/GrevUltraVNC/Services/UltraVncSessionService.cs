@@ -1,9 +1,16 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using GrevUltraVNC.Models;
 
 namespace GrevUltraVNC.Services;
+
+public readonly record struct ViewerSurfaceBounds(int Left, int Top, int Width, int Height)
+{
+    public bool Contains(int x, int y) =>
+        x >= Left && y >= Top && x < Left + Width && y < Top + Height;
+}
 
 public sealed class UltraVncSessionService
 {
@@ -35,7 +42,9 @@ public sealed class UltraVncSessionService
             return existing!;
         }
 
-        var process = StartViewer(machine, settings, configPath: null);
+        // Grev sessions deliberately begin view-only. Collaboration ownership decides who
+        // may send remote mouse/keyboard input after everyone can see each other's cursor.
+        var process = StartViewer(machine, settings, configPath: null, startViewOnly: true);
         _sessions[machine.Id] = process;
         return process;
     }
@@ -58,7 +67,7 @@ public sealed class UltraVncSessionService
         var width = Math.Clamp(bounds?.Width ?? 1920, 800, 7680);
         var height = Math.Clamp(bounds?.Height ?? 1080, 600, 4320);
         var configPath = CreateVirtualDisplayConfig(machine.Id, width, height);
-        var process = StartViewer(machine, settings, configPath);
+        var process = StartViewer(machine, settings, configPath, startViewOnly: true);
         _virtualSessions[machine.Id] = process;
 
         try
@@ -72,11 +81,21 @@ public sealed class UltraVncSessionService
                     throw new InvalidOperationException(
                         "UltraVNC closed the Screen 2 viewer while creating the virtual display. " +
                         "The target must run UltraVNC Server as a service/administrator, use DDengine capture, " +
-                        "and support UltraVNC virtual displays (1.3.0 or newer).");
+                        "and support UltraVNC virtual displays.");
 
                 var handle = FindPrimaryViewerWindow(process);
                 if (handle != IntPtr.Zero)
                 {
+                    // Requesting Extend Display creates the virtual monitor. Some UltraVNC builds
+                    // still open the new viewer on monitor 1, so explicitly invoke UltraVNC's own
+                    // Switch Monitor command once to select the newly-added monitor.
+                    await Task.Delay(900, cancellationToken);
+                    if (process.HasExited)
+                        throw new InvalidOperationException("The Screen 2 viewer closed after the display topology changed.");
+
+                    PostMessage(handle, TB_WM_SWITCHMONITOR, IntPtr.Zero, IntPtr.Zero);
+                    await Task.Delay(250, cancellationToken);
+                    SetProcessViewOnly(process, true);
                     FocusViewer(process);
                     return process;
                 }
@@ -99,24 +118,65 @@ public sealed class UltraVncSessionService
     public bool HasActiveSession(Guid machineId) => TryGetSession(machineId, out _);
     public bool HasVirtualSession(Guid machineId) => TryGetVirtualSession(machineId, out _);
 
-    public bool TryGetViewerWindowHandle(Guid machineId, out IntPtr handle)
+    public bool TryGetViewerWindowHandle(Guid machineId, out IntPtr handle) =>
+        TryGetWindowHandle(_sessions, machineId, out handle);
+
+    public bool TryGetVirtualViewerWindowHandle(Guid machineId, out IntPtr handle) =>
+        TryGetWindowHandle(_virtualSessions, machineId, out handle);
+
+    public bool TryGetViewerSurfaceBounds(Guid machineId, bool virtualDisplay, out ViewerSurfaceBounds bounds)
     {
-        handle = IntPtr.Zero;
-        if (!TryGetSession(machineId, out var process) || process is null)
+        bounds = default;
+        var sessions = virtualDisplay ? _virtualSessions : _sessions;
+        if (!TryGetTrackedSession(sessions, machineId, out var process) || process is null)
             return false;
 
-        handle = FindPrimaryViewerWindow(process);
-        return handle != IntPtr.Zero;
+        var surface = FindViewerContentWindow(process);
+        if (surface == IntPtr.Zero || !GetWindowRect(surface, out var rect))
+            return false;
+
+        var width = Math.Max(0, rect.Right - rect.Left);
+        var height = Math.Max(0, rect.Bottom - rect.Top);
+        if (width < 32 || height < 32) return false;
+
+        bounds = new ViewerSurfaceBounds(rect.Left, rect.Top, width, height);
+        return true;
     }
 
-    public bool TryGetVirtualViewerWindowHandle(Guid machineId, out IntPtr handle)
+    public bool TryGetLocalPointer(Guid machineId, out string surface, out double x, out double y)
     {
-        handle = IntPtr.Zero;
-        if (!TryGetVirtualSession(machineId, out var process) || process is null)
-            return false;
+        surface = "screen1";
+        x = 0;
+        y = 0;
 
-        handle = FindPrimaryViewerWindow(process);
-        return handle != IntPtr.Zero;
+        if (!GetCursorPos(out var point)) return false;
+
+        if (TryGetViewerSurfaceBounds(machineId, virtualDisplay: true, out var screen2) && screen2.Contains(point.X, point.Y))
+        {
+            surface = "screen2";
+            x = Math.Clamp((point.X - screen2.Left) / (double)screen2.Width, 0, 1);
+            y = Math.Clamp((point.Y - screen2.Top) / (double)screen2.Height, 0, 1);
+            return true;
+        }
+
+        if (TryGetViewerSurfaceBounds(machineId, virtualDisplay: false, out var screen1) && screen1.Contains(point.X, point.Y))
+        {
+            surface = "screen1";
+            x = Math.Clamp((point.X - screen1.Left) / (double)screen1.Width, 0, 1);
+            y = Math.Clamp((point.Y - screen1.Top) / (double)screen1.Height, 0, 1);
+            return true;
+        }
+
+        return false;
+    }
+
+    public void SetViewOnly(Guid machineId, bool viewOnly)
+    {
+        if (TryGetSession(machineId, out var primary) && primary is not null)
+            SetProcessViewOnly(primary, viewOnly);
+
+        if (TryGetVirtualSession(machineId, out var secondary) && secondary is not null)
+            SetProcessViewOnly(secondary, viewOnly);
     }
 
     public void BringViewerToFront(Guid machineId) => FocusViewer(GetSession(machineId));
@@ -200,7 +260,7 @@ public sealed class UltraVncSessionService
     public void SendWinL(Guid machineId) =>
         SendRemoteChordWithScrollLock(GetSession(machineId), VK_LWIN, VK_L);
 
-    private Process StartViewer(Machine machine, AppSettings settings, string? configPath)
+    private Process StartViewer(Machine machine, AppSettings settings, string? configPath, bool startViewOnly)
     {
         if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
             throw new InvalidOperationException("No LAN or Grev Connect route is currently available for this machine.");
@@ -223,6 +283,7 @@ public sealed class UltraVncSessionService
         psi.ArgumentList.Add("-connect");
         psi.ArgumentList.Add($"{machine.ActiveAddress}::{machine.VncPort}");
         psi.ArgumentList.Add("-shared");
+        if (startViewOnly) psi.ArgumentList.Add("-viewonly");
 
         if (_credentials.TryRead(machine.Id, out var password) && !string.IsNullOrEmpty(password))
         {
@@ -243,14 +304,14 @@ public sealed class UltraVncSessionService
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, $"{machineId:N}-screen2.vnc");
 
-        // UltraVNC virtual-display mode:
-        // ChangeServerRes + requested resolution + extendDisplay keeps the host's physical
-        // display enabled and adds a virtual monitor for this viewer. showExtend asks this
-        // viewer to show the newly-created extended display rather than Screen 1.
+        // Extend display creates a real extra Windows display while leaving the host's physical
+        // display enabled. We deliberately start on the normal monitor, then use UltraVNC's own
+        // Switch Monitor command after the connection is established so Screen 2 selection is
+        // explicit instead of relying on version-dependent auto-selection behaviour.
         var content = $"""
                       [options]
                       shared=1
-                      viewonly=0
+                      viewonly=1
                       showtoolbar=1
                       fullscreen=0
                       AutoScaling=1
@@ -258,7 +319,7 @@ public sealed class UltraVncSessionService
                       allowMonitorSpanning=0
                       ChangeServerRes=1
                       extendDisplay=1
-                      showExtend=1
+                      showExtend=0
                       use_virt=0
                       useAllMonitors=0
                       requestedWidth={width}
@@ -285,6 +346,16 @@ public sealed class UltraVncSessionService
     private bool TryGetVirtualSession(Guid machineId, out Process? process) =>
         TryGetTrackedSession(_virtualSessions, machineId, out process);
 
+    private static bool TryGetWindowHandle(Dictionary<Guid, Process> sessions, Guid machineId, out IntPtr handle)
+    {
+        handle = IntPtr.Zero;
+        if (!TryGetTrackedSession(sessions, machineId, out var process) || process is null)
+            return false;
+
+        handle = FindPrimaryViewerWindow(process);
+        return handle != IntPtr.Zero;
+    }
+
     private static bool TryGetTrackedSession(Dictionary<Guid, Process> sessions, Guid machineId, out Process? process)
     {
         process = null;
@@ -306,6 +377,19 @@ public sealed class UltraVncSessionService
 
         process = candidate;
         return true;
+    }
+
+    private static void SetProcessViewOnly(Process process, bool viewOnly)
+    {
+        var main = FindPrimaryViewerWindow(process);
+        if (main == IntPtr.Zero) return;
+
+        var value = viewOnly ? new IntPtr(1) : IntPtr.Zero;
+        PostMessage(main, WM_SETVIEWONLY, value, IntPtr.Zero);
+
+        var surface = FindViewerContentWindow(process);
+        if (surface != IntPtr.Zero && surface != main)
+            PostMessage(surface, WM_SETVIEWONLY, value, IntPtr.Zero);
     }
 
     private static void TryCloseProcess(Process process)
@@ -369,11 +453,38 @@ public sealed class UltraVncSessionService
         SetForegroundWindow(handle);
     }
 
-    // UltraVNC creates transient top-level toolbar/tooltip windows. Process.MainWindowHandle
-    // can briefly follow one of those, which made the Grev Control Panel jump around when
-    // hovering the viewer toolbar. Always resolve the largest visible top-level window owned
-    // by the viewer process instead. That remains the actual desktop viewer in windowed and
-    // fullscreen modes while ignoring tiny controls and popups.
+    private static IntPtr FindViewerContentWindow(Process process)
+    {
+        var main = FindPrimaryViewerWindow(process);
+        if (main == IntPtr.Zero) return IntPtr.Zero;
+
+        var best = IntPtr.Zero;
+        long bestArea = 0;
+        EnumChildWindows(main, (window, _) =>
+        {
+            if (!IsWindowVisible(window)) return true;
+
+            var className = new StringBuilder(128);
+            GetClassName(window, className, className.Capacity);
+            if (!string.Equals(className.ToString(), "VNCviewerwindow", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!GetWindowRect(window, out var rect)) return true;
+            var width = Math.Max(0, rect.Right - rect.Left);
+            var height = Math.Max(0, rect.Bottom - rect.Top);
+            var area = (long)width * height;
+            if (area <= bestArea) return true;
+
+            bestArea = area;
+            best = window;
+            return true;
+        }, IntPtr.Zero);
+
+        return best != IntPtr.Zero ? best : main;
+    }
+
+    // UltraVNC creates transient top-level toolbar/tooltip windows. Resolve the largest real
+    // top-level viewer instead of Process.MainWindowHandle so Grev's companion panel stays docked.
     private static IntPtr FindPrimaryViewerWindow(Process process)
     {
         try
@@ -441,9 +552,23 @@ public sealed class UltraVncSessionService
         public int Bottom;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
@@ -458,6 +583,10 @@ public sealed class UltraVncSessionService
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -482,6 +611,9 @@ public sealed class UltraVncSessionService
     private const int SW_RESTORE = 9;
     private const uint GW_OWNER = 4;
     private const uint WM_CLOSE = 0x0010;
+    private const uint WM_USER = 0x0400;
+    private const uint WM_SETVIEWONLY = WM_USER + 102;
+    private const uint TB_WM_SWITCHMONITOR = WM_USER + 1006;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const byte VK_CONTROL = 0x11;
     private const byte VK_SHIFT = 0x10;
