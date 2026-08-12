@@ -21,6 +21,19 @@ jobs:
       - name: Build solution
         run: dotnet build GrevUltraVNC.slnx --configuration Release --no-restore
 
+      - name: Smoke test GrevUltraVNC startup
+        shell: powershell
+        run: |
+          $exe = Resolve-Path 'src\GrevUltraVNC\bin\Release\net10.0-windows\GrevUltraVNC.exe'
+          $process = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            throw "GrevUltraVNC exited during startup smoke test with exit code $($process.ExitCode)."
+          }
+
+          Stop-Process -Id $process.Id -Force
+
       - name: Build Grev Agent package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
