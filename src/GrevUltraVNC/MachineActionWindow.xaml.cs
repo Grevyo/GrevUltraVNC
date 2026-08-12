@@ -16,6 +16,9 @@ public partial class MachineActionWindow : Window
     private readonly RemoteUltraVncService _remoteVnc = new();
     private readonly VncCredentialService _credentials = new();
     private readonly AgentCredentialService _agentCredentials = new();
+    private readonly GrevAgentClient _agent = new();
+    private readonly AgentUpdateService _agentUpdater;
+    private bool _agentUpdateRunning;
 
     public bool MachineChanged { get; private set; }
     public bool MachineDeleted { get; private set; }
@@ -26,6 +29,8 @@ public partial class MachineActionWindow : Window
         _machine = machine;
         _settings = settings;
         _vnc = vnc;
+        _agentUpdater = new AgentUpdateService(_agent);
+        Closed += (_, _) => _agent.Dispose();
         RefreshHeader();
     }
 
@@ -143,6 +148,48 @@ public partial class MachineActionWindow : Window
         overview.ShowDialog();
     }
 
+    private async void UpdateAgent_Click(object sender, RoutedEventArgs e)
+    {
+        if (_agentUpdateRunning) return;
+
+        if (MessageBox.Show(this,
+                $"Update Grev Agent on {_machine.Name} from the latest GitHub release?\n\nThe Agent service will restart. The existing pairing key will be preserved.",
+                "Update Grev Agent",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        _agentUpdateRunning = true;
+        UpdateAgentButton.IsEnabled = false;
+        AgentUpdateStatusText.Text = "Preparing Agent update…";
+
+        try
+        {
+            var progress = new Progress<string>(message => AgentUpdateStatusText.Text = message);
+            var result = await _agentUpdater.UpdateFromGitHubAsync(_machine, progress);
+            _machine.AgentState = result.State;
+            _machine.AgentStatus = result.Status;
+            _machine.AgentMessage = result.Message;
+            AgentUpdateStatusText.Text = "Grev Agent is up to date and responding.";
+
+            MessageBox.Show(this,
+                $"Grev Agent on {_machine.Name} updated successfully and is responding again.",
+                "Grev Agent updated",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            AgentUpdateStatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "Grev Agent update", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _agentUpdateRunning = false;
+            UpdateAgentButton.IsEnabled = true;
+        }
+    }
+
     private void Shares_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -164,12 +211,16 @@ public partial class MachineActionWindow : Window
     {
         var networkResult = await _network.ProbeAsync(_machine);
         var serviceResult = await _remoteVnc.QueryAsync(_machine.IpAddress);
+        var agentResult = await _agent.ProbeAsync(_machine);
         var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
         var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
         var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
+        var agent = agentResult.Status is null
+            ? $"{agentResult.State}: {agentResult.Message}"
+            : $"Connected · Agent {agentResult.Status.AgentVersion} · CPU {agentResult.Status.CpuUsagePercent:0.#}%";
 
         MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nProbe result: {networkResult.Status}",
+            $"Machine: {_machine.Name}\nIP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
             "Connection diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
