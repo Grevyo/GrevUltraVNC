@@ -21,7 +21,7 @@
                         <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="2" Stretch="Uniform" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="9,0,0,0">
-                        <TextBlock Text="GREV CONTROL PANEL" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="Bold" />
+                        <TextBlock Text="GREV CONTROL PANEL" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="Bold" />
                         <TextBlock x:Name="MachineNameText" FontSize="19" FontWeight="Bold" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </Grid>
@@ -35,7 +35,7 @@
                     </Grid>
                 </Border>
 
-                <TextBlock Text="SYSTEM HEALTH" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <TextBlock Text="SYSTEM HEALTH" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="11">
                     <StackPanel>
                         <TextBlock x:Name="AgentConnectionText" Text="AGENT CHECKING" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" FontWeight="SemiBold" />
@@ -49,7 +49,7 @@
                 <Button x:Name="UpdateAgentButton" Style="{StaticResource SecondaryButton}" Content="⇩ Update Grev Agent" Click="UpdateAgent_Click" Margin="0,7,0,0" />
                 <TextBlock x:Name="AgentUpdateStatusText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,6,2,0" />
 
-                <TextBlock Text="REMOTE KEYS" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <TextBlock Text="REMOTE KEYS" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <UniformGrid Columns="2">
                     <Button Style="{StaticResource CardActionButton}" Content="Ctrl+Alt+Del" Click="Cad_Click" Margin="0,0,4,8" />
                     <Button Style="{StaticResource CardActionButton}" Content="Windows ⊞" Click="WindowsKey_Click" Margin="4,0,0,8" />
@@ -61,7 +61,16 @@
                     <Button Style="{StaticResource CardActionButton}" Content="Win+L" Click="WinL_Click" Margin="4,0,0,0" />
                 </UniformGrid>
 
-                <TextBlock Text="SESSION" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <TextBlock Text="WINDOWS SESSION" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
+                <UniformGrid Columns="2">
+                    <Button Style="{StaticResource CardActionButton}" Content="🔒 Lock" Click="LockMachine_Click" Margin="0,0,4,8" />
+                    <Button Style="{StaticResource CardActionButton}" Content="↻ Explorer" Click="RestartExplorerAgent_Click" Margin="4,0,0,8" />
+                    <Button Style="{StaticResource DangerButton}" Content="Sign out" Click="SignOutMachine_Click" Margin="0,0,4,8" Padding="12,7" />
+                    <Button Style="{StaticResource CardActionButton}" Content="Sleep" Click="SleepMachine_Click" Margin="4,0,0,8" />
+                </UniformGrid>
+                <Button Style="{StaticResource SecondaryButton}" Content="Hibernate machine" Click="HibernateMachine_Click" />
+
+                <TextBlock Text="VNC SESSION CONTROLS" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <UniformGrid Columns="2">
                     <Button Style="{StaticResource CardActionButton}" Content="Bring to front" Click="BringToFront_Click" Margin="0,0,4,8" />
                     <Button Style="{StaticResource CardActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="4,0,0,8" />
