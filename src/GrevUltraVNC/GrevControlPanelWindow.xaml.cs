@@ -35,6 +35,7 @@ public partial class GrevControlPanelWindow : Window
         MachineNameText.Text = machine.Name;
         MachineAddressText.Text = $"{machine.IpAddress}  ·  VNC {machine.VncPort}";
         UpdateAgentButton.IsEnabled = false;
+        SessionActionPanel.IsEnabled = false;
 
         Loaded += GrevControlPanelWindow_Loaded;
         Closed += GrevControlPanelWindow_Closed;
@@ -82,6 +83,9 @@ public partial class GrevControlPanelWindow : Window
             _machine.AgentState = result.State;
             _machine.AgentStatus = result.Status;
             _machine.AgentMessage = result.Message;
+
+            var sessionActionsReady = result.State == GrevAgentState.Connected && string.IsNullOrWhiteSpace(result.Message);
+            SessionActionPanel.IsEnabled = sessionActionsReady;
             UpdateAgentButton.IsEnabled = result.State == GrevAgentState.Connected;
             UpdateAgentButton.Content = result.State == GrevAgentState.Connected && !string.IsNullOrWhiteSpace(result.Message)
                 ? "⇩ Update Grev Agent · recommended"
@@ -91,8 +95,10 @@ public partial class GrevControlPanelWindow : Window
             {
                 var status = result.Status;
                 var usedMemory = Math.Max(0, status.TotalMemoryBytes - status.AvailableMemoryBytes);
-                AgentConnectionText.Text = "● AGENT CONNECTED";
-                AgentConnectionText.Foreground = new SolidColorBrush(Color.FromRgb(80, 220, 145));
+                AgentConnectionText.Text = sessionActionsReady ? "● AGENT CONNECTED" : "● AGENT UPDATE RECOMMENDED";
+                AgentConnectionText.Foreground = sessionActionsReady
+                    ? new SolidColorBrush(Color.FromRgb(80, 220, 145))
+                    : (Brush)FindResource("Accent2Brush");
                 AgentCpuRamText.Text = $"CPU {status.CpuUsagePercent:0.#}%   ·   RAM {FormatGiB(usedMemory)} / {FormatGiB(status.TotalMemoryBytes)}";
                 AgentUserUptimeText.Text = $"{status.InteractiveUser ?? "No console user"}   ·   Uptime {FormatUptime(status.UptimeSeconds)}";
                 AgentVncHealthText.Text = $"UltraVNC {status.UltraVncServiceStatus}   ·   TCP {status.UltraVncPort} {(status.UltraVncPortListening ? "listening" : "not listening")}";
@@ -103,6 +109,7 @@ public partial class GrevControlPanelWindow : Window
                 return;
             }
 
+            SessionActionPanel.IsEnabled = false;
             AgentConnectionText.Text = result.State switch
             {
                 GrevAgentState.ReadyToPair => "● AGENT READY TO PAIR",
@@ -139,6 +146,7 @@ public partial class GrevControlPanelWindow : Window
 
         _agentUpdateRunning = true;
         UpdateAgentButton.IsEnabled = false;
+        SessionActionPanel.IsEnabled = false;
         AgentUpdateStatusText.Text = "Preparing Agent update…";
 
         try
