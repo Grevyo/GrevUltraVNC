@@ -138,7 +138,7 @@ public sealed class GrevAgentClient : IDisposable
             throw new AgentAuthenticationException();
 
         if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new InvalidOperationException("This Grev Agent is too old for the encrypted terminal. Rebuild and reinstall the latest Agent package on the target PC.");
+            throw new InvalidOperationException("This Grev Agent is too old for the encrypted terminal. Use Update Agent on the target PC.");
 
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {AgentProtocol.CommandPath}.");
@@ -147,6 +147,41 @@ public sealed class GrevAgentClient : IDisposable
                                ?? throw new InvalidOperationException("Grev Agent returned an empty encrypted terminal response.");
 
         return AgentPayloadCrypto.Decrypt<AgentCommandResponse>(sharedKey, responseEnvelope);
+    }
+
+    public async Task<AgentFileResponse> RunFileRequestAsync(
+        Machine machine,
+        AgentFileRequest fileRequest,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_credentials.TryRead(machine.Id, out var sharedKey))
+            throw new InvalidOperationException("This machine has no saved Grev Agent pairing key. Open Edit Machine and pair the Agent first.");
+
+        var encrypted = AgentPayloadCrypto.Encrypt(sharedKey, fileRequest);
+        var body = JsonSerializer.SerializeToUtf8Bytes(encrypted, JsonOptions);
+
+        using var request = CreateAuthenticatedRequest(
+            HttpMethod.Post,
+            Root(machine) + AgentProtocol.FilesPath,
+            sharedKey,
+            AgentProtocol.FilesPath,
+            body);
+        using var timeout = CreateTimeout(cancellationToken, TimeSpan.FromMinutes(10));
+        using var response = await _httpClient.SendAsync(request, timeout.Token);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new AgentAuthenticationException();
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            throw new InvalidOperationException("This Grev Agent is too old for native file management. Use Update Agent on the target PC.");
+
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {AgentProtocol.FilesPath}.");
+
+        var responseEnvelope = await response.Content.ReadFromJsonAsync<AgentEncryptedEnvelope>(cancellationToken: timeout.Token)
+                               ?? throw new InvalidOperationException("Grev Agent returned an empty encrypted file response.");
+
+        return AgentPayloadCrypto.Decrypt<AgentFileResponse>(sharedKey, responseEnvelope);
     }
 
     private async Task<T> GetRequiredAuthenticatedAsync<T>(Machine machine, string path, CancellationToken cancellationToken)
@@ -173,7 +208,7 @@ public sealed class GrevAgentClient : IDisposable
             throw new AgentAuthenticationException();
 
         if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new InvalidOperationException("This Grev Agent is too old for remote control actions. Rebuild and reinstall the latest Agent package on the target PC.");
+            throw new InvalidOperationException("This Grev Agent is too old for remote control actions. Use Update Agent on the target PC.");
 
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Grev Agent returned HTTP {(int)response.StatusCode} for {path}.");
