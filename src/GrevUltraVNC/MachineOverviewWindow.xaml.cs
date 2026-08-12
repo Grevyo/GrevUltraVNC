@@ -14,6 +14,7 @@ public partial class MachineOverviewWindow : Window
     private IReadOnlyList<AgentProcessInfo> _processes = [];
     private IReadOnlyList<AgentServiceInfo> _services = [];
     private bool _refreshing;
+    private bool _actionRunning;
 
     public MachineOverviewWindow(Machine machine)
     {
@@ -112,6 +113,7 @@ public partial class MachineOverviewWindow : Window
                 || process.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
                 || process.Id.ToString().Contains(search, StringComparison.OrdinalIgnoreCase))
             .Select(process => new ProcessRow(
+                process.Id,
                 process.Name,
                 process.Id.ToString(),
                 FormatBytes(process.WorkingSetBytes),
@@ -124,6 +126,7 @@ public partial class MachineOverviewWindow : Window
         ProcessCountText.Text = rows.Length == _processes.Count
             ? $"{_processes.Count} processes"
             : $"Showing {rows.Length} of {_processes.Count}";
+        ProcessSummaryText.Text = $"Processes: {_processes.Count}";
     }
 
     private void RenderServices()
@@ -147,6 +150,83 @@ public partial class MachineOverviewWindow : Window
         ServiceCountText.Text = rows.Length == _services.Count
             ? $"{_services.Count} services"
             : $"Showing {rows.Length} of {_services.Count}";
+        ServiceSummaryText.Text = $"Services: {_services.Count}";
+    }
+
+    private async void EndProcess_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProcessesList.SelectedItem is not ProcessRow selected)
+        {
+            StatusText.Text = "Select a process first.";
+            return;
+        }
+
+        if (MessageBox.Show(this,
+                $"End {selected.Name} (PID {selected.ProcessId}) on {_machine.Name}?\n\nUnsaved work in that process can be lost.",
+                "End remote process",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunAgentActionAsync(() => _agent.EndProcessAsync(_machine, selected.ProcessId));
+    }
+
+    private async void StartService_Click(object sender, RoutedEventArgs e) =>
+        await RunSelectedServiceActionAsync("start", requiresConfirmation: false);
+
+    private async void StopService_Click(object sender, RoutedEventArgs e) =>
+        await RunSelectedServiceActionAsync("stop", requiresConfirmation: true);
+
+    private async void RestartService_Click(object sender, RoutedEventArgs e) =>
+        await RunSelectedServiceActionAsync("restart", requiresConfirmation: true);
+
+    private async Task RunSelectedServiceActionAsync(string action, bool requiresConfirmation)
+    {
+        if (ServicesList.SelectedItem is not ServiceRow selected)
+        {
+            StatusText.Text = "Select a Windows service first.";
+            return;
+        }
+
+        if (requiresConfirmation && MessageBox.Show(this,
+                $"{char.ToUpperInvariant(action[0]) + action[1..]} {selected.DisplayName} ({selected.ServiceName}) on {_machine.Name}?",
+                $"{action} remote service",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunAgentActionAsync(() => _agent.ControlServiceAsync(_machine, selected.ServiceName, action));
+    }
+
+    private async Task RunAgentActionAsync(Func<Task<AgentActionResponse>> action)
+    {
+        if (_actionRunning) return;
+        _actionRunning = true;
+        StatusText.Text = "Sending authenticated Agent action…";
+
+        try
+        {
+            var result = await action();
+            if (result.Success)
+            {
+                await RefreshAllAsync();
+                StatusText.Text = result.Message;
+            }
+            else
+            {
+                StatusText.Text = result.Message;
+                MessageBox.Show(this, result.Message, "Grev Agent action", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "Grev Agent action", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _actionRunning = false;
+        }
     }
 
     private void ProcessSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderProcesses();
@@ -204,6 +284,6 @@ public partial class MachineOverviewWindow : Window
     }
 
     private sealed record DiskRow(string Name, string Label, string Space);
-    private sealed record ProcessRow(string Name, string Pid, string Memory, string CpuTime, string Session, string Started);
+    private sealed record ProcessRow(int ProcessId, string Name, string Pid, string Memory, string CpuTime, string Session, string Started);
     private sealed record ServiceRow(string DisplayName, string ServiceName, string Status, string StartMode, string Control);
 }
