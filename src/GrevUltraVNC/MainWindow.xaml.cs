@@ -54,6 +54,20 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         _settings = await _storage.LoadSettingsAsync();
+        var identityChanged = false;
+        if (string.IsNullOrWhiteSpace(_settings.ControllerId))
+        {
+            _settings.ControllerId = Guid.NewGuid().ToString("N");
+            identityChanged = true;
+        }
+        if (string.IsNullOrWhiteSpace(_settings.GrevName))
+        {
+            _settings.GrevName = string.IsNullOrWhiteSpace(Environment.UserName) ? "Grev User" : Environment.UserName;
+            identityChanged = true;
+        }
+        if (identityChanged)
+            await _storage.SaveSettingsAsync(_settings);
+
         _settings.Theme = ThemeService.Normalize(_settings.Theme);
         ThemeService.Apply(_settings.Theme);
 
@@ -198,7 +212,9 @@ public partial class MainWindow : Window
             StatusCheckSeconds = _settings.StatusCheckSeconds,
             Theme = _settings.Theme,
             StartWithWindows = _settings.StartWithWindows,
-            MinimizeToTray = _settings.MinimizeToTray
+            MinimizeToTray = _settings.MinimizeToTray,
+            GrevName = _settings.GrevName,
+            ControllerId = _settings.ControllerId
         };
 
         var dialog = new SettingsWindow(working, _vnc) { Owner = this };
@@ -291,7 +307,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var controlPanel = new GrevControlPanelWindow(machine, _vnc);
+            var controlPanel = new GrevControlPanelWindow(machine, _vnc, _settings);
             _controlPanels[machine.Id] = controlPanel;
             controlPanel.Closed += (_, _) => _controlPanels.Remove(machine.Id);
             controlPanel.Show();
