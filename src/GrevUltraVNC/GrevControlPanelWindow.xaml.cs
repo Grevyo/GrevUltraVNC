@@ -22,6 +22,7 @@ public partial class GrevControlPanelWindow : Window
     private readonly DispatcherTimer _agentTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _agentRefreshRunning;
     private bool _agentUpdateRunning;
+    private bool _agentActionRunning;
     private MachineOverviewWindow? _machineOverview;
 
     public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
@@ -72,7 +73,7 @@ public partial class GrevControlPanelWindow : Window
 
     private async Task RefreshAgentHealthAsync()
     {
-        if (_agentRefreshRunning || _agentUpdateRunning) return;
+        if (_agentRefreshRunning || _agentUpdateRunning || _agentActionRunning) return;
         _agentRefreshRunning = true;
 
         try
@@ -240,6 +241,60 @@ public partial class GrevControlPanelWindow : Window
     private void FullScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.ToggleFullScreen(_machine.Id));
     private void RefreshScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.RequestScreenRefresh(_machine.Id));
     private void FileTransfer_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.OpenFileTransfer(_machine.Id));
+
+    private async void LockMachine_Click(object sender, RoutedEventArgs e) =>
+        await RunAgentQuickActionAsync("lock", "Lock workstation");
+
+    private async void RestartExplorerAgent_Click(object sender, RoutedEventArgs e) =>
+        await RunAgentQuickActionAsync("restart-explorer", "Restart Explorer");
+
+    private async void SignOutMachine_Click(object sender, RoutedEventArgs e) =>
+        await RunAgentQuickActionAsync(
+            "sign-out",
+            "Sign out",
+            $"Sign out the active user on {_machine.Name}?\n\nAny unsaved work in that Windows session can be lost.");
+
+    private async void SleepMachine_Click(object sender, RoutedEventArgs e) =>
+        await RunAgentQuickActionAsync(
+            "sleep",
+            "Sleep machine",
+            $"Put {_machine.Name} to sleep?\n\nThe VNC session will disconnect until the machine wakes again.");
+
+    private async void HibernateMachine_Click(object sender, RoutedEventArgs e) =>
+        await RunAgentQuickActionAsync(
+            "hibernate",
+            "Hibernate machine",
+            $"Hibernate {_machine.Name}?\n\nThe VNC session will disconnect until the machine is powered or woken again.");
+
+    private async Task RunAgentQuickActionAsync(string action, string title, string? confirmation = null)
+    {
+        if (_agentActionRunning) return;
+
+        if (!string.IsNullOrWhiteSpace(confirmation) &&
+            MessageBox.Show(this, confirmation, title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        _agentActionRunning = true;
+        AgentUpdateStatusText.Text = $"{title}…";
+
+        try
+        {
+            var result = await _agent.RunQuickActionAsync(_machine, action);
+            AgentUpdateStatusText.Text = result.Message;
+
+            if (!result.Success)
+                MessageBox.Show(this, result.Message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            AgentUpdateStatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _agentActionRunning = false;
+        }
+    }
 
     private void SendViewerAction(Action action)
     {
