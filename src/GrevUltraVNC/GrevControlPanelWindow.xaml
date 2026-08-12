@@ -45,6 +45,7 @@
                         <TextBlock x:Name="AgentDiskText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,6,0,0" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
+                <Button Style="{StaticResource PrimaryButton}" Content="Manage machine" Click="ManageMachine_Click" Margin="0,8,0,0" />
 
                 <TextBlock Text="REMOTE KEYS" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <UniformGrid Columns="2">
