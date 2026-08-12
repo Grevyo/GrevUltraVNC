@@ -28,3 +28,20 @@ public sealed record AgentStatusResponse(
     int UltraVncPort,
     IReadOnlyList<AgentDiskStatus> Disks,
     DateTimeOffset CapturedAtUtc);
+
+public sealed record AgentProcessInfo(
+    int Id,
+    string Name,
+    long WorkingSetBytes,
+    long PrivateMemoryBytes,
+    long CpuTimeMilliseconds,
+    int SessionId,
+    DateTimeOffset? StartedAtUtc);
+
+public sealed record AgentServiceInfo(
+    string ServiceName,
+    string DisplayName,
+    string Status,
+    string StartMode,
+    bool CanStop,
+    bool CanPauseAndContinue);
