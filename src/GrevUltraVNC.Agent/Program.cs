@@ -65,7 +65,7 @@ app.MapGet(AgentProtocol.PingPath, () =>
         version,
         Environment.MachineName,
         true,
-        1));
+        AgentProtocol.ProtocolVersion));
 });
 
 app.MapGet(AgentProtocol.StatusPath, async (SystemTelemetryService telemetry, CancellationToken cancellationToken) =>
@@ -76,5 +76,11 @@ app.MapGet(AgentProtocol.ProcessesPath, (SystemInventoryService inventory) =>
 
 app.MapGet(AgentProtocol.ServicesPath, (SystemInventoryService inventory) =>
     Results.Json(inventory.GetServices()));
+
+app.MapPost(AgentProtocol.ProcessActionPath, (AgentProcessActionRequest request, SystemInventoryService inventory) =>
+    Results.Json(inventory.ControlProcess(request)));
+
+app.MapPost(AgentProtocol.ServiceActionPath, (AgentServiceActionRequest request, SystemInventoryService inventory) =>
+    Results.Json(inventory.ControlService(request)));
 
 await app.RunAsync();
