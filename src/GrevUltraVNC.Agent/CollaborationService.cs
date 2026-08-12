@@ -4,7 +4,7 @@ namespace GrevUltraVNC.Agent;
 
 public sealed class CollaborationService
 {
-    private static readonly TimeSpan PresenceTimeout = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan PresenceTimeout = TimeSpan.FromSeconds(6);
     private const int MaxWhiteboardEvents = 400;
     private const int MaxReturnedEvents = 120;
     private const int MaxStrokePoints = 2048;
@@ -13,6 +13,7 @@ public sealed class CollaborationService
     private readonly Dictionary<string, PresenceState> _participants = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<AgentWhiteboardEvent> _whiteboardEvents = [];
     private long _nextEventId;
+    private string? _controlOwnerId;
 
     public AgentCollaborationResponse Execute(AgentCollaborationRequest request)
     {
@@ -33,15 +34,29 @@ public sealed class CollaborationService
             {
                 case "heartbeat":
                 case "snapshot":
-                    TouchParticipant(controllerId, displayName);
+                case "cursor":
+                    TouchParticipant(controllerId, displayName, request);
                     return Snapshot(true, "Collaboration connected.", request.LastEventId);
+
+                case "take-control":
+                    TouchParticipant(controllerId, displayName, request);
+                    _controlOwnerId = controllerId;
+                    return Snapshot(true, $"{displayName} has control.", request.LastEventId);
+
+                case "release-control":
+                    TouchParticipant(controllerId, displayName, request);
+                    if (string.Equals(_controlOwnerId, controllerId, StringComparison.OrdinalIgnoreCase))
+                        _controlOwnerId = null;
+                    return Snapshot(true, "Remote control released.", request.LastEventId);
 
                 case "leave":
                     _participants.Remove(controllerId);
+                    if (string.Equals(_controlOwnerId, controllerId, StringComparison.OrdinalIgnoreCase))
+                        _controlOwnerId = null;
                     return Snapshot(true, $"{displayName} left the session.", request.LastEventId);
 
                 case "publish":
-                    TouchParticipant(controllerId, displayName);
+                    TouchParticipant(controllerId, displayName, request);
                     if (request.WhiteboardEvent is null)
                         return Snapshot(false, "No whiteboard event was supplied.", request.LastEventId);
 
@@ -64,23 +79,34 @@ public sealed class CollaborationService
         }
     }
 
-    private void TouchParticipant(string controllerId, string displayName)
+    private void TouchParticipant(string controllerId, string displayName, AgentCollaborationRequest request)
     {
         var now = DateTimeOffset.UtcNow;
-        if (_participants.TryGetValue(controllerId, out var existing))
+        if (!_participants.TryGetValue(controllerId, out var participant))
         {
-            existing.DisplayName = displayName;
-            existing.LastSeenUtc = now;
-            return;
+            participant = new PresenceState
+            {
+                ControllerId = controllerId,
+                DisplayName = displayName,
+                ConnectedAtUtc = now,
+                LastSeenUtc = now
+            };
+            _participants[controllerId] = participant;
         }
 
-        _participants[controllerId] = new PresenceState
+        participant.DisplayName = displayName;
+        participant.LastSeenUtc = now;
+        participant.CursorVisible = request.CursorVisible;
+        participant.CursorSurface = NormalizeCursorSurface(request.CursorSurface);
+        participant.CursorX = request.CursorX is null ? null : Math.Clamp(request.CursorX.Value, 0, 1);
+        participant.CursorY = request.CursorY is null ? null : Math.Clamp(request.CursorY.Value, 0, 1);
+
+        if (!participant.CursorVisible || participant.CursorX is null || participant.CursorY is null)
         {
-            ControllerId = controllerId,
-            DisplayName = displayName,
-            ConnectedAtUtc = now,
-            LastSeenUtc = now
-        };
+            participant.CursorVisible = false;
+            participant.CursorX = null;
+            participant.CursorY = null;
+        }
     }
 
     private void CleanupStaleParticipants()
@@ -92,7 +118,12 @@ public sealed class CollaborationService
                      .ToArray())
         {
             _participants.Remove(id);
+            if (string.Equals(_controlOwnerId, id, StringComparison.OrdinalIgnoreCase))
+                _controlOwnerId = null;
         }
+
+        if (_controlOwnerId is not null && !_participants.ContainsKey(_controlOwnerId))
+            _controlOwnerId = null;
     }
 
     private AgentCollaborationResponse Snapshot(bool success, string message, long lastEventId)
@@ -103,7 +134,12 @@ public sealed class CollaborationService
                 item.ControllerId,
                 item.DisplayName,
                 item.ConnectedAtUtc,
-                item.LastSeenUtc))
+                item.LastSeenUtc,
+                item.CursorX,
+                item.CursorY,
+                item.CursorVisible,
+                item.CursorSurface,
+                string.Equals(_controlOwnerId, item.ControllerId, StringComparison.OrdinalIgnoreCase)))
             .ToArray();
 
         var events = _whiteboardEvents
@@ -115,7 +151,18 @@ public sealed class CollaborationService
             ? Math.Max(lastEventId, _nextEventId)
             : _whiteboardEvents[^1].EventId;
 
-        return new AgentCollaborationResponse(success, message, participants, events, latestEventId);
+        string? ownerName = null;
+        if (_controlOwnerId is not null && _participants.TryGetValue(_controlOwnerId, out var owner))
+            ownerName = owner.DisplayName;
+
+        return new AgentCollaborationResponse(
+            success,
+            message,
+            participants,
+            events,
+            latestEventId,
+            _controlOwnerId,
+            ownerName);
     }
 
     private AgentWhiteboardEvent? NormalizeWhiteboardEvent(
@@ -155,6 +202,11 @@ public sealed class CollaborationService
             DateTimeOffset.UtcNow);
     }
 
+    private static string NormalizeCursorSurface(string? value) =>
+        string.Equals(value?.Trim(), "screen2", StringComparison.OrdinalIgnoreCase)
+            ? "screen2"
+            : "screen1";
+
     private static string? NormalizeControllerId(string? value)
     {
         var text = value?.Trim();
@@ -183,5 +235,9 @@ public sealed class CollaborationService
         public required string DisplayName { get; set; }
         public DateTimeOffset ConnectedAtUtc { get; init; }
         public DateTimeOffset LastSeenUtc { get; set; }
+        public double? CursorX { get; set; }
+        public double? CursorY { get; set; }
+        public bool CursorVisible { get; set; }
+        public string CursorSurface { get; set; } = "screen1";
     }
 }
