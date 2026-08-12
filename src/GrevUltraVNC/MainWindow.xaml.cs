@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -17,6 +18,7 @@ public partial class MainWindow : Window
     private readonly AdminWorkspaceStorage _workspace = new();
     private readonly NetworkStatusService _network = new();
     private readonly GrevAgentClient _agent = new();
+    private readonly GrevConnectResolver _connectResolver = new();
     private readonly UltraVncSessionService _vnc = new();
     private readonly VncCredentialService _credentials = new();
     private readonly AgentCredentialService _agentCredentials = new();
@@ -78,6 +80,7 @@ public partial class MainWindow : Window
         _statusTimer.Stop();
         _tray?.Dispose();
         _agent.Dispose();
+        _connectResolver.Dispose();
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -99,9 +102,11 @@ public partial class MainWindow : Window
     {
         if (_statusRefreshRunning) return;
         _statusRefreshRunning = true;
+        var identityChanged = 0;
+
         try
         {
-            FooterStatus.Text = $"Checking {Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}…";
+            FooterStatus.Text = $"Resolving and checking {Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}…";
             var checkedAt = DateTime.Now;
 
             var probes = Machines.Select(async machine =>
@@ -110,6 +115,9 @@ public partial class MainWindow : Window
                 machine.AgentState = GrevAgentState.Unknown;
                 machine.AgentStatus = null;
                 machine.AgentMessage = null;
+                var originalConnectId = machine.ConnectId;
+
+                await _connectResolver.ResolveAsync(machine);
 
                 var networkTask = _network.ProbeAsync(machine);
                 var agentTask = _agent.ProbeAsync(machine);
@@ -126,9 +134,15 @@ public partial class MainWindow : Window
                 machine.AgentStatus = agentResult.Status;
                 machine.AgentMessage = agentResult.Message;
                 machine.AgentState = agentResult.State;
+
+                if (!string.Equals(originalConnectId, machine.ConnectId, StringComparison.Ordinal))
+                    Interlocked.Exchange(ref identityChanged, 1);
             });
 
             await Task.WhenAll(probes);
+            if (identityChanged != 0)
+                await _storage.SaveMachinesAsync(Machines);
+
             FooterStatus.Text = $"Last checked {DateTime.Now:HH:mm:ss}";
             RefreshMachineView();
         }
@@ -146,6 +160,7 @@ public partial class MainWindow : Window
 
         return machine.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
                || machine.IpAddress.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+               || machine.ConnectId.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
                || machine.Group.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
                || machine.Notes.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
@@ -249,15 +264,23 @@ public partial class MainWindow : Window
         overview.ShowDialog();
     }
 
-    private void ConnectMachine(Machine machine)
+    private async void ConnectMachine(Machine machine)
     {
         try
         {
+            var originalConnectId = machine.ConnectId;
+            await _connectResolver.ResolveAsync(machine);
+            if (!string.Equals(originalConnectId, machine.ConnectId, StringComparison.Ordinal))
+                await _storage.SaveMachinesAsync(Machines);
+
+            if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
+                throw new InvalidOperationException($"{machine.ConnectId} could not be found on the current LAN or Grev Connect networks.");
+
             var alreadyConnected = _vnc.HasActiveSession(machine.Id);
             _vnc.Launch(machine, _settings);
 
             if (!alreadyConnected)
-                _ = RecordActivityAsync(machine, "VNC", "Connect", $"Connected to {machine.IpAddress}:{machine.VncPort}", true);
+                _ = RecordActivityAsync(machine, "VNC", "Connect", $"Connected through {machine.ResolvedRoute} · {machine.ActiveAddress}:{machine.VncPort}", true);
 
             if (_controlPanels.TryGetValue(machine.Id, out var existing))
             {
