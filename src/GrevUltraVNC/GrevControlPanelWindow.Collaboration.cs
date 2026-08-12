@@ -13,6 +13,7 @@ public partial class GrevControlPanelWindow
     private readonly DispatcherTimer _collaborationTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly List<AgentWhiteboardEvent> _whiteboardHistory = [];
     private bool _collaborationRefreshRunning;
+    private bool _virtualDisplayStarting;
     private long _lastWhiteboardEventId;
     private RemoteAudioPlaybackService? _remoteAudio;
     private WhiteboardOverlayWindow? _whiteboardOverlay;
@@ -28,6 +29,7 @@ public partial class GrevControlPanelWindow
 
     private async void GrevCollaboration_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateDisplayState();
         _collaborationTimer.Start();
         await RefreshCollaborationAsync();
     }
@@ -42,8 +44,11 @@ public partial class GrevControlPanelWindow
         _collaborationClient.Dispose();
     }
 
-    private async void CollaborationTimer_Tick(object? sender, EventArgs e) =>
+    private async void CollaborationTimer_Tick(object? sender, EventArgs e)
+    {
+        UpdateDisplayState();
         await RefreshCollaborationAsync();
+    }
 
     private async Task RefreshCollaborationAsync()
     {
@@ -69,7 +74,7 @@ public partial class GrevControlPanelWindow
             AudioButton.IsEnabled = true;
             WhiteboardButton.IsEnabled = true;
 
-            if (_remoteAudio?.IsRunning != true)
+            if (_remoteAudio?.IsRunning != true && !_virtualDisplayStarting)
                 CollaborationStatusText.Text = "Collaboration ready";
         }
         catch (Exception ex)
@@ -141,7 +146,7 @@ public partial class GrevControlPanelWindow
             if (_remoteAudio.IsRunning)
             {
                 await _remoteAudio.StopAsync();
-                AudioButton.Content = "🔊 Sound";
+                AudioButton.Content = "🔊 Computer sound";
                 CollaborationStatusText.Text = "Computer audio off";
                 return;
             }
@@ -154,7 +159,7 @@ public partial class GrevControlPanelWindow
         }
         catch (Exception ex)
         {
-            AudioButton.Content = "🔊 Sound";
+            AudioButton.Content = "🔊 Computer sound";
             CollaborationStatusText.Text = "Audio unavailable";
             MessageBox.Show(this, ex.Message, "Computer audio", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
@@ -227,21 +232,81 @@ public partial class GrevControlPanelWindow
         }
     }
 
-    private void VirtualDisplay_Click(object sender, RoutedEventArgs e)
+    private async void VirtualDisplay_Click(object sender, RoutedEventArgs e)
     {
+        if (_virtualDisplayStarting) return;
+
+        if (_vnc.HasVirtualSession(_machine.Id))
+        {
+            try
+            {
+                _vnc.BringVirtualViewerToFront(_machine.Id);
+                DisplayStatusText.Text = "Screen 1 physical · Screen 2 virtual";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Screen 2", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            return;
+        }
+
+        _virtualDisplayStarting = true;
+        VirtualDisplayButton.IsEnabled = false;
+        VirtualDisplayButton.Content = "Creating Screen 2…";
+        DisplayStatusText.Text = "Adding a virtual Windows display…";
+        CollaborationStatusText.Text = "Creating Screen 2";
+
         try
         {
-            _vnc.OpenVirtualDisplay(_machine, _collaborationSettings);
-            CollaborationStatusText.Text = "Screen 2 requested";
+            await _vnc.OpenVirtualDisplayAsync(_machine, _collaborationSettings);
+            UpdateDisplayState();
+            CollaborationStatusText.Text = "Screen 2 ready";
         }
         catch (Exception ex)
         {
+            UpdateDisplayState();
             CollaborationStatusText.Text = "Screen 2 unavailable";
             MessageBox.Show(this,
-                $"{ex.Message}\n\nThe target UltraVNC server must support its virtual-display / desktop-resize feature.",
+                $"{ex.Message}\n\nScreen 1 has been left open. A brief physical-screen flash can occur while Windows changes display topology, but Screen 2 should remain as a separate viewer when creation succeeds.",
                 "Virtual Screen 2",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
+        finally
+        {
+            _virtualDisplayStarting = false;
+            UpdateDisplayState();
+        }
+    }
+
+    private void CloseVirtualDisplay_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _vnc.CloseVirtualDisplay(_machine.Id);
+            CollaborationStatusText.Text = "Screen 2 closed";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Screen 2", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        finally
+        {
+            UpdateDisplayState();
+        }
+    }
+
+    private void UpdateDisplayState()
+    {
+        if (_virtualDisplayStarting) return;
+
+        var screen2Active = _vnc.HasVirtualSession(_machine.Id);
+        VirtualDisplayButton.IsEnabled = true;
+        VirtualDisplayButton.Content = screen2Active ? "▣ Screen 2 · ACTIVE" : "＋ Screen 2";
+        CloseVirtualDisplayButton.Visibility = screen2Active ? Visibility.Visible : Visibility.Collapsed;
+        DisplayStatusText.Text = screen2Active
+            ? "Screen 1 physical · Screen 2 virtual"
+            : "Screen 1 · physical display";
+        SessionStatusText.Text = screen2Active ? "● SCREEN 1 + 2 ACTIVE" : "● SCREEN 1 ACTIVE";
     }
 }
