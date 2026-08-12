@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GrevUltraVNC.Contracts\GrevUltraVNC.Contracts.csproj" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
     <Using Include="System" />
     <Using Include="System.Collections.Generic" />
     <Using Include="System.IO" />
