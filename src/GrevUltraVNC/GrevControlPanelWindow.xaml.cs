@@ -207,12 +207,15 @@ public partial class GrevControlPanelWindow : Window
         var viewerBottom = viewerRect.Bottom / scale;
 
         const double gap = 8.0;
+        const double preferredPanelHeight = 690.0;
         var panelWidth = Width;
-        var availableHeight = Math.Max(300, workBottom - workTop);
-        var viewerHeight = Math.Max(300, viewerBottom - viewerTop);
+        var availableHeight = Math.Max(MinHeight, workBottom - workTop);
+        var viewerHeight = Math.Max(MinHeight, viewerBottom - viewerTop);
 
-        Height = Math.Min(availableHeight, Math.Max(600, viewerHeight));
-        Top = Math.Clamp(viewerTop, workTop, Math.Max(workTop, workBottom - Height));
+        Height = Math.Min(availableHeight, Math.Min(preferredPanelHeight, Math.Max(MinHeight, viewerHeight)));
+
+        var centeredTop = viewerTop + Math.Max(0, (viewerHeight - Height) / 2.0);
+        Top = Math.Clamp(centeredTop, workTop, Math.Max(workTop, workBottom - Height));
 
         if (viewerRight + gap + panelWidth <= workRight)
             Left = viewerRight + gap;
