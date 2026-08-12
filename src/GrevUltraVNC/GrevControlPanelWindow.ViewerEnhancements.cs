@@ -83,12 +83,15 @@ if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
         const double chromeMargin = 14;
         const double minimumUsableHeight = 560;
         var availableHeight = Math.Max(minimumUsableHeight, workHeight - chromeMargin);
+        var targetHeight = Math.Min(desiredHeight, availableHeight);
         var needsScroll = availableHeight + 1 < desiredHeight;
 
-        // The panel is allowed to use the monitor height. Only smaller displays get scrolling.
-        MinHeight = Math.Min(840, availableHeight);
-        MaxHeight = Math.Max(MinHeight, Math.Min(1040, availableHeight));
-        Height = Math.Min(desiredHeight, availableHeight);
+        // Force the legacy dock calculation to respect the full usable height. On a normal
+        // monitor that means the full 900px companion; on a shorter display it fills the work
+        // area and only then enables scrolling.
+        MinHeight = targetHeight;
+        MaxHeight = Math.Max(targetHeight, Math.Min(1040, availableHeight));
+        Height = targetHeight;
         PanelScrollViewer.VerticalScrollBarVisibility = needsScroll
             ? ScrollBarVisibility.Auto
             : ScrollBarVisibility.Disabled;
