@@ -21,10 +21,10 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="MinHeight" Value="36" />
         </Style>
-        <Style x:Key="CollabActionButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
-            <Setter Property="Padding" Value="7,6" />
+        <Style x:Key="TinyStatusButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
+            <Setter Property="Padding" Value="7,4" />
             <Setter Property="FontSize" Value="9" />
-            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="MinHeight" Value="26" />
         </Style>
     </Window.Resources>
 
@@ -43,7 +43,6 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Compact identity header -->
             <Border Padding="14,13,12,11" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -67,7 +66,6 @@
                 </Grid>
             </Border>
 
-            <!-- Route + live state -->
             <Border Grid.Row="1" Margin="12,11,12,0" Padding="10,8" CornerRadius="10"
                     Background="{DynamicResource SubtlePanelBrush}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
@@ -75,7 +73,7 @@
                     <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}"
                                FontSize="9" TextTrimming="CharacterEllipsis" />
                     <Grid Margin="0,6,0,0">
-                        <TextBlock x:Name="SessionStatusText" Text="● VIEWER ACTIVE" Foreground="#50DC91"
+                        <TextBlock x:Name="SessionStatusText" Text="● SCREEN 1 ACTIVE" Foreground="#50DC91"
                                    FontSize="9" FontWeight="SemiBold" />
                         <TextBlock x:Name="AgentConnectionText" Text="AGENT CHECKING" HorizontalAlignment="Right"
                                    Foreground="{DynamicResource FaintTextBrush}" FontSize="9" FontWeight="SemiBold" />
@@ -86,7 +84,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- Keep code-behind compatibility for maintenance-only fields without cluttering the panel. -->
             <StackPanel Visibility="Collapsed">
                 <TextBlock x:Name="AgentUserUptimeText" />
                 <TextBlock x:Name="AgentVncHealthText" />
@@ -100,12 +97,33 @@
                     <TextBlock Text="VIEWER" Style="{StaticResource PanelSectionLabel}" />
                     <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1" CornerRadius="12" Padding="8">
-                        <UniformGrid Columns="2">
-                            <Button Style="{StaticResource PanelActionButton}" Content="Bring forward" Click="BringToFront_Click" Margin="0,0,4,6" />
-                            <Button Style="{StaticResource PanelActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="4,0,0,6" />
-                            <Button Style="{StaticResource PanelActionButton}" Content="Refresh screen" Click="RefreshScreen_Click" Margin="0,0,4,0" />
-                            <Button Style="{StaticResource PanelActionButton}" Content="File transfer" Click="FileTransfer_Click" Margin="4,0,0,0" />
-                        </UniformGrid>
+                        <StackPanel>
+                            <TextBlock Text="DISPLAYS" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" FontWeight="SemiBold" Margin="2,0,0,6" />
+                            <UniformGrid Columns="2">
+                                <Button Style="{StaticResource PanelActionButton}" Content="▣ Screen 1" Click="BringToFront_Click" Margin="0,0,4,6" />
+                                <Button x:Name="VirtualDisplayButton" Style="{StaticResource PanelActionButton}"
+                                        Content="＋ Screen 2" Click="VirtualDisplay_Click" Margin="4,0,0,6" />
+                            </UniformGrid>
+                            <Grid Margin="2,0,2,8">
+                                <TextBlock x:Name="DisplayStatusText" Text="Screen 1 · physical display"
+                                           Foreground="{DynamicResource FaintTextBrush}" FontSize="8" VerticalAlignment="Center" />
+                                <Button x:Name="CloseVirtualDisplayButton" HorizontalAlignment="Right"
+                                        Visibility="Collapsed" Style="{StaticResource TinyStatusButton}"
+                                        Content="Close Screen 2" Click="CloseVirtualDisplay_Click" />
+                            </Grid>
+
+                            <TextBlock Text="LIVE TOOLS" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" FontWeight="SemiBold" Margin="2,2,0,6" />
+                            <UniformGrid Columns="2">
+                                <Button Style="{StaticResource PanelActionButton}" Content="Fullscreen" Click="FullScreen_Click" Margin="0,0,4,6" />
+                                <Button Style="{StaticResource PanelActionButton}" Content="Refresh screen" Click="RefreshScreen_Click" Margin="4,0,0,6" />
+                                <Button Style="{StaticResource PanelActionButton}" Content="File transfer" Click="FileTransfer_Click" Margin="0,0,4,6" />
+                                <Button x:Name="AudioButton" Style="{StaticResource PanelActionButton}"
+                                        Content="🔊 Computer sound" Click="Audio_Click" Margin="4,0,0,6" IsEnabled="False" />
+                                <Button x:Name="WhiteboardButton" Style="{StaticResource PanelActionButton}"
+                                        Content="✎ Whiteboard" Click="Whiteboard_Click" Margin="0,0,4,0" IsEnabled="False" />
+                                <Button Style="{StaticResource PanelActionButton}" Content="Bring Screen 1" Click="BringToFront_Click" Margin="4,0,0,0" />
+                            </UniformGrid>
+                        </StackPanel>
                     </Border>
 
                     <TextBlock Text="REMOTE KEYS" Style="{StaticResource PanelSectionLabel}" Margin="2,13,0,8" />
@@ -140,26 +158,17 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Grev Collaboration stays compact at the bottom instead of bloating the main controls. -->
             <Border Grid.Row="3" Margin="12,3,12,10" Padding="9" CornerRadius="12"
                     Background="{DynamicResource SubtlePanelBrush}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                 <StackPanel>
-                    <Grid Margin="1,0,1,7">
+                    <Grid Margin="1,0,1,5">
                         <TextBlock x:Name="ParticipantsHeaderText" Text="CONNECTED · checking"
                                    Foreground="{DynamicResource AccentBrush}" FontSize="9" FontWeight="SemiBold" />
                         <TextBlock x:Name="CollaborationStatusText" Text="Grev Collaboration"
                                    HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
                     </Grid>
-                    <UniformGrid Columns="3">
-                        <Button x:Name="AudioButton" Style="{StaticResource CollabActionButton}"
-                                Content="🔊 Sound" Click="Audio_Click" Margin="0,0,3,0" IsEnabled="False" />
-                        <Button x:Name="WhiteboardButton" Style="{StaticResource CollabActionButton}"
-                                Content="✎ Whiteboard" Click="Whiteboard_Click" Margin="3,0" IsEnabled="False" />
-                        <Button x:Name="VirtualDisplayButton" Style="{StaticResource CollabActionButton}"
-                                Content="▣ Screen 2" Click="VirtualDisplay_Click" Margin="3,0,0,0" />
-                    </UniformGrid>
-                    <ItemsControl x:Name="ParticipantsItems" Margin="1,7,1,0">
+                    <ItemsControl x:Name="ParticipantsItems" Margin="1,2,1,0">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
@@ -167,7 +176,7 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="{DynamicResource PanelBrush}" CornerRadius="7" Padding="7,3" Margin="0,0,5,4">
+                                <Border Background="{DynamicResource PanelBrush}" CornerRadius="7" Padding="7,3" Margin="0,0,5,3">
                                     <TextBlock Text="{Binding}" Foreground="{DynamicResource MutedTextBrush}" FontSize="8" />
                                 </Border>
                             </DataTemplate>
