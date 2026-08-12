@@ -26,6 +26,8 @@ builder.Services.AddSingleton<SystemInventoryService>();
 builder.Services.AddSingleton<InteractiveSessionService>();
 builder.Services.AddSingleton<CommandExecutionService>();
 builder.Services.AddSingleton<FileManagementService>();
+builder.Services.AddSingleton<CollaborationService>();
+builder.Services.AddSingleton<RemoteAudioCaptureService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SystemTelemetryService>());
 
 var app = builder.Build();
@@ -142,6 +144,48 @@ app.MapPost(AgentProtocol.FilesPath, async (
     catch (FormatException)
     {
         return Results.BadRequest(new { error = "Encrypted Grev Agent file payload was malformed." });
+    }
+});
+
+app.MapPost(AgentProtocol.CollaborationPath, (
+    AgentEncryptedEnvelope envelope,
+    CollaborationService collaboration,
+    AgentConfiguration configuration) =>
+{
+    try
+    {
+        var request = AgentPayloadCrypto.Decrypt<AgentCollaborationRequest>(configuration.SharedKey, envelope);
+        var response = collaboration.Execute(request);
+        return Results.Json(AgentPayloadCrypto.Encrypt(configuration.SharedKey, response));
+    }
+    catch (CryptographicException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev collaboration payload was invalid." });
+    }
+    catch (FormatException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev collaboration payload was malformed." });
+    }
+});
+
+app.MapPost(AgentProtocol.AudioPath, (
+    AgentEncryptedEnvelope envelope,
+    RemoteAudioCaptureService audio,
+    AgentConfiguration configuration) =>
+{
+    try
+    {
+        var request = AgentPayloadCrypto.Decrypt<AgentAudioRequest>(configuration.SharedKey, envelope);
+        var response = audio.Execute(request);
+        return Results.Json(AgentPayloadCrypto.Encrypt(configuration.SharedKey, response));
+    }
+    catch (CryptographicException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev audio payload was invalid." });
+    }
+    catch (FormatException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev audio payload was malformed." });
     }
 });
 
