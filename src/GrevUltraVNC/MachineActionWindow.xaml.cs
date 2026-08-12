@@ -15,6 +15,7 @@ public partial class MachineActionWindow : Window
     private readonly NetworkStatusService _network = new();
     private readonly RemoteUltraVncService _remoteVnc = new();
     private readonly VncCredentialService _credentials = new();
+    private readonly AgentCredentialService _agentCredentials = new();
 
     public bool MachineChanged { get; private set; }
     public bool MachineDeleted { get; private set; }
@@ -136,6 +137,12 @@ public partial class MachineActionWindow : Window
     private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e) =>
         await RunVncServiceActionAsync(() => _remoteVnc.EnableAutoStartAndStartAsync(_machine.IpAddress), "UltraVNC at boot");
 
+    private void Overview_Click(object sender, RoutedEventArgs e)
+    {
+        var overview = new MachineOverviewWindow(_machine) { Owner = this };
+        overview.ShowDialog();
+    }
+
     private void Shares_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -179,13 +186,17 @@ public partial class MachineActionWindow : Window
         if (MessageBox.Show(this, $"Remove {_machine.Name} from GrevUltraVNC?", "Remove machine",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
-        try
+        var cleanupErrors = new List<string>();
+        try { _credentials.Delete(_machine.Id); }
+        catch (Exception ex) { cleanupErrors.Add($"VNC credential: {ex.Message}"); }
+
+        try { _agentCredentials.Delete(_machine.Id); }
+        catch (Exception ex) { cleanupErrors.Add($"Agent credential: {ex.Message}"); }
+
+        if (cleanupErrors.Count > 0)
         {
-            _credentials.Delete(_machine.Id);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, $"The machine will be removed, but its saved VNC credential could not be deleted:\n\n{ex.Message}",
+            MessageBox.Show(this,
+                "The machine will be removed, but some saved credentials could not be deleted:\n\n" + string.Join("\n", cleanupErrors),
                 "Credential cleanup", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
