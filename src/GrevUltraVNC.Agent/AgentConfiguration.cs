@@ -34,17 +34,13 @@ public sealed class AgentConfiguration
                     existing.UltraVncPort is >= 1 and <= 65535 &&
                     AgentProtocol.IsValidSharedKey(existing.SharedKey))
                 {
-                    if (!GrevConnectId.TryNormalize(existing.ConnectId, out var normalized, out _))
-                    {
-                        existing.ConnectId = GrevConnectId.CreateDefault(Environment.MachineName);
-                        Save(existing);
-                    }
-                    else if (!string.Equals(existing.ConnectId, normalized, StringComparison.Ordinal))
-                    {
-                        existing.ConnectId = normalized;
-                        Save(existing);
-                    }
+                    existing.ConnectId = GrevConnectId.TryNormalize(existing.ConnectId, out var normalized, out _)
+                        ? normalized
+                        : GrevConnectId.CreateDefault(Environment.MachineName);
 
+                    // Always write a valid loaded configuration back once. This permanently migrates
+                    // pre-Connect-ID agent.json files without changing their existing pairing key.
+                    Save(existing);
                     return existing;
                 }
             }
