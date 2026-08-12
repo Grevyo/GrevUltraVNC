@@ -38,7 +38,7 @@
                         <TextBlock Text="Grev" FontSize="31" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
                         <TextBlock Text="UltraVNC" FontSize="31" FontWeight="Bold" Margin="1,0,0,0" />
                     </StackPanel>
-                    <TextBlock Text="LAN remote management" Foreground="{DynamicResource MutedTextBrush}" FontSize="13" Margin="1,3,0,0" />
+                    <TextBlock Text="LAN + Grev Connect remote management" Foreground="{DynamicResource MutedTextBrush}" FontSize="13" Margin="1,3,0,0" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
@@ -58,7 +58,7 @@
                 <TextBlock Text="YOUR MACHINES" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Margin="1,0,0,7" />
                 <Grid MaxWidth="620" HorizontalAlignment="Left">
                     <TextBox x:Name="SearchBox" Width="420" HorizontalAlignment="Left" TextChanged="SearchBox_TextChanged"
-                             ToolTip="Search name, IP, group or notes" Padding="34,10,10,10" />
+                             ToolTip="Search name, Grev Connect ID, IP, group or notes" Padding="34,10,10,10" />
                     <TextBlock Text="⌕" FontSize="19" Foreground="{DynamicResource MutedTextBrush}" Margin="10,0,0,0"
                                HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
                 </Grid>
@@ -104,7 +104,7 @@
 
                                 <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="2,8,2,8">
                                     <TextBlock Text="{Binding Name}" FontSize="23" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding IpAddress}" Foreground="{DynamicResource MutedTextBrush}" FontSize="13" Margin="0,5,0,0" />
+                                    <TextBlock Text="{Binding ConnectDisplayText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,10,0,0" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding LastCheckedText}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" Margin="0,3,0,0" />
 
@@ -144,7 +144,7 @@
                 <TextBlock x:Name="FooterStatus" Foreground="{DynamicResource MutedTextBrush}" Text="Ready" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <TextBlock Text="Double-click = connect" Foreground="{DynamicResource FaintTextBrush}" Margin="0,0,18,0" />
-                    <TextBlock Text="LAN-only remote management" Foreground="{DynamicResource FaintTextBrush}" />
+                    <TextBlock Text="LAN / Grev Connect" Foreground="{DynamicResource FaintTextBrush}" />
                 </StackPanel>
             </Grid>
         </Border>
