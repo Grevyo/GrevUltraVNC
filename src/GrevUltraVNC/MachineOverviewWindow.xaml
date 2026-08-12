@@ -1,0 +1,219 @@
+<Window x:Class="GrevUltraVNC.MachineOverviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:svc="clr-namespace:GrevUltraVNC.Services"
+        Title="GrevUltraVNC · Machine overview"
+        Width="1080" Height="760" MinWidth="900" MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Style="{StaticResource AppWindowStyle}"
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}">
+    <Grid Background="{DynamicResource WindowBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="28,20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="58" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="50" Height="50" CornerRadius="12" Background="#030509" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <TextBlock Text="MACHINE MANAGEMENT" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock x:Name="MachineNameText" FontSize="27" FontWeight="Bold" Margin="0,2,0,0" />
+                    <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,3,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="AgentStateText" Text="● CHECKING AGENT" Foreground="{DynamicResource MutedTextBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <Button Style="{StaticResource SecondaryButton}" Content="↻ Refresh" Click="Refresh_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Background="{DynamicResource WindowBrush}" Padding="28,16,28,12">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="OverviewButton" Style="{StaticResource PrimaryButton}" Content="Overview" Click="OverviewTab_Click" Margin="0,0,10,0" />
+                <Button x:Name="ProcessesButton" Style="{StaticResource SecondaryButton}" Content="Processes" Click="ProcessesTab_Click" Margin="0,0,10,0" />
+                <Button x:Name="ServicesButton" Style="{StaticResource SecondaryButton}" Content="Services" Click="ServicesTab_Click" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="28,0,28,18">
+            <Grid x:Name="OverviewPanel">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <UniformGrid Columns="4" Margin="0,0,0,14">
+                    <Border Style="{StaticResource MachineCardStyle}" Padding="16" Margin="0,0,8,0">
+                        <StackPanel>
+                            <TextBlock Text="CPU" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock x:Name="CpuUsageText" Text="—" FontSize="25" FontWeight="Bold" Margin="0,5,0,0" />
+                            <TextBlock x:Name="CpuNameText" Text="Waiting for Agent" Foreground="{DynamicResource FaintTextBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource MachineCardStyle}" Padding="16" Margin="4,0">
+                        <StackPanel>
+                            <TextBlock Text="MEMORY" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock x:Name="MemoryUsageText" Text="—" FontSize="25" FontWeight="Bold" Margin="0,5,0,0" />
+                            <TextBlock x:Name="MemoryDetailText" Text="Waiting for Agent" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource MachineCardStyle}" Padding="16" Margin="4,0">
+                        <StackPanel>
+                            <TextBlock Text="UPTIME" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock x:Name="UptimeText" Text="—" FontSize="25" FontWeight="Bold" Margin="0,5,0,0" />
+                            <TextBlock x:Name="UserText" Text="Waiting for Agent" Foreground="{DynamicResource FaintTextBrush}" TextTrimming="CharacterEllipsis" FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource MachineCardStyle}" Padding="16" Margin="8,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="ULTRAVNC" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock x:Name="VncServiceText" Text="—" FontSize="25" FontWeight="Bold" Margin="0,5,0,0" />
+                            <TextBlock x:Name="VncPortText" Text="Waiting for Agent" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <Grid Grid.Row="1" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,7,0">
+                        <StackPanel>
+                            <TextBlock Text="SYSTEM" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock x:Name="OsText" Text="Waiting for Grev Agent…" FontSize="15" FontWeight="SemiBold" Margin="0,10,0,0" TextWrapping="Wrap" />
+                            <TextBlock x:Name="HostText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,0" />
+                            <TextBlock x:Name="AgentVersionText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="7,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="INVENTORY" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock x:Name="ProcessSummaryText" Text="Processes: —" Margin="0,10,0,0" />
+                            <TextBlock x:Name="ServiceSummaryText" Text="Services: —" Margin="0,6,0,0" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="DISKS" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,10" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="DiskItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,5">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="80" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="150" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Label}" Foreground="{DynamicResource MutedTextBrush}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Space}" HorizontalAlignment="Right" Foreground="{DynamicResource MutedTextBrush}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="ProcessesPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ProcessSearchBox" Width="360" HorizontalAlignment="Left" TextChanged="ProcessSearchBox_TextChanged" ToolTip="Filter processes by name or PID" />
+                    <TextBlock x:Name="ProcessCountText" Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
+                </Grid>
+                <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="14">
+                    <ListView x:Name="ProcessesList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextBrush}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="2,5" Width="940">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="3*" />
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="2*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Pid}" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Memory}" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock Grid.Column="3" Text="{Binding CpuTime}" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock Grid.Column="4" Text="{Binding Session}" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock Grid.Column="5" Text="{Binding Started}" Foreground="{DynamicResource FaintTextBrush}" TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="ServicesPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ServiceSearchBox" Width="360" HorizontalAlignment="Left" TextChanged="ServiceSearchBox_TextChanged" ToolTip="Filter services by name, display name or state" />
+                    <TextBlock x:Name="ServiceCountText" Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
+                </Grid>
+                <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="14">
+                    <ListView x:Name="ServicesList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextBrush}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="2,5" Width="940">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="3*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="110" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1" Text="{Binding ServiceName}" Foreground="{DynamicResource MutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock Grid.Column="3" Text="{Binding StartMode}" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock Grid.Column="4" Text="{Binding Control}" Foreground="{DynamicResource FaintTextBrush}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="3" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,11">
+            <Grid>
+                <TextBlock x:Name="StatusText" Text="Ready" Foreground="{DynamicResource MutedTextBrush}" />
+                <TextBlock Text="Read-only Agent management · process/service controls come next" HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
