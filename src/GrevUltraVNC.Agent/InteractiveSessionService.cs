@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using GrevUltraVNC.Contracts;
 
 namespace GrevUltraVNC.Agent;
@@ -9,6 +10,11 @@ public sealed class InteractiveSessionService
 {
     private const uint MaximumAllowed = 0x02000000;
     private const uint CreateUnicodeEnvironment = 0x00000400;
+    private const uint TokenAdjustPrivileges = 0x0020;
+    private const uint TokenQuery = 0x0008;
+    private const uint SePrivilegeEnabled = 0x00000002;
+    private const int ErrorNotAllAssigned = 1300;
+    private const string ShutdownPrivilege = "SeShutdownPrivilege";
 
     public AgentActionResponse RunQuickAction(AgentQuickActionRequest request)
     {
@@ -16,6 +22,10 @@ public sealed class InteractiveSessionService
         return action switch
         {
             "restart-explorer" => RestartExplorer(),
+            "lock" => LockWorkstation(),
+            "sign-out" or "logoff" => SignOutInteractiveUser(),
+            "sleep" => SuspendSystem(hibernate: false),
+            "hibernate" => SuspendSystem(hibernate: true),
             _ => new AgentActionResponse(false, $"Unsupported quick action: {request.Action}")
         };
     }
@@ -61,7 +71,107 @@ public sealed class InteractiveSessionService
         }
     }
 
-    private static void LaunchInInteractiveSession(uint sessionId, string executablePath)
+    private static AgentActionResponse LockWorkstation()
+    {
+        var sessionId = WTSGetActiveConsoleSessionId();
+        if (sessionId == uint.MaxValue)
+            return new AgentActionResponse(false, "No interactive Windows session is currently active.");
+
+        try
+        {
+            var rundll32 = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "rundll32.exe");
+
+            if (!File.Exists(rundll32))
+                return new AgentActionResponse(false, "Windows rundll32.exe could not be found.");
+
+            // LockWorkStation must run on the interactive desktop, so launch the
+            // request with the active console user's token instead of from Session 0.
+            LaunchInInteractiveSession(sessionId, rundll32, "user32.dll,LockWorkStation");
+            return new AgentActionResponse(true, "Lock request sent to the active Windows session.");
+        }
+        catch (Exception ex)
+        {
+            return new AgentActionResponse(false, $"Could not lock the workstation: {ex.Message}");
+        }
+    }
+
+    private static AgentActionResponse SignOutInteractiveUser()
+    {
+        var sessionId = WTSGetActiveConsoleSessionId();
+        if (sessionId == uint.MaxValue)
+            return new AgentActionResponse(false, "No interactive Windows session is currently active.");
+
+        try
+        {
+            if (!WTSLogoffSession(IntPtr.Zero, sessionId, false))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows refused to sign out the active session.");
+
+            return new AgentActionResponse(true, "Sign-out request sent to the active Windows session.");
+        }
+        catch (Exception ex)
+        {
+            return new AgentActionResponse(false, $"Could not sign out the active user: {ex.Message}");
+        }
+    }
+
+    private static AgentActionResponse SuspendSystem(bool hibernate)
+    {
+        var actionName = hibernate ? "hibernate" : "sleep";
+
+        try
+        {
+            EnableShutdownPrivilege();
+
+            if (!SetSuspendState(hibernate, false, false))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Windows refused to {actionName} the machine.");
+
+            return new AgentActionResponse(true, hibernate
+                ? "Hibernate request accepted by Windows."
+                : "Sleep request accepted by Windows.");
+        }
+        catch (Exception ex)
+        {
+            return new AgentActionResponse(false, $"Could not {actionName} the machine: {ex.Message}");
+        }
+    }
+
+    private static void EnableShutdownPrivilege()
+    {
+        using var process = Process.GetCurrentProcess();
+        if (!OpenProcessToken(process.Handle, TokenAdjustPrivileges | TokenQuery, out var token))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open the Grev Agent process token.");
+
+        try
+        {
+            if (!LookupPrivilegeValue(null, ShutdownPrivilege, out var luid))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resolve the Windows shutdown privilege.");
+
+            var privileges = new TokenPrivileges
+            {
+                PrivilegeCount = 1,
+                Privileges = new LuidAndAttributes
+                {
+                    Luid = luid,
+                    Attributes = SePrivilegeEnabled
+                }
+            };
+
+            if (!AdjustTokenPrivileges(token, false, ref privileges, 0, IntPtr.Zero, IntPtr.Zero))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not enable the Windows shutdown privilege.");
+
+            var error = Marshal.GetLastWin32Error();
+            if (error == ErrorNotAllAssigned)
+                throw new Win32Exception(error, "The Grev Agent account does not have the Windows shutdown privilege.");
+        }
+        finally
+        {
+            CloseHandle(token);
+        }
+    }
+
+    private static void LaunchInInteractiveSession(uint sessionId, string executablePath, string? arguments = null)
     {
         if (!WTSQueryUserToken(sessionId, out var userToken))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not get the interactive user's Windows token.");
@@ -91,10 +201,14 @@ public sealed class InteractiveSessionService
                         lpDesktop = @"winsta0\default"
                     };
 
+                    StringBuilder? commandLine = null;
+                    if (!string.IsNullOrWhiteSpace(arguments))
+                        commandLine = new StringBuilder($"\"{executablePath}\" {arguments}");
+
                     if (!CreateProcessAsUser(
                             primaryToken,
                             executablePath,
-                            null,
+                            commandLine,
                             IntPtr.Zero,
                             IntPtr.Zero,
                             false,
@@ -103,11 +217,11 @@ public sealed class InteractiveSessionService
                             Path.GetDirectoryName(executablePath),
                             ref startupInfo,
                             out var processInfo))
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows refused to relaunch Explorer in the interactive session.");
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows refused to launch the action in the interactive session.");
 
                     try
                     {
-                        // Creation succeeded; Explorer now owns its lifetime.
+                        // Creation succeeded; the interactive process owns its lifetime.
                     }
                     finally
                     {
@@ -144,6 +258,27 @@ public sealed class InteractiveSessionService
     {
         TokenPrimary = 1,
         TokenImpersonation
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Luid
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LuidAndAttributes
+    {
+        public Luid Luid;
+        public uint Attributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TokenPrivileges
+    {
+        public uint PrivilegeCount;
+        public LuidAndAttributes Privileges;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -185,6 +320,10 @@ public sealed class InteractiveSessionService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WTSQueryUserToken(uint sessionId, out IntPtr token);
 
+    [DllImport("Wtsapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WTSLogoffSession(IntPtr serverHandle, uint sessionId, bool wait);
+
     [DllImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DuplicateTokenEx(
@@ -194,6 +333,28 @@ public sealed class InteractiveSessionService
         SecurityImpersonationLevel impersonationLevel,
         TokenType tokenType,
         out IntPtr newToken);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool LookupPrivilegeValue(string? systemName, string name, out Luid luid);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AdjustTokenPrivileges(
+        IntPtr tokenHandle,
+        bool disableAllPrivileges,
+        ref TokenPrivileges newState,
+        uint bufferLength,
+        IntPtr previousState,
+        IntPtr returnLength);
+
+    [DllImport("powrprof.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);
 
     [DllImport("userenv.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -208,7 +369,7 @@ public sealed class InteractiveSessionService
     private static extern bool CreateProcessAsUser(
         IntPtr token,
         string? applicationName,
-        string? commandLine,
+        StringBuilder? commandLine,
         IntPtr processAttributes,
         IntPtr threadAttributes,
         bool inheritHandles,
