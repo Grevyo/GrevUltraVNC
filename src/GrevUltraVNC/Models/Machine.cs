@@ -57,24 +57,34 @@ public sealed class Machine : INotifyPropertyChanged
     }
 
     [JsonIgnore]
-    public string ActiveAddress => !string.IsNullOrWhiteSpace(ResolvedAddress) ? ResolvedAddress! : IpAddress;
+    public string ActiveAddress
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ResolvedAddress)) return ResolvedAddress!;
+            return string.IsNullOrWhiteSpace(ConnectId) ? IpAddress : string.Empty;
+        }
+    }
 
     [JsonIgnore]
     public string ConnectDisplayText
     {
         get
         {
-            var id = string.IsNullOrWhiteSpace(ConnectId) ? "Grev Connect not assigned" : ConnectId;
             if (!string.IsNullOrWhiteSpace(ResolvedAddress))
             {
                 var route = string.IsNullOrWhiteSpace(ResolvedRoute) ? "Grev Connect" : ResolvedRoute;
-                return $"{id} · {route} {ResolvedAddress}";
+                return string.IsNullOrWhiteSpace(ConnectId)
+                    ? $"{route} {ResolvedAddress}"
+                    : $"{ConnectId} · {route} {ResolvedAddress}";
             }
 
-            if (!string.IsNullOrWhiteSpace(IpAddress))
-                return $"{id} · LAN {IpAddress}";
+            if (!string.IsNullOrWhiteSpace(ConnectId))
+                return $"{ConnectId} · route unavailable";
 
-            return $"{id} · resolving…";
+            return string.IsNullOrWhiteSpace(IpAddress)
+                ? "No route configured"
+                : $"LAN {IpAddress}";
         }
     }
 
