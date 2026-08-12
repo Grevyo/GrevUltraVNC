@@ -38,6 +38,16 @@ public sealed class JsonStorage
         await JsonSerializer.SerializeAsync(stream, machines, JsonOptions);
     }
 
+    public async Task UpdateMachineAsync(Machine machine)
+    {
+        var machines = await LoadMachinesAsync();
+        var existing = machines.FirstOrDefault(item => item.Id == machine.Id);
+        if (existing is null) return;
+
+        existing.ApplyFrom(machine);
+        await SaveMachinesAsync(machines);
+    }
+
     public async Task<AppSettings> LoadSettingsAsync()
     {
         if (!File.Exists(_settingsPath)) return new AppSettings();
