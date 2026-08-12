@@ -20,6 +20,7 @@ public partial class GrevControlPanelWindow : Window
     private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private readonly DispatcherTimer _agentTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _agentRefreshRunning;
+    private MachineOverviewWindow? _machineOverview;
 
     public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
     {
@@ -157,6 +158,23 @@ public partial class GrevControlPanelWindow : Window
             Left = viewerLeft - gap - panelWidth;
         else
             Left = Math.Max(workLeft, workRight - panelWidth);
+    }
+
+    private void ManageMachine_Click(object sender, RoutedEventArgs e)
+    {
+        if (_machineOverview is not null)
+        {
+            if (!_machineOverview.IsVisible)
+                _machineOverview.Show();
+
+            _machineOverview.Activate();
+            return;
+        }
+
+        var overview = new MachineOverviewWindow(_machine) { Owner = this };
+        _machineOverview = overview;
+        overview.Closed += (_, _) => _machineOverview = null;
+        overview.Show();
     }
 
     private void Cad_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendCtrlAltDelete(_machine.Id));
