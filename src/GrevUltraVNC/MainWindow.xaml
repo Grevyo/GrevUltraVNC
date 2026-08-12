@@ -125,10 +125,12 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Button Style="{StaticResource PrimaryButton}" Content="Connect" Click="ConnectMachine_Click" Margin="0,0,8,0" />
-                                    <Button Grid.Column="1" Style="{StaticResource CardActionButton}" Content="Edit" Click="EditMachine_Click" Margin="0,0,8,0" />
-                                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="⋯" Click="MoreMachine_Click" ToolTip="Machine actions" />
+                                    <Button Style="{StaticResource PrimaryButton}" Content="Connect" Click="ConnectMachine_Click" Margin="0,0,6,0" />
+                                    <Button Grid.Column="1" Style="{StaticResource CardActionButton}" Content="Manage" Click="ManageMachine_Click" Margin="0,0,6,0" />
+                                    <Button Grid.Column="2" Style="{StaticResource CardActionButton}" Content="Edit" Click="EditMachine_Click" Margin="0,0,6,0" />
+                                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="⋯" Click="MoreMachine_Click" ToolTip="Machine actions" />
                                 </Grid>
                             </Grid>
                         </Border>
