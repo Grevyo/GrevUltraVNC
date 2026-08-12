@@ -120,5 +120,7 @@ public sealed class GrevAgentClient : IDisposable
 
     public void Dispose() => _httpClient.Dispose();
 
-    private sealed class AgentAuthenticationException : Exception;
+    private sealed class AgentAuthenticationException : Exception
+    {
+    }
 }
