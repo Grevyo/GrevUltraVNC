@@ -26,7 +26,7 @@ public static class BrandAssets
             using var bitmap = new Bitmap(256, 256, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             using (var graphics = Graphics.FromImage(bitmap))
             {
-                graphics.Clear(Color.Transparent);
+                graphics.Clear(System.Drawing.Color.Transparent);
                 graphics.CompositingQuality = CompositingQuality.HighQuality;
                 graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 graphics.SmoothingMode = SmoothingMode.HighQuality;
