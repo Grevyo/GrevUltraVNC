@@ -62,13 +62,15 @@
                 </UniformGrid>
 
                 <TextBlock Text="WINDOWS SESSION" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
-                <UniformGrid Columns="2">
-                    <Button Style="{StaticResource CardActionButton}" Content="🔒 Lock" Click="LockMachine_Click" Margin="0,0,4,8" />
-                    <Button Style="{StaticResource CardActionButton}" Content="↻ Explorer" Click="RestartExplorerAgent_Click" Margin="4,0,0,8" />
-                    <Button Style="{StaticResource DangerButton}" Content="Sign out" Click="SignOutMachine_Click" Margin="0,0,4,8" Padding="12,7" />
-                    <Button Style="{StaticResource CardActionButton}" Content="Sleep" Click="SleepMachine_Click" Margin="4,0,0,8" />
-                </UniformGrid>
-                <Button Style="{StaticResource SecondaryButton}" Content="Hibernate machine" Click="HibernateMachine_Click" />
+                <StackPanel x:Name="SessionActionPanel" IsEnabled="False">
+                    <UniformGrid Columns="2">
+                        <Button Style="{StaticResource CardActionButton}" Content="🔒 Lock" Click="LockMachine_Click" Margin="0,0,4,8" />
+                        <Button Style="{StaticResource CardActionButton}" Content="↻ Explorer" Click="RestartExplorerAgent_Click" Margin="4,0,0,8" />
+                        <Button Style="{StaticResource DangerButton}" Content="Sign out" Click="SignOutMachine_Click" Margin="0,0,4,8" Padding="12,7" />
+                        <Button Style="{StaticResource CardActionButton}" Content="Sleep" Click="SleepMachine_Click" Margin="4,0,0,8" />
+                    </UniformGrid>
+                    <Button Style="{StaticResource SecondaryButton}" Content="Hibernate machine" Click="HibernateMachine_Click" />
+                </StackPanel>
 
                 <TextBlock Text="VNC SESSION CONTROLS" Foreground="{DynamicResource Accent2Brush}" FontSize="11" FontWeight="SemiBold" Margin="0,18,0,8" />
                 <UniformGrid Columns="2">
