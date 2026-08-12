@@ -44,6 +44,8 @@ public partial class MachineOverviewWindow : Window
         AgentStateText.Text = "● CHECKING AGENT";
         AgentStateText.Foreground = (Brush)FindResource("MutedTextBrush");
         UpdateAgentButton.IsEnabled = false;
+        SessionActionsPanel.IsEnabled = false;
+        SessionFeatureStatusText.Text = "Checking Agent capability…";
 
         try
         {
@@ -69,25 +71,34 @@ public partial class MachineOverviewWindow : Window
             RenderProcesses();
             RenderServices();
 
-            AgentStateText.Text = string.IsNullOrWhiteSpace(probe.Message)
-                ? "● AGENT CONNECTED"
-                : "● AGENT UPDATE RECOMMENDED";
-            AgentStateText.Foreground = string.IsNullOrWhiteSpace(probe.Message)
-                ? new SolidColorBrush(Color.FromRgb(80, 220, 145))
-                : (Brush)FindResource("Accent2Brush");
-            UpdateAgentButton.Content = string.IsNullOrWhiteSpace(probe.Message)
-                ? "⇩ Update Agent"
-                : "⇩ Update Agent · recommended";
+            var needsUpdate = !string.IsNullOrWhiteSpace(probe.Message);
+            AgentStateText.Text = needsUpdate
+                ? "● AGENT UPDATE RECOMMENDED"
+                : "● AGENT CONNECTED";
+            AgentStateText.Foreground = needsUpdate
+                ? (Brush)FindResource("Accent2Brush")
+                : new SolidColorBrush(Color.FromRgb(80, 220, 145));
+            UpdateAgentButton.Content = needsUpdate
+                ? "⇩ Update Agent · recommended"
+                : "⇩ Update Agent";
             UpdateAgentButton.IsEnabled = !_agentUpdateRunning;
-            StatusText.Text = string.IsNullOrWhiteSpace(probe.Message)
-                ? $"Live data refreshed {DateTime.Now:HH:mm:ss}"
-                : probe.Message;
+
+            SessionActionsPanel.IsEnabled = !needsUpdate;
+            SessionFeatureStatusText.Text = needsUpdate
+                ? "Update Grev Agent to the current protocol before using the new Windows session and power controls."
+                : "Agent session controls ready · actions are authenticated with this machine's pairing key.";
+
+            StatusText.Text = needsUpdate
+                ? probe.Message!
+                : $"Live data refreshed {DateTime.Now:HH:mm:ss}";
         }
         catch (Exception ex)
         {
             AgentStateText.Text = "● AGENT UNAVAILABLE";
             AgentStateText.Foreground = (Brush)FindResource("DangerBrush");
             UpdateAgentButton.IsEnabled = false;
+            SessionActionsPanel.IsEnabled = false;
+            SessionFeatureStatusText.Text = "Grev Agent must be connected before session controls can be used.";
             StatusText.Text = ex.Message;
         }
         finally
@@ -191,6 +202,7 @@ public partial class MachineOverviewWindow : Window
 
         _agentUpdateRunning = true;
         UpdateAgentButton.IsEnabled = false;
+        SessionActionsPanel.IsEnabled = false;
 
         try
         {
@@ -253,6 +265,45 @@ public partial class MachineOverviewWindow : Window
         await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "restart-explorer"));
     }
 
+    private async void LockSession_Click(object sender, RoutedEventArgs e) =>
+        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "lock"), refreshAfterSuccess: false);
+
+    private async void SignOutSession_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                $"Sign out the active user on {_machine.Name}?\n\nAny unsaved work in that Windows session can be lost.",
+                "Sign out active user",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "sign-out"), refreshAfterSuccess: false);
+    }
+
+    private async void SleepSession_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                $"Put {_machine.Name} to sleep?\n\nRemote connections will drop until the machine wakes again.",
+                "Sleep machine",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "sleep"), refreshAfterSuccess: false);
+    }
+
+    private async void HibernateSession_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this,
+                $"Hibernate {_machine.Name}?\n\nRemote connections will drop until the machine is powered or woken again.",
+                "Hibernate machine",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        await RunAgentActionAsync(() => _agent.RunQuickActionAsync(_machine, "hibernate"), refreshAfterSuccess: false);
+    }
+
     private async void StartService_Click(object sender, RoutedEventArgs e) =>
         await RunSelectedServiceActionAsync("start", requiresConfirmation: false);
 
@@ -281,7 +332,7 @@ public partial class MachineOverviewWindow : Window
         await RunAgentActionAsync(() => _agent.ControlServiceAsync(_machine, selected.ServiceName, action));
     }
 
-    private async Task RunAgentActionAsync(Func<Task<AgentActionResponse>> action)
+    private async Task RunAgentActionAsync(Func<Task<AgentActionResponse>> action, bool refreshAfterSuccess = true)
     {
         if (_actionRunning) return;
         _actionRunning = true;
@@ -292,7 +343,9 @@ public partial class MachineOverviewWindow : Window
             var result = await action();
             if (result.Success)
             {
-                await RefreshAllAsync();
+                if (refreshAfterSuccess)
+                    await RefreshAllAsync();
+
                 StatusText.Text = result.Message;
             }
             else
@@ -395,6 +448,7 @@ public partial class MachineOverviewWindow : Window
     private void OverviewTab_Click(object sender, RoutedEventArgs e) => ShowSection(OverviewPanel, OverviewButton);
     private void ProcessesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ProcessesPanel, ProcessesButton);
     private void ServicesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ServicesPanel, ServicesButton);
+    private void SessionTab_Click(object sender, RoutedEventArgs e) => ShowSection(SessionPanel, SessionButton);
     private void TerminalTab_Click(object sender, RoutedEventArgs e)
     {
         ShowSection(TerminalPanel, TerminalButton);
@@ -406,12 +460,14 @@ public partial class MachineOverviewWindow : Window
         OverviewPanel.Visibility = Visibility.Collapsed;
         ProcessesPanel.Visibility = Visibility.Collapsed;
         ServicesPanel.Visibility = Visibility.Collapsed;
+        SessionPanel.Visibility = Visibility.Collapsed;
         TerminalPanel.Visibility = Visibility.Collapsed;
         section.Visibility = Visibility.Visible;
 
         OverviewButton.Style = (Style)FindResource("SecondaryButton");
         ProcessesButton.Style = (Style)FindResource("SecondaryButton");
         ServicesButton.Style = (Style)FindResource("SecondaryButton");
+        SessionButton.Style = (Style)FindResource("SecondaryButton");
         TerminalButton.Style = (Style)FindResource("SecondaryButton");
         activeButton.Style = (Style)FindResource("PrimaryButton");
     }
