@@ -21,6 +21,7 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{serviceConfiguration.Port}");
 builder.Services.AddSingleton(serviceConfiguration);
 builder.Services.AddSingleton<AgentRequestAuthenticator>();
 builder.Services.AddSingleton<SystemTelemetryService>();
+builder.Services.AddSingleton<SystemInventoryService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SystemTelemetryService>());
 
 var app = builder.Build();
@@ -69,5 +70,11 @@ app.MapGet(AgentProtocol.PingPath, () =>
 
 app.MapGet(AgentProtocol.StatusPath, async (SystemTelemetryService telemetry, CancellationToken cancellationToken) =>
     Results.Json(await telemetry.CaptureAsync(cancellationToken)));
+
+app.MapGet(AgentProtocol.ProcessesPath, (SystemInventoryService inventory) =>
+    Results.Json(inventory.GetProcesses()));
+
+app.MapGet(AgentProtocol.ServicesPath, (SystemInventoryService inventory) =>
+    Results.Json(inventory.GetServices()));
 
 await app.RunAsync();
