@@ -145,6 +145,7 @@
                     <TextBox x:Name="ProcessSearchBox" Width="360" HorizontalAlignment="Left" TextChanged="ProcessSearchBox_TextChanged" ToolTip="Filter processes by name or PID" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="ProcessCountText" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,14,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Restart Explorer" Click="RestartExplorer_Click" Padding="12,7" Margin="0,0,6,0" />
                         <Button Style="{StaticResource DangerButton}" Content="End selected process" Click="EndProcess_Click" Padding="12,7" />
                     </StackPanel>
                 </Grid>
