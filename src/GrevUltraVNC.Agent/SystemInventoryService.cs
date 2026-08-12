@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.ServiceProcess;
 using GrevUltraVNC.Contracts;
@@ -7,6 +8,21 @@ namespace GrevUltraVNC.Agent;
 
 public sealed class SystemInventoryService
 {
+    private static readonly HashSet<string> ProtectedProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "System",
+        "Registry",
+        "smss",
+        "csrss",
+        "wininit",
+        "services",
+        "lsass",
+        "winlogon",
+        "GrevUltraVNC.Agent"
+    };
+
+    private static readonly TimeSpan ServiceTimeout = TimeSpan.FromSeconds(20);
+
     public IReadOnlyList<AgentProcessInfo> GetProcesses()
     {
         var results = new List<AgentProcessInfo>();
@@ -96,6 +112,128 @@ public sealed class SystemInventoryService
             .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ServiceName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    public AgentActionResponse ControlProcess(AgentProcessActionRequest request)
+    {
+        if (!string.Equals(request.Action, "terminate", StringComparison.OrdinalIgnoreCase))
+            return new AgentActionResponse(false, $"Unsupported process action: {request.Action}");
+
+        if (request.ProcessId <= 4)
+            return new AgentActionResponse(false, "That Windows process is protected and cannot be ended through Grev Agent.");
+
+        try
+        {
+            using var process = Process.GetProcessById(request.ProcessId);
+            var processName = process.ProcessName;
+
+            if (ProtectedProcessNames.Contains(processName) || process.Id == Environment.ProcessId)
+                return new AgentActionResponse(false, $"{processName} is protected and cannot be ended through Grev Agent.");
+
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit(5000);
+            return new AgentActionResponse(true, $"Ended {processName} (PID {request.ProcessId}).");
+        }
+        catch (ArgumentException)
+        {
+            return new AgentActionResponse(true, $"PID {request.ProcessId} is no longer running.");
+        }
+        catch (InvalidOperationException)
+        {
+            return new AgentActionResponse(true, $"PID {request.ProcessId} is no longer running.");
+        }
+        catch (Win32Exception ex)
+        {
+            return new AgentActionResponse(false, $"Windows refused to end PID {request.ProcessId}: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return new AgentActionResponse(false, $"Could not end PID {request.ProcessId}: {ex.Message}");
+        }
+    }
+
+    public AgentActionResponse ControlService(AgentServiceActionRequest request)
+    {
+        var serviceName = request.ServiceName?.Trim();
+        if (string.IsNullOrWhiteSpace(serviceName))
+            return new AgentActionResponse(false, "No Windows service was selected.");
+
+        if (string.Equals(serviceName, "GrevUltraVNCAgent", StringComparison.OrdinalIgnoreCase))
+            return new AgentActionResponse(false, "Grev Agent cannot stop or restart its own Windows service remotely.");
+
+        try
+        {
+            using var service = new ServiceController(serviceName);
+            _ = service.DisplayName; // Forces Windows to resolve the service now.
+
+            return request.Action.Trim().ToLowerInvariant() switch
+            {
+                "start" => StartService(service),
+                "stop" => StopService(service),
+                "restart" => RestartService(service),
+                _ => new AgentActionResponse(false, $"Unsupported service action: {request.Action}")
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new AgentActionResponse(false, $"Could not access service {serviceName}: {ex.Message}");
+        }
+        catch (Win32Exception ex)
+        {
+            return new AgentActionResponse(false, $"Windows refused the service action: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return new AgentActionResponse(false, $"Service action failed: {ex.Message}");
+        }
+    }
+
+    private static AgentActionResponse StartService(ServiceController service)
+    {
+        service.Refresh();
+        if (service.Status == ServiceControllerStatus.Running)
+            return new AgentActionResponse(true, $"{service.DisplayName} is already running.");
+
+        if (service.Status == ServiceControllerStatus.StartPending)
+        {
+            service.WaitForStatus(ServiceControllerStatus.Running, ServiceTimeout);
+            return new AgentActionResponse(true, $"{service.DisplayName} is running.");
+        }
+
+        service.Start();
+        service.WaitForStatus(ServiceControllerStatus.Running, ServiceTimeout);
+        return new AgentActionResponse(true, $"Started {service.DisplayName}.");
+    }
+
+    private static AgentActionResponse StopService(ServiceController service)
+    {
+        service.Refresh();
+        if (service.Status == ServiceControllerStatus.Stopped)
+            return new AgentActionResponse(true, $"{service.DisplayName} is already stopped.");
+
+        if (!service.CanStop)
+            return new AgentActionResponse(false, $"Windows reports that {service.DisplayName} cannot be stopped.");
+
+        service.Stop();
+        service.WaitForStatus(ServiceControllerStatus.Stopped, ServiceTimeout);
+        return new AgentActionResponse(true, $"Stopped {service.DisplayName}.");
+    }
+
+    private static AgentActionResponse RestartService(ServiceController service)
+    {
+        service.Refresh();
+        if (service.Status != ServiceControllerStatus.Stopped)
+        {
+            if (!service.CanStop)
+                return new AgentActionResponse(false, $"Windows reports that {service.DisplayName} cannot be restarted because it cannot be stopped.");
+
+            service.Stop();
+            service.WaitForStatus(ServiceControllerStatus.Stopped, ServiceTimeout);
+        }
+
+        service.Start();
+        service.WaitForStatus(ServiceControllerStatus.Running, ServiceTimeout);
+        return new AgentActionResponse(true, $"Restarted {service.DisplayName}.");
     }
 
     private static string GetStartMode(string serviceName)
