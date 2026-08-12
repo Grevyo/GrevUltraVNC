@@ -57,6 +57,19 @@ public sealed record AgentServiceActionRequest(
 public sealed record AgentQuickActionRequest(
     string Action);
 
+public sealed record AgentCommandRequest(
+    string Shell,
+    string Command,
+    int TimeoutSeconds = 30);
+
+public sealed record AgentCommandResponse(
+    bool Success,
+    int ExitCode,
+    string StandardOutput,
+    string StandardError,
+    bool TimedOut,
+    long DurationMilliseconds);
+
 public sealed record AgentActionResponse(
     bool Success,
     string Message);
