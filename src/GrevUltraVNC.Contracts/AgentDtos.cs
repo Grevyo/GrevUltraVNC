@@ -45,3 +45,15 @@ public sealed record AgentServiceInfo(
     string StartMode,
     bool CanStop,
     bool CanPauseAndContinue);
+
+public sealed record AgentProcessActionRequest(
+    int ProcessId,
+    string Action);
+
+public sealed record AgentServiceActionRequest(
+    string ServiceName,
+    string Action);
+
+public sealed record AgentActionResponse(
+    bool Success,
+    string Message);
