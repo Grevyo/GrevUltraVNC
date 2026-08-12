@@ -34,8 +34,15 @@ jobs:
         run: |
           $tag = 'agent-latest'
           $asset = 'dist\GrevUltraVNC-Agent-win-x64.zip'
-          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC Agent - Latest' --notes 'Automatically built from the latest main branch.' --prerelease
+
+          cmd /c "gh release view $tag --repo $env:GITHUB_REPOSITORY >nul 2>nul"
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+            gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the agent-latest release asset.' }
           }
-          gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
+          else {
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC Agent - Latest' --notes 'Automatically built from the latest main branch.' --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
+          }
