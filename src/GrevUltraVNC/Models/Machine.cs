@@ -23,6 +23,9 @@ public sealed class Machine : INotifyPropertyChanged
     private GrevAgentState _agentState = GrevAgentState.Unknown;
     private AgentStatusResponse? _agentStatus;
     private string? _agentMessage;
+    private string _connectId = string.Empty;
+    private string? _resolvedAddress;
+    private string _resolvedRoute = string.Empty;
 
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "New PC";
@@ -32,6 +35,48 @@ public sealed class Machine : INotifyPropertyChanged
     public int AgentPort { get; set; } = AgentProtocol.DefaultPort;
     public string Group { get; set; } = "My PCs";
     public string Notes { get; set; } = string.Empty;
+
+    public string ConnectId
+    {
+        get => _connectId;
+        set => SetField(ref _connectId, value?.Trim() ?? string.Empty);
+    }
+
+    [JsonIgnore]
+    public string? ResolvedAddress
+    {
+        get => _resolvedAddress;
+        set => SetField(ref _resolvedAddress, value);
+    }
+
+    [JsonIgnore]
+    public string ResolvedRoute
+    {
+        get => _resolvedRoute;
+        set => SetField(ref _resolvedRoute, value ?? string.Empty);
+    }
+
+    [JsonIgnore]
+    public string ActiveAddress => !string.IsNullOrWhiteSpace(ResolvedAddress) ? ResolvedAddress! : IpAddress;
+
+    [JsonIgnore]
+    public string ConnectDisplayText
+    {
+        get
+        {
+            var id = string.IsNullOrWhiteSpace(ConnectId) ? "Grev Connect not assigned" : ConnectId;
+            if (!string.IsNullOrWhiteSpace(ResolvedAddress))
+            {
+                var route = string.IsNullOrWhiteSpace(ResolvedRoute) ? "Grev Connect" : ResolvedRoute;
+                return $"{id} · {route} {ResolvedAddress}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(IpAddress))
+                return $"{id} · LAN {IpAddress}";
+
+            return $"{id} · resolving…";
+        }
+    }
 
     public bool IsFavorite
     {
@@ -104,8 +149,8 @@ public sealed class Machine : INotifyPropertyChanged
     {
         MachineStatus.Online => $"{PingText} · {VncText}",
         MachineStatus.VncUnavailable => $"{PingText} · {VncText}",
-        MachineStatus.Offline => "No network response",
-        _ => $"Checking {IpAddress}:{VncPort}"
+        MachineStatus.Offline => string.IsNullOrWhiteSpace(ConnectId) ? "No network response" : $"{ConnectId} not currently reachable",
+        _ => string.IsNullOrWhiteSpace(ActiveAddress) ? "Resolving Grev Connect route…" : $"Checking {ActiveAddress}:{VncPort}"
     };
 
     public string LastCheckedText => LastCheckedAt is null
@@ -148,6 +193,7 @@ public sealed class Machine : INotifyPropertyChanged
         Id = Id,
         Name = Name,
         IpAddress = IpAddress,
+        ConnectId = ConnectId,
         MacAddress = MacAddress,
         VncPort = VncPort,
         AgentPort = AgentPort,
@@ -160,13 +206,16 @@ public sealed class Machine : INotifyPropertyChanged
         LastCheckedAt = LastCheckedAt,
         AgentState = AgentState,
         AgentStatus = AgentStatus,
-        AgentMessage = AgentMessage
+        AgentMessage = AgentMessage,
+        ResolvedAddress = ResolvedAddress,
+        ResolvedRoute = ResolvedRoute
     };
 
     public void ApplyFrom(Machine other)
     {
         Name = other.Name;
         IpAddress = other.IpAddress;
+        ConnectId = other.ConnectId;
         MacAddress = other.MacAddress;
         VncPort = other.VncPort;
         AgentPort = other.AgentPort;
@@ -184,13 +233,15 @@ public sealed class Machine : INotifyPropertyChanged
         field = value;
         OnPropertyChanged(propertyName);
 
-        if (propertyName is nameof(Status) or nameof(LatencyMs) or nameof(VncAvailable) or nameof(LastCheckedAt))
+        if (propertyName is nameof(Status) or nameof(LatencyMs) or nameof(VncAvailable) or nameof(LastCheckedAt) or nameof(ResolvedAddress) or nameof(ResolvedRoute) or nameof(ConnectId))
         {
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(PingText));
             OnPropertyChanged(nameof(VncText));
             OnPropertyChanged(nameof(DetailText));
             OnPropertyChanged(nameof(LastCheckedText));
+            OnPropertyChanged(nameof(ActiveAddress));
+            OnPropertyChanged(nameof(ConnectDisplayText));
         }
 
         if (propertyName is nameof(AgentState) or nameof(AgentStatus) or nameof(AgentMessage))
