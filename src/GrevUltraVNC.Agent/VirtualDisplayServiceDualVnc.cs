@@ -42,7 +42,6 @@ public sealed class VirtualDisplayService : IDisposable
 
     public async Task<AgentDisplayResponse> ExecuteAsync(
         AgentDisplayRequest request,
-        string? controllerAddress,
         CancellationToken cancellationToken = default)
     {
         var controllerId = request.ControllerId?.Trim();
@@ -65,7 +64,7 @@ public sealed class VirtualDisplayService : IDisposable
                     {
                         try
                         {
-                            await CreateAsync(controllerAddress ?? string.Empty, cancellationToken);
+                            await CreateAsync(cancellationToken);
                         }
                         catch
                         {
@@ -104,7 +103,7 @@ public sealed class VirtualDisplayService : IDisposable
         }
     }
 
-    private async Task CreateAsync(string controllerAddress, CancellationToken cancellationToken)
+    private async Task CreateAsync(CancellationToken cancellationToken)
     {
         ReleaseUnsafe();
         var infPath = FindCachedDriverInf()
@@ -118,7 +117,7 @@ public sealed class VirtualDisplayService : IDisposable
         File.WriteAllText(OwnedDeviceStatePath, _virtualDeviceInstanceId);
 
         await Task.Delay(1500, cancellationToken);
-        await _secondaryServer.StartAsync(controllerAddress, cancellationToken);
+        await _secondaryServer.StartAsync(cancellationToken);
     }
 
     private static string? FindCachedDriverInf() =>
