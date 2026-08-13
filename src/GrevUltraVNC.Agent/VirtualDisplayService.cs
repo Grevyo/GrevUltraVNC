@@ -7,8 +7,10 @@ using GrevUltraVNC.Contracts;
 namespace GrevUltraVNC.Agent;
 
 /// <summary>
-/// Owns the Grev virtual monitor on the host. The software-device handle deliberately lives
-/// inside the long-running Agent process: closing that handle removes the virtual monitor.
+/// Owns the Grev virtual monitor on the host. Grev first uses Windows' Software Device API,
+/// matching UltraVNC's normal dynamic-display path. If that API is unavailable/broken on a
+/// particular host, Grev falls back to a temporary root-enumerated display device and removes
+/// it again when the Screen 2 lease ends.
 /// </summary>
 public sealed class VirtualDisplayService : IDisposable
 {
@@ -35,6 +37,7 @@ public sealed class VirtualDisplayService : IDisposable
     private readonly Timer _leaseTimer;
     private MemoryMappedFile? _supportedMonitorMap;
     private IntPtr _softwareDeviceHandle;
+    private string? _legacyDeviceInstanceId;
     private string? _virtualDeviceName;
     private bool _disposed;
 
@@ -66,7 +69,9 @@ public sealed class VirtualDisplayService : IDisposable
                     var height = Math.Clamp(request.Height, 600, 4320);
                     _leases[controllerId] = DateTimeOffset.UtcNow;
 
-                    if (_softwareDeviceHandle == IntPtr.Zero || FindVirtualDisplay(GetDisplays()) is null)
+                    var noOwnedDevice = _softwareDeviceHandle == IntPtr.Zero &&
+                                        string.IsNullOrWhiteSpace(_legacyDeviceInstanceId);
+                    if (noOwnedDevice || FindVirtualDisplay(GetDisplays()) is null)
                     {
                         try
                         {
@@ -127,7 +132,7 @@ public sealed class VirtualDisplayService : IDisposable
     private async Task CreateVirtualDisplayUnsafeAsync(int width, int height, CancellationToken cancellationToken)
     {
         ReleaseDeviceUnsafe();
-        await EnsureUltraVncVirtualDriverAsync(cancellationToken);
+        var infPath = await EnsureUltraVncVirtualDriverAsync(cancellationToken);
         PrepareSupportedMonitorMap(width, height);
 
         var beforeNames = GetDisplays()
@@ -136,6 +141,68 @@ public sealed class VirtualDisplayService : IDisposable
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var creation = new DeviceCreationState();
+        try
+        {
+            TryCreateSoftwareDevice(creation, cancellationToken);
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("0x8007007E", StringComparison.OrdinalIgnoreCase))
+        {
+            // ERROR_MOD_NOT_FOUND from SwDeviceCreate is the exact failure seen on some hosts.
+            // Device Manager/DevCon use a different root-enumerated path, so fall back to that
+            // instead of retrying the same Software Device API call.
+            _softwareDeviceHandle = IntPtr.Zero;
+            _legacyDeviceInstanceId = LegacyVirtualDisplayDevice.Create(infPath);
+        }
+
+        AgentDisplayInfo? virtualDisplay = null;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var displays = GetDisplays();
+            virtualDisplay = displays.FirstOrDefault(display =>
+                display.IsVirtual && !beforeNames.Contains(display.DeviceName))
+                ?? FindVirtualDisplay(displays);
+            if (virtualDisplay is not null)
+                break;
+            await Task.Delay(250, cancellationToken);
+        }
+
+        if (virtualDisplay is null)
+        {
+            var callbackDetail = creation.HResult < 0
+                ? $" Windows PnP reported {FormatHResult(creation.HResult)} while loading the display driver."
+                : string.Empty;
+            var pathDetail = string.IsNullOrWhiteSpace(_legacyDeviceInstanceId)
+                ? "Software Device API path was used."
+                : $"Legacy root-device fallback {_legacyDeviceInstanceId} was created.";
+            throw new InvalidOperationException(
+                "Windows never attached UVncVirtualDisplay as an active desktop monitor." +
+                callbackDetail + " " + pathDetail);
+        }
+
+        ConfigureVirtualDisplay(virtualDisplay.DeviceName, width, height);
+
+        deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var displays = GetDisplays();
+            virtualDisplay = FindVirtualDisplay(displays);
+            if (virtualDisplay is not null && displays.Count >= 2 && virtualDisplay.Width > 0 && virtualDisplay.Height > 0)
+            {
+                _virtualDeviceName = virtualDisplay.DeviceName;
+                return;
+            }
+            await Task.Delay(250, cancellationToken);
+        }
+
+        throw new InvalidOperationException("Windows did not expose the new virtual monitor as a usable second desktop display.");
+    }
+
+    private void TryCreateSoftwareDevice(DeviceCreationState creation, CancellationToken cancellationToken)
+    {
         var stateHandle = GCHandle.Alloc(creation);
         IntPtr hardwareIds = IntPtr.Zero;
         IntPtr compatibleIds = IntPtr.Zero;
@@ -183,9 +250,7 @@ public sealed class VirtualDisplayService : IDisposable
                     throw new TimeoutException("Windows timed out while creating the UVnc virtual display device.");
 
                 // UltraVNC itself does not treat hrCreateResult from the callback as the final
-                // success condition. Some Windows/driver combinations report a callback HRESULT
-                // while PnP is still completing enumeration. The authoritative check below is
-                // whether an attached UVncVirtualDisplay actually appears on the Windows desktop.
+                // success condition. The authoritative check is whether a display enumerates.
             }
             finally
             {
@@ -199,52 +264,9 @@ public sealed class VirtualDisplayService : IDisposable
             if (compatibleIds != IntPtr.Zero) Marshal.FreeHGlobal(compatibleIds);
             if (stateHandle.IsAllocated) stateHandle.Free();
         }
-
-        AgentDisplayInfo? virtualDisplay = null;
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(12);
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var displays = GetDisplays();
-            virtualDisplay = displays.FirstOrDefault(display =>
-                display.IsVirtual && !beforeNames.Contains(display.DeviceName))
-                ?? FindVirtualDisplay(displays);
-            if (virtualDisplay is not null)
-                break;
-            await Task.Delay(250, cancellationToken);
-        }
-
-        if (virtualDisplay is null)
-        {
-            var callbackDetail = creation.HResult < 0
-                ? $" Windows PnP reported {FormatHResult(creation.HResult)} while loading the display driver."
-                : string.Empty;
-            throw new InvalidOperationException(
-                "The UVnc software device was requested, but Windows never attached it as an active desktop monitor." +
-                callbackDetail +
-                " Grev staged the UltraVNC virtual-display driver with Windows before creating the device.");
-        }
-
-        ConfigureVirtualDisplay(virtualDisplay.DeviceName, width, height);
-
-        deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var displays = GetDisplays();
-            virtualDisplay = FindVirtualDisplay(displays);
-            if (virtualDisplay is not null && displays.Count >= 2 && virtualDisplay.Width > 0 && virtualDisplay.Height > 0)
-            {
-                _virtualDeviceName = virtualDisplay.DeviceName;
-                return;
-            }
-            await Task.Delay(250, cancellationToken);
-        }
-
-        throw new InvalidOperationException("Windows did not expose the new virtual monitor as a usable second desktop display.");
     }
 
-    private static async Task EnsureUltraVncVirtualDriverAsync(CancellationToken cancellationToken)
+    private static async Task<string> EnsureUltraVncVirtualDriverAsync(CancellationToken cancellationToken)
     {
         var winvnc = FindWinVncExecutable();
         if (winvnc is null)
@@ -256,6 +278,17 @@ public sealed class VirtualDisplayService : IDisposable
             throw new FileNotFoundException(
                 "UltraVNC virtual-display driver files are missing. Reinstall UltraVNC Server with the virtual monitor component available.");
 
+        var driverDirectory = Path.GetDirectoryName(inf)!;
+        var driverDll = Path.Combine(driverDirectory, "UVncVirtualDisplay.dll");
+        var driverCat = Directory.EnumerateFiles(driverDirectory, "*.cat", SearchOption.TopDirectoryOnly).FirstOrDefault();
+        if (!File.Exists(driverDll))
+            throw new FileNotFoundException(
+                "UltraVNC's UVncVirtualDisplay.dll is missing beside the virtual-display INF.",
+                driverDll);
+        if (driverCat is null)
+            throw new FileNotFoundException(
+                "UltraVNC's virtual-display catalog file is missing beside the INF.");
+
         var pnputil = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.Windows),
             "System32",
@@ -263,9 +296,6 @@ public sealed class VirtualDisplayService : IDisposable
         if (!File.Exists(pnputil))
             throw new FileNotFoundException("Windows pnputil.exe could not be found.", pnputil);
 
-        // Stage the exact INF that sits beside this UltraVNC installation. Doing this directly
-        // gives Grev a trustworthy exit code/output instead of relying on winvnc -installdriver,
-        // whose command-line path does not return useful detail to the Agent.
         var startInfo = new ProcessStartInfo
         {
             FileName = pnputil,
@@ -302,6 +332,8 @@ public sealed class VirtualDisplayService : IDisposable
             throw new InvalidOperationException(
                 $"Windows could not stage the UltraVNC virtual-display driver (pnputil exit {process.ExitCode}). {detail}".Trim());
         }
+
+        return inf;
     }
 
     private void PrepareSupportedMonitorMap(int width, int height)
@@ -461,8 +493,11 @@ public sealed class VirtualDisplayService : IDisposable
         try
         {
             PruneExpiredLeasesUnsafe();
-            if (_leases.Count == 0 && _softwareDeviceHandle != IntPtr.Zero)
+            if (_leases.Count == 0 &&
+                (_softwareDeviceHandle != IntPtr.Zero || !string.IsNullOrWhiteSpace(_legacyDeviceInstanceId)))
+            {
                 ReleaseDeviceUnsafe();
+            }
         }
         catch
         {
@@ -489,6 +524,12 @@ public sealed class VirtualDisplayService : IDisposable
         {
             try { SwDeviceClose(_softwareDeviceHandle); } catch { }
             _softwareDeviceHandle = IntPtr.Zero;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_legacyDeviceInstanceId))
+        {
+            LegacyVirtualDisplayDevice.TryRemove(_legacyDeviceInstanceId);
+            _legacyDeviceInstanceId = null;
         }
 
         _virtualDeviceName = null;
