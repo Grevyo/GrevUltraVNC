@@ -2,60 +2,18 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using GrevUltraVNC.Contracts;
 
 namespace GrevUltraVNC;
 
 public partial class GrevControlPanelWindow
 {
     private readonly DispatcherTimer _adaptivePanelTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-
-    private const string PrepareVirtualDisplayDriverScript = """
-$ErrorActionPreference = 'Stop'
-$service = Get-CimInstance Win32_Service -Filter "Name='uvnc_service'"
-if ($null -eq $service) { throw 'UltraVNC service uvnc_service was not found.' }
-$raw = $service.PathName.Trim()
-if ($raw.StartsWith('"')) { $exe = $raw.Split('"')[1] } else { $exe = ($raw -split '\s+')[0] }
-if (-not (Test-Path -LiteralPath $exe)) { throw 'UltraVNC winvnc.exe could not be found from the service path.' }
-$root = Split-Path -Parent $exe
-$inf = Get-ChildItem -LiteralPath $root -Recurse -Filter 'UVncVirtualDisplay.inf' -File -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($null -eq $inf) { throw 'UltraVNC virtual-display driver files are not installed. Reinstall UltraVNC Server with the virtual monitor files included.' }
-$cat = Get-ChildItem -LiteralPath $inf.DirectoryName -Filter '*.cat' -File -ErrorAction SilentlyContinue | Select-Object -First 1
-$store = $null
-$cert = $null
-$added = $false
-try {
-    if ($null -ne $cat) { $cert = (Get-AuthenticodeSignature -FilePath $cat.FullName).SignerCertificate }
-    if ($null -ne $cert) {
-        $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher','LocalMachine')
-        $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-        $existing = $store.Certificates.Find([System.Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint, $cert.Thumbprint, $false)
-        if ($existing.Count -eq 0) { $store.Add($cert); $added = $true }
-        $store.Close()
-    }
-
-    $arguments = "/add-driver `"$($inf.FullName)`" /install"
-    $process = Start-Process -FilePath "$env:SystemRoot\System32\pnputil.exe" -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait
-    if ($process.ExitCode -ne 0) { throw "Windows could not install the UltraVNC virtual-display driver (pnputil exit $($process.ExitCode))." }
-    Write-Output 'READY'
-}
-finally {
-    if ($added -and $null -ne $cert) {
-        try {
-            if ($null -eq $store) { $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher','LocalMachine') }
-            $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-            $store.Remove($cert)
-            $store.Close()
-        } catch { }
-    }
-}
-""";
-
-    private const string VerifyVirtualDisplayScript = """
-$device = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object {
-    $_.Name -like '*UVncVirtualDisplay*' -or $_.PNPDeviceID -like '*UVncVirtualDisplay*'
-} | Select-Object -First 1
-if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
-""";
+    private bool _suppressScaleSlider;
+    private bool _virtualDisplayLeaseActive;
+    private bool _virtualDisplayLeaseRefreshRunning;
+    private DateTimeOffset _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.MinValue;
+    private int _virtualMonitorIndex = -1;
 
     private void AdaptivePanel_ContentRendered(object? sender, EventArgs e)
     {
@@ -67,7 +25,11 @@ if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
 
     private void AdaptivePanel_Closed(object? sender, EventArgs e) => _adaptivePanelTimer.Stop();
 
-    private void AdaptivePanelTimer_Tick(object? sender, EventArgs e) => ApplyAdaptivePanelSizing();
+    private async void AdaptivePanelTimer_Tick(object? sender, EventArgs e)
+    {
+        ApplyAdaptivePanelSizing();
+        await RefreshVirtualDisplayLeaseAsync();
+    }
 
     private void ApplyAdaptivePanelSizing()
     {
@@ -86,9 +48,6 @@ if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
         var targetHeight = Math.Min(desiredHeight, availableHeight);
         var needsScroll = availableHeight + 1 < desiredHeight;
 
-        // Force the legacy dock calculation to respect the full usable height. On a normal
-        // monitor that means the full 900px companion; on a shorter display it fills the work
-        // area and only then enables scrolling.
         MinHeight = targetHeight;
         MaxHeight = Math.Max(targetHeight, Math.Min(1040, availableHeight));
         Height = targetHeight;
@@ -114,12 +73,47 @@ if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
             if (!int.TryParse(tag, out var percent))
                 return;
 
-            _vnc.SetScale(_machine.Id, percent);
-            ZoomStatusText.Text = $"{percent}%";
+            ApplyViewerScale(percent, syncSlider: true);
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Viewer size", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void ViewerScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressScaleSlider || !IsLoaded)
+            return;
+
+        try
+        {
+            var percent = (int)Math.Round(e.NewValue / 5d) * 5;
+            ApplyViewerScale(percent, syncSlider: false);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Viewer size", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void ApplyViewerScale(int percent, bool syncSlider)
+    {
+        percent = Math.Clamp(percent, 10, 300);
+        _vnc.SetScale(_machine.Id, percent);
+        ZoomStatusText.Text = $"{percent}%";
+
+        if (!syncSlider || ViewerScaleSlider is null)
+            return;
+
+        _suppressScaleSlider = true;
+        try
+        {
+            ViewerScaleSlider.Value = percent;
+        }
+        finally
+        {
+            _suppressScaleSlider = false;
         }
     }
 
@@ -143,39 +137,39 @@ if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
 
         _virtualDisplayStarting = true;
         VirtualDisplayButton.IsEnabled = false;
-        VirtualDisplayButton.Content = "Preparing Screen 2…";
-        DisplayStatusText.Text = "Preparing UltraVNC virtual monitor driver…";
-        CollaborationStatusText.Text = "Preparing Screen 2";
+        VirtualDisplayButton.Content = "Creating Screen 2…";
+        DisplayStatusText.Text = "Creating virtual monitor on host…";
+        CollaborationStatusText.Text = "Creating Screen 2";
 
+        var leaseCreated = false;
         try
         {
-            var preparation = await _collaborationClient.RunCommandAsync(
+            var (width, height) = GetPreferredVirtualDisplaySize();
+            var display = await _collaborationClient.RunDisplayAsync(
                 _machine,
-                "powershell",
-                PrepareVirtualDisplayDriverScript,
-                timeoutSeconds: 45);
+                new AgentDisplayRequest(
+                    "create",
+                    _collaborationSettings.ControllerId,
+                    width,
+                    height));
 
-            if (!preparation.Success || preparation.ExitCode != 0 ||
-                !preparation.StandardOutput.Contains("READY", StringComparison.OrdinalIgnoreCase))
-            {
-                var detail = string.IsNullOrWhiteSpace(preparation.StandardError)
-                    ? preparation.StandardOutput
-                    : preparation.StandardError;
-                throw new InvalidOperationException(
-                    "The UltraVNC virtual-display driver could not be prepared on the host. " + detail.Trim());
-            }
+            if (!display.Success || !display.VirtualDisplayActive || display.VirtualMonitorIndex < 1)
+                throw new InvalidOperationException(display.Message);
 
-            DisplayStatusText.Text = "Creating Windows virtual monitor…";
-            await _vnc.OpenVirtualDisplayAsync(_machine, _collaborationSettings);
+            leaseCreated = true;
+            _virtualDisplayLeaseActive = true;
+            _virtualMonitorIndex = display.VirtualMonitorIndex;
+            _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.UtcNow;
 
-            var virtualDeviceReady = await WaitForRemoteVirtualDisplayAsync();
-            if (!virtualDeviceReady)
-            {
-                _vnc.CloseVirtualDisplay(_machine.Id);
-                throw new InvalidOperationException(
-                    "UltraVNC opened a second viewer, but Windows did not create a UVncVirtualDisplay device. " +
-                    "Grev closed the duplicate viewer instead of pretending Screen 2 was ready.");
-            }
+            var virtualInfo = display.Displays.FirstOrDefault(item => item.IsVirtual);
+            DisplayStatusText.Text = virtualInfo is null
+                ? "Host Screen 2 attached · opening viewer…"
+                : $"Host Screen 2 attached · {virtualInfo.Width}×{virtualInfo.Height} · opening viewer…";
+
+            await _vnc.OpenVirtualDisplayAsync(
+                _machine,
+                _collaborationSettings,
+                display.VirtualMonitorIndex);
 
             EnsureCursorOverlays();
             var localHasControl = string.Equals(
@@ -184,12 +178,16 @@ if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
                 StringComparison.OrdinalIgnoreCase);
             _vnc.SetViewOnly(_machine.Id, !localHasControl);
             UpdateDisplayState();
-            DisplayStatusText.Text = "Screen 1 physical · Screen 2 virtual Windows display";
+            DisplayStatusText.Text = virtualInfo is null
+                ? "Screen 1 physical · Screen 2 virtual Windows display"
+                : $"Screen 1 physical · Screen 2 virtual · {virtualInfo.Width}×{virtualInfo.Height}";
             CollaborationStatusText.Text = "Screen 2 ready";
         }
         catch (Exception ex)
         {
             try { _vnc.CloseVirtualDisplay(_machine.Id); } catch { }
+            if (leaseCreated)
+                await ReleaseVirtualDisplayLeaseAsync(closeViewer: false);
             UpdateDisplayState();
             CollaborationStatusText.Text = "Screen 2 unavailable";
             MessageBox.Show(this, ex.Message, "Virtual Screen 2", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -201,23 +199,106 @@ if ($null -ne $device) { 'READY|' + $device.Name } else { 'MISSING' }
         }
     }
 
-    private async Task<bool> WaitForRemoteVirtualDisplayAsync()
+    private async void CloseScreen2_Click(object sender, RoutedEventArgs e)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
-        while (DateTime.UtcNow < deadline)
+        try
         {
-            var result = await _collaborationClient.RunCommandAsync(
-                _machine,
-                "powershell",
-                VerifyVirtualDisplayScript,
-                timeoutSeconds: 10);
+            await ReleaseVirtualDisplayLeaseAsync(closeViewer: true);
+            if (_screen2CursorOverlay is not null)
+            {
+                try { _screen2CursorOverlay.Close(); } catch { }
+                _screen2CursorOverlay = null;
+            }
+            CollaborationStatusText.Text = "Screen 2 closed";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Screen 2", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        finally
+        {
+            UpdateDisplayState();
+        }
+    }
 
-            if (result.Success && result.StandardOutput.Contains("READY|", StringComparison.OrdinalIgnoreCase))
-                return true;
+    private async Task RefreshVirtualDisplayLeaseAsync()
+    {
+        if (!_virtualDisplayLeaseActive || _virtualDisplayLeaseRefreshRunning)
+            return;
 
-            await Task.Delay(500);
+        // If viewer 2 was closed outside Grev, release the host display rather than leaving a
+        // phantom Screen 2 until the lease timer expires.
+        if (!_vnc.HasVirtualSession(_machine.Id))
+        {
+            await ReleaseVirtualDisplayLeaseAsync(closeViewer: false);
+            return;
         }
 
-        return false;
+        if (DateTimeOffset.UtcNow - _lastVirtualDisplayLeaseRefreshUtc < TimeSpan.FromSeconds(5))
+            return;
+
+        _virtualDisplayLeaseRefreshRunning = true;
+        try
+        {
+            var response = await _collaborationClient.RunDisplayAsync(
+                _machine,
+                new AgentDisplayRequest("heartbeat", _collaborationSettings.ControllerId));
+            if (!response.Success || !response.VirtualDisplayActive)
+            {
+                _virtualDisplayLeaseActive = false;
+                _virtualMonitorIndex = -1;
+                return;
+            }
+            _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.UtcNow;
+        }
+        catch
+        {
+            // Do not interrupt an active VNC session for one missed heartbeat. The Agent keeps a
+            // 30-second lease, so transient LAN/Zima packet loss has room to recover.
+        }
+        finally
+        {
+            _virtualDisplayLeaseRefreshRunning = false;
+        }
+    }
+
+    private async Task ReleaseVirtualDisplayLeaseAsync(bool closeViewer)
+    {
+        if (closeViewer)
+        {
+            try { _vnc.CloseVirtualDisplay(_machine.Id); } catch { }
+        }
+
+        if (!_virtualDisplayLeaseActive)
+        {
+            _virtualMonitorIndex = -1;
+            return;
+        }
+
+        try
+        {
+            await _collaborationClient.RunDisplayAsync(
+                _machine,
+                new AgentDisplayRequest("release", _collaborationSettings.ControllerId));
+        }
+        finally
+        {
+            _virtualDisplayLeaseActive = false;
+            _virtualMonitorIndex = -1;
+            _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.MinValue;
+        }
+    }
+
+    private (int Width, int Height) GetPreferredVirtualDisplaySize()
+    {
+        if (_vnc.TryGetViewerWindowHandle(_machine.Id, out var viewerHandle) && viewerHandle != IntPtr.Zero)
+        {
+            var screen = System.Windows.Forms.Screen.FromHandle(viewerHandle);
+            return (
+                Math.Clamp(screen.Bounds.Width, 800, 7680),
+                Math.Clamp(screen.Bounds.Height, 600, 4320));
+        }
+
+        return (1920, 1080);
     }
 }
