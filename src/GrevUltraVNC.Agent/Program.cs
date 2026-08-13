@@ -28,6 +28,7 @@ builder.Services.AddSingleton<CommandExecutionService>();
 builder.Services.AddSingleton<FileManagementService>();
 builder.Services.AddSingleton<CollaborationService>();
 builder.Services.AddSingleton<RemoteAudioCaptureService>();
+builder.Services.AddSingleton<VirtualDisplayService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SystemTelemetryService>());
 
 var app = builder.Build();
@@ -186,6 +187,28 @@ app.MapPost(AgentProtocol.AudioPath, (
     catch (FormatException)
     {
         return Results.BadRequest(new { error = "Encrypted Grev audio payload was malformed." });
+    }
+});
+
+app.MapPost(AgentProtocol.DisplayPath, async (
+    AgentEncryptedEnvelope envelope,
+    VirtualDisplayService displays,
+    AgentConfiguration configuration,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var request = AgentPayloadCrypto.Decrypt<AgentDisplayRequest>(configuration.SharedKey, envelope);
+        var response = await displays.ExecuteAsync(request, cancellationToken);
+        return Results.Json(AgentPayloadCrypto.Encrypt(configuration.SharedKey, response));
+    }
+    catch (CryptographicException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev display payload was invalid." });
+    }
+    catch (FormatException)
+    {
+        return Results.BadRequest(new { error = "Encrypted Grev display payload was malformed." });
     }
 });
 
