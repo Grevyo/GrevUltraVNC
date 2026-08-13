@@ -4,7 +4,7 @@ using GrevUltraVNC.Contracts;
 
 namespace GrevUltraVNC.Agent;
 
-internal sealed record DisplaySessionBridgeResult(
+public sealed record DisplaySessionBridgeResult(
     bool Success,
     string Message,
     string? VirtualDeviceName,
