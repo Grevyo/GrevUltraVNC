@@ -174,13 +174,18 @@ public sealed class VirtualDisplayService : IDisposable
                     out var deviceHandle);
 
                 if (hr < 0 || deviceHandle == IntPtr.Zero)
-                    Marshal.ThrowExceptionForHR(hr);
+                    throw new InvalidOperationException(
+                        $"Windows could not start the UVnc virtual display device ({FormatHResult(hr)}).",
+                        Marshal.GetExceptionForHR(hr));
 
                 _softwareDeviceHandle = deviceHandle;
                 if (!creation.Completed.Wait(TimeSpan.FromSeconds(10), cancellationToken))
                     throw new TimeoutException("Windows timed out while creating the UVnc virtual display device.");
-                if (creation.HResult < 0)
-                    Marshal.ThrowExceptionForHR(creation.HResult);
+
+                // UltraVNC itself does not treat hrCreateResult from the callback as the final
+                // success condition. Some Windows/driver combinations report a callback HRESULT
+                // while PnP is still completing enumeration. The authoritative check below is
+                // whether an attached UVncVirtualDisplay actually appears on the Windows desktop.
             }
             finally
             {
@@ -210,8 +215,15 @@ public sealed class VirtualDisplayService : IDisposable
         }
 
         if (virtualDisplay is null)
+        {
+            var callbackDetail = creation.HResult < 0
+                ? $" Windows PnP reported {FormatHResult(creation.HResult)} while loading the display driver."
+                : string.Empty;
             throw new InvalidOperationException(
-                "The UltraVNC virtual-display driver created a software device, but Windows never attached it as an active desktop monitor.");
+                "The UVnc software device was requested, but Windows never attached it as an active desktop monitor." +
+                callbackDetail +
+                " Grev staged the UltraVNC virtual-display driver with Windows before creating the device.");
+        }
 
         ConfigureVirtualDisplay(virtualDisplay.DeviceName, width, height);
 
@@ -244,21 +256,34 @@ public sealed class VirtualDisplayService : IDisposable
             throw new FileNotFoundException(
                 "UltraVNC virtual-display driver files are missing. Reinstall UltraVNC Server with the virtual monitor component available.");
 
-        // UltraVNC provides this command specifically to stage/install its virtual monitor driver.
-        // It is safe to call again when the driver is already present; actual device creation below
-        // is the authoritative success check.
+        var pnputil = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            "System32",
+            "pnputil.exe");
+        if (!File.Exists(pnputil))
+            throw new FileNotFoundException("Windows pnputil.exe could not be found.", pnputil);
+
+        // Stage the exact INF that sits beside this UltraVNC installation. Doing this directly
+        // gives Grev a trustworthy exit code/output instead of relying on winvnc -installdriver,
+        // whose command-line path does not return useful detail to the Agent.
         var startInfo = new ProcessStartInfo
         {
-            FileName = winvnc,
+            FileName = pnputil,
             UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
             CreateNoWindow = true
         };
-        startInfo.ArgumentList.Add("-installdriver");
+        startInfo.ArgumentList.Add("/add-driver");
+        startInfo.ArgumentList.Add(inf);
+        startInfo.ArgumentList.Add("/install");
 
         using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Windows could not start UltraVNC's virtual-driver installer.");
+            ?? throw new InvalidOperationException("Windows could not start pnputil for the UltraVNC virtual-display driver.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
             await process.WaitForExitAsync(timeout.Token);
@@ -266,7 +291,16 @@ public sealed class VirtualDisplayService : IDisposable
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             try { process.Kill(entireProcessTree: true); } catch { }
-            throw new TimeoutException("UltraVNC's virtual-driver installer did not finish in time.");
+            throw new TimeoutException("Windows driver staging did not finish in time.");
+        }
+
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+        if (process.ExitCode != 0)
+        {
+            var detail = string.Join(" ", new[] { stdout, stderr }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            throw new InvalidOperationException(
+                $"Windows could not stage the UltraVNC virtual-display driver (pnputil exit {process.ExitCode}). {detail}".Trim());
         }
     }
 
@@ -417,6 +451,8 @@ public sealed class VirtualDisplayService : IDisposable
         var exe = value.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
         return exe >= 0 ? value[..(exe + 4)] : value.Split(' ', 2)[0];
     }
+
+    private static string FormatHResult(int value) => $"0x{unchecked((uint)value):X8}";
 
     private void ExpireLeases()
     {
@@ -594,9 +630,10 @@ public sealed class VirtualDisplayService : IDisposable
         public uint DmPanningHeight;
     }
 
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate void SwDeviceCreateCallback(IntPtr hSwDevice, int hResult, IntPtr context, IntPtr deviceInstanceId);
 
-    [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("cfgmgr32.dll", EntryPoint = "SwDeviceCreate", ExactSpelling = true, CharSet = CharSet.Unicode)]
     private static extern int SwDeviceCreate(
         string enumeratorName,
         string parentDeviceInstance,
@@ -607,7 +644,7 @@ public sealed class VirtualDisplayService : IDisposable
         IntPtr context,
         out IntPtr softwareDevice);
 
-    [DllImport("cfgmgr32.dll")]
+    [DllImport("cfgmgr32.dll", EntryPoint = "SwDeviceClose", ExactSpelling = true)]
     private static extern void SwDeviceClose(IntPtr softwareDevice);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
