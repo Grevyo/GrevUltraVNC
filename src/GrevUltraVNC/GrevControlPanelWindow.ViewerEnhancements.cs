@@ -19,8 +19,8 @@ public partial class GrevControlPanelWindow
 
     private void AdaptivePanel_ContentRendered(object? sender, EventArgs e)
     {
-        // The original companion-panel timer sizes itself from the viewer and was written for the
-        // old narrow 690px panel. The adaptive panel owns docking now so two loops never fight.
+        // Compatibility path for older XAML. The compact panel is the current layout and swaps
+        // this handler out in CompactPanel_ContentRendered.
         _dockTimer.Stop();
         _adaptivePanelTimer.Tick -= AdaptivePanelTimer_Tick;
         _adaptivePanelTimer.Tick += AdaptivePanelTimer_Tick;
@@ -130,11 +130,12 @@ public partial class GrevControlPanelWindow
 
         _viewerScaleDragging = false;
 
-        // Let UltraVNC finish changing its final viewer bounds, then dock once. During the drag
-        // the panel remains completely still even though the viewer is continuously resizing.
+        // Let UltraVNC finish changing its final viewer bounds, then dock the CURRENT compact
+        // panel once. Calling the retired adaptive 900px routine here caused the panel to jump or
+        // slowly grow again after a slider drag.
         await Task.Delay(650);
         if (IsLoaded)
-            DockAdaptivePanel();
+            DockCompactPanel();
     }
 
     private void ViewerScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
