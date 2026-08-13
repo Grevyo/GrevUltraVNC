@@ -3,6 +3,12 @@ using GrevUltraVNC.Agent;
 using GrevUltraVNC.Contracts;
 using Microsoft.Extensions.Hosting.WindowsServices;
 
+if (DisplaySessionHelper.TryRun(args, out var displayHelperExitCode))
+{
+    Environment.ExitCode = displayHelperExitCode;
+    return;
+}
+
 var serviceConfiguration = AgentConfiguration.LoadOrCreate();
 var options = new WebApplicationOptions
 {
