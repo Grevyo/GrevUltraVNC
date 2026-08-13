@@ -9,6 +9,10 @@ public partial class GrevControlPanelWindow
 {
     private const double CompactPanelDesiredHeight = 820d;
     private const double CompactPanelMinimumHeight = 480d;
+    private static readonly TimeSpan ViewerStartupGrace = TimeSpan.FromSeconds(12);
+
+    private readonly DateTimeOffset _compactPanelOpenedUtc = DateTimeOffset.UtcNow;
+    private bool _compactViewerWindowSeen;
 
     /// <summary>
     /// Compact-panel docking is deterministic: the panel has one normal height and only becomes
@@ -39,18 +43,28 @@ public partial class GrevControlPanelWindow
     {
         // The old companion-panel timer used to perform this session-ended check. When compact
         // docking replaced that timer the check was accidentally lost, so manually closing the
-        // UltraVNC window left the Grev panel alive. Require both the tracked session and an
-        // actual viewer window to remain present.
-        if (!_vnc.HasActiveSession(_machine.Id) ||
-            !_vnc.TryGetViewerWindowHandle(_machine.Id, out var viewerHandle) ||
-            viewerHandle == IntPtr.Zero)
+        // UltraVNC window left the Grev panel alive.
+        var trackedSessionAlive = _vnc.HasActiveSession(_machine.Id);
+        var viewerWindowAlive = _vnc.TryGetViewerWindowHandle(
+            _machine.Id,
+            out var viewerHandle) && viewerHandle != IntPtr.Zero;
+
+        if (viewerWindowAlive)
+            _compactViewerWindowSeen = true;
+
+        // During initial connection UltraVNC may need a moment before its real viewer window is
+        // created. Once that window has existed, however, its disappearance is an immediate
+        // disconnect even if vncviewer.exe itself hangs around in the background.
+        var startupGraceExpired = DateTimeOffset.UtcNow - _compactPanelOpenedUtc >= ViewerStartupGrace;
+        if (!trackedSessionAlive ||
+            (!viewerWindowAlive && (_compactViewerWindowSeen || startupGraceExpired)))
         {
             SessionStatusText.Text = "● SESSION ENDED";
             Close();
             return;
         }
 
-        if (!_viewerScaleDragging)
+        if (!_viewerScaleDragging && viewerWindowAlive)
             DockCompactPanel();
 
         // Keep the existing Screen 2 lease behaviour intact while this timer owns docking.
