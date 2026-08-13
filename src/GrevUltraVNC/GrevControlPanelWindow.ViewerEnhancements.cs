@@ -19,8 +19,6 @@ public partial class GrevControlPanelWindow
 
     private void AdaptivePanel_ContentRendered(object? sender, EventArgs e)
     {
-        // Compatibility path for older XAML. The compact panel is the current layout and swaps
-        // this handler out in CompactPanel_ContentRendered.
         _dockTimer.Stop();
         _adaptivePanelTimer.Tick -= AdaptivePanelTimer_Tick;
         _adaptivePanelTimer.Tick += AdaptivePanelTimer_Tick;
@@ -178,6 +176,7 @@ public partial class GrevControlPanelWindow
         {
             try
             {
+                await ForcePrimaryViewerToScreen1Async();
                 _vnc.BringVirtualViewerToFront(_machine.Id);
                 DisplayStatusText.Text = "Screen 1 physical · Screen 2 virtual";
             }
@@ -230,6 +229,8 @@ public partial class GrevControlPanelWindow
                 _collaborationSettings,
                 display.VirtualMonitorIndex);
 
+            await ForcePrimaryViewerToScreen1Async();
+
             EnsureCursorOverlays();
             var localHasControl = string.Equals(
                 _controlOwnerId,
@@ -255,6 +256,35 @@ public partial class GrevControlPanelWindow
         {
             _virtualDisplayStarting = false;
             UpdateDisplayState();
+        }
+    }
+
+    private async Task ForcePrimaryViewerToScreen1Async()
+    {
+        if (!_vnc.TryGetViewerWindowHandle(_machine.Id, out var viewerHandle) || viewerHandle == IntPtr.Zero)
+            return;
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var monitorPointer = Marshal.AllocHGlobal(sizeof(int));
+            try
+            {
+                Marshal.WriteInt32(monitorPointer, 0);
+                var data = new PrimaryMonitorCopyData
+                {
+                    dwData = new UIntPtr(2),
+                    cbData = sizeof(int),
+                    lpData = monitorPointer
+                };
+                SendPrimaryMonitorMessage(viewerHandle, WmCopyDataForMonitorSelection, IntPtr.Zero, ref data);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(monitorPointer);
+            }
+
+            if (attempt < 2)
+                await Task.Delay(250);
         }
     }
 
@@ -356,4 +386,21 @@ public partial class GrevControlPanelWindow
 
         return (1920, 1080);
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PrimaryMonitorCopyData
+    {
+        public UIntPtr dwData;
+        public int cbData;
+        public IntPtr lpData;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendPrimaryMonitorMessage(
+        IntPtr hWnd,
+        uint msg,
+        IntPtr wParam,
+        ref PrimaryMonitorCopyData lParam);
+
+    private const uint WmCopyDataForMonitorSelection = 0x004A;
 }
