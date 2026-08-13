@@ -32,11 +32,6 @@ public partial class GrevControlPanelWindow
 
     private async void GrevCollaboration_Loaded(object sender, RoutedEventArgs e)
     {
-        // Keep the redesigned companion panel comfortably tall. The legacy docking loop still
-        // proposes a smaller height, but WPF will respect this minimum on normal desktop sizes.
-        MinHeight = 840;
-        Height = 900;
-
         // Connecting never grants remote input automatically. The named pointer is available
         // immediately; mouse/keyboard input is enabled only after Take Control succeeds.
         _vnc.SetViewOnly(_machine.Id, true);
@@ -379,80 +374,11 @@ public partial class GrevControlPanelWindow
         }
     }
 
-    private async void VirtualDisplay_Click(object sender, RoutedEventArgs e)
-    {
-        if (_virtualDisplayStarting) return;
+    // Kept as compatibility handlers for any older XAML/code path; all Screen 2 work now goes
+    // through the Agent-owned display implementation in ViewerEnhancements.
+    private void VirtualDisplay_Click(object sender, RoutedEventArgs e) => CreateScreen2_Click(sender, e);
 
-        if (_vnc.HasVirtualSession(_machine.Id))
-        {
-            try
-            {
-                _vnc.BringVirtualViewerToFront(_machine.Id);
-                DisplayStatusText.Text = "Screen 1 physical · Screen 2 virtual";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(this, ex.Message, "Screen 2", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            return;
-        }
-
-        _virtualDisplayStarting = true;
-        VirtualDisplayButton.IsEnabled = false;
-        VirtualDisplayButton.Content = "Creating Screen 2…";
-        DisplayStatusText.Text = "Adding virtual display + selecting Screen 2…";
-        CollaborationStatusText.Text = "Creating Screen 2";
-
-        try
-        {
-            await _vnc.OpenVirtualDisplayAsync(_machine, _collaborationSettings);
-            EnsureCursorOverlays();
-            var localHasControl = string.Equals(
-                _controlOwnerId,
-                _collaborationSettings.ControllerId,
-                StringComparison.OrdinalIgnoreCase);
-            _vnc.SetViewOnly(_machine.Id, !localHasControl);
-            UpdateDisplayState();
-            CollaborationStatusText.Text = "Screen 2 ready";
-        }
-        catch (Exception ex)
-        {
-            UpdateDisplayState();
-            CollaborationStatusText.Text = "Screen 2 unavailable";
-            MessageBox.Show(this,
-                $"{ex.Message}\n\nScreen 1 has been left open. Grev now explicitly asks the second UltraVNC viewer to switch away from Screen 1 after creating the virtual display.",
-                "Virtual Screen 2",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-        finally
-        {
-            _virtualDisplayStarting = false;
-            UpdateDisplayState();
-        }
-    }
-
-    private void CloseVirtualDisplay_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            _vnc.CloseVirtualDisplay(_machine.Id);
-            if (_screen2CursorOverlay is not null)
-            {
-                try { _screen2CursorOverlay.Close(); } catch { }
-                _screen2CursorOverlay = null;
-            }
-            CollaborationStatusText.Text = "Screen 2 closed";
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Screen 2", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        finally
-        {
-            UpdateDisplayState();
-        }
-    }
+    private void CloseVirtualDisplay_Click(object sender, RoutedEventArgs e) => CloseScreen2_Click(sender, e);
 
     private void UpdateDisplayState()
     {
