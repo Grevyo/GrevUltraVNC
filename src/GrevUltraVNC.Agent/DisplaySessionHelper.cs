@@ -17,10 +17,8 @@ internal static class DisplaySessionHelper
     private const int DisplayDevicePrimaryDevice = 0x00000004;
     private const int DisplayDeviceMirroringDriver = 0x00000008;
     private const int EnumCurrentSettings = -1;
-    private const int EnumRegistrySettings = -2;
     private const uint CdsUpdateRegistry = 0x00000001;
     private const uint CdsNoReset = 0x10000000;
-    private const uint DmPosition = 0x00000020;
     private const uint DmPelsWidth = 0x00080000;
     private const uint DmPelsHeight = 0x00100000;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -46,7 +44,9 @@ internal static class DisplaySessionHelper
                 throw new InvalidOperationException("Screen 2 interactive helper arguments were invalid.");
             }
 
-            var result = CreateAndAttach(Math.Clamp(width, 800, 7680), Math.Clamp(height, 600, 4320));
+            var result = WaitForActiveAndMatchPrimary(
+                Math.Clamp(width, 800, 7680),
+                Math.Clamp(height, 600, 4320));
             WriteResult(resultPath, result);
             return result.Success ? 0 : 2;
         }
@@ -70,11 +70,10 @@ internal static class DisplaySessionHelper
         }
     }
 
-    private static DisplaySessionBridgeResult CreateAndAttach(int bootstrapWidth, int bootstrapHeight)
+    private static DisplaySessionBridgeResult WaitForActiveAndMatchPrimary(int bootstrapWidth, int bootstrapHeight)
     {
-        // bootstrapWidth/bootstrapHeight are intentionally not used as the final Screen 2 mode.
-        // Windows must first expose Screen 2 as an active desktop monitor. Only after that happens
-        // do we read the REMOTE physical primary monitor and change Screen 2 to the exact same size.
+        // The request size is only a bootstrap value retained for protocol compatibility.
+        // Do not use the controller PC's resolution to configure the remote virtual monitor.
         _ = bootstrapWidth;
         _ = bootstrapHeight;
 
@@ -82,18 +81,11 @@ internal static class DisplaySessionHelper
         var deadline = DateTime.UtcNow.AddSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
-            var devices = GetDisplayDevices();
-            var candidates = devices
-                .Where(IsVirtualDevice)
-                .OrderBy(device => (device.StateFlags & DisplayDeviceAttachedToDesktop) != 0 ? 1 : 0)
-                .ToArray();
-
-            if (candidates.Length > 0)
-            {
-                virtualDevice = candidates[0];
+            virtualDevice = GetDisplayDevices().FirstOrDefault(IsVirtualDevice);
+            if (virtualDevice is not null && !string.IsNullOrWhiteSpace(virtualDevice.Value.DeviceName))
                 break;
-            }
 
+            virtualDevice = null;
             Thread.Sleep(250);
         }
 
@@ -109,77 +101,77 @@ internal static class DisplaySessionHelper
 
         var deviceName = virtualDevice.Value.DeviceName;
 
-        // Phase 1: attach the display with its existing/default mode. Do not try to match the
-        // physical monitor's resolution until Windows reports Screen 2 as attached and active.
-        AttachDisplayBestEffort(deviceName);
-
-        AgentDisplayInfo? attachedVirtual = null;
-        List<AgentDisplayInfo> activeDisplays = [];
-        deadline = DateTime.UtcNow.AddSeconds(12);
+        // IMPORTANT: do not attach, reposition or extend the desktop here. The virtual driver
+        // already brings Screen 2 online. Wait until Windows reports it as an ACTIVE monitor first.
+        AgentDisplayInfo? virtualDisplay = null;
+        List<AgentDisplayInfo> displays = [];
+        deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline)
         {
-            activeDisplays = GetDisplays();
-            attachedVirtual = activeDisplays.FirstOrDefault(display =>
+            displays = GetDisplays();
+            virtualDisplay = displays.FirstOrDefault(display =>
                 string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
 
-            if (attachedVirtual is not null && activeDisplays.Count >= 2 &&
-                attachedVirtual.Width > 0 && attachedVirtual.Height > 0 &&
-                attachedVirtual.VncMonitorIndex >= 1)
+            if (virtualDisplay is not null &&
+                virtualDisplay.Width > 0 &&
+                virtualDisplay.Height > 0 &&
+                virtualDisplay.VncMonitorIndex >= 1)
             {
                 break;
             }
 
-            attachedVirtual = null;
+            virtualDisplay = null;
             Thread.Sleep(250);
         }
 
-        if (attachedVirtual is null)
+        if (virtualDisplay is null)
         {
             return new DisplaySessionBridgeResult(
                 false,
-                "The interactive Windows session found Grev Screen 2 but could not attach it as an active desktop display. " + DescribeDisplays(),
+                "Windows detected Grev Screen 2, but it did not become an active desktop monitor. " + DescribeDisplays(),
                 deviceName,
                 -1,
                 GetDisplays().ToArray());
         }
 
-        // Phase 2: Screen 2 is now active. Read the REMOTE physical primary monitor and change
-        // only Screen 2's resolution to match it. Do not change Screen 1 and do not span monitors.
-        var primary = activeDisplays.FirstOrDefault(display => display.IsPrimary && !display.IsVirtual)
-            ?? activeDisplays.FirstOrDefault(display => !display.IsVirtual);
+        // Screen 2 is ACTIVE now. Only at this point read the remote physical primary monitor.
+        var primary = displays.FirstOrDefault(display => display.IsPrimary && !display.IsVirtual)
+            ?? displays.FirstOrDefault(display => !display.IsVirtual);
 
         if (primary is null || primary.Width <= 0 || primary.Height <= 0)
         {
             return new DisplaySessionBridgeResult(
                 false,
-                "Screen 2 became active, but Grev could not read the remote physical primary monitor resolution.",
+                "Screen 2 is active, but Grev could not read the remote physical primary monitor resolution.",
                 deviceName,
-                attachedVirtual.VncMonitorIndex,
-                activeDisplays.ToArray());
+                virtualDisplay.VncMonitorIndex,
+                displays.ToArray());
         }
 
-        if (attachedVirtual.Width != primary.Width || attachedVirtual.Height != primary.Height)
+        // Change ONLY the virtual monitor's width/height. Its desktop position is left entirely
+        // alone so Grev does not turn the remote desktop into a combined/spanned framebuffer.
+        if (virtualDisplay.Width != primary.Width || virtualDisplay.Height != primary.Height)
         {
             if (!SetDisplayResolution(deviceName, primary.Width, primary.Height))
             {
                 return new DisplaySessionBridgeResult(
                     false,
-                    $"Screen 2 became active, but Windows would not set it to the primary monitor resolution {primary.Width}x{primary.Height}.",
+                    $"Screen 2 is active, but Windows would not set it to the physical primary resolution {primary.Width}x{primary.Height}.",
                     deviceName,
-                    attachedVirtual.VncMonitorIndex,
+                    virtualDisplay.VncMonitorIndex,
                     GetDisplays().ToArray());
             }
 
             deadline = DateTime.UtcNow.AddSeconds(12);
             while (DateTime.UtcNow < deadline)
             {
-                activeDisplays = GetDisplays();
-                attachedVirtual = activeDisplays.FirstOrDefault(display =>
+                displays = GetDisplays();
+                virtualDisplay = displays.FirstOrDefault(display =>
                     string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
 
-                if (attachedVirtual is not null &&
-                    attachedVirtual.Width == primary.Width &&
-                    attachedVirtual.Height == primary.Height)
+                if (virtualDisplay is not null &&
+                    virtualDisplay.Width == primary.Width &&
+                    virtualDisplay.Height == primary.Height)
                 {
                     break;
                 }
@@ -188,58 +180,24 @@ internal static class DisplaySessionHelper
             }
         }
 
-        if (attachedVirtual is null ||
-            attachedVirtual.Width != primary.Width ||
-            attachedVirtual.Height != primary.Height)
+        if (virtualDisplay is null ||
+            virtualDisplay.Width != primary.Width ||
+            virtualDisplay.Height != primary.Height)
         {
             return new DisplaySessionBridgeResult(
                 false,
-                $"Screen 2 is active, but it did not settle at the primary monitor resolution {primary.Width}x{primary.Height}. " + DescribeDisplays(),
+                $"Screen 2 stayed active but did not settle at {primary.Width}x{primary.Height}. " + DescribeDisplays(),
                 deviceName,
-                attachedVirtual?.VncMonitorIndex ?? -1,
+                virtualDisplay?.VncMonitorIndex ?? -1,
                 GetDisplays().ToArray());
         }
 
         return new DisplaySessionBridgeResult(
             true,
-            $"Screen 2 active at {attachedVirtual.Width}x{attachedVirtual.Height} to match the remote primary monitor; VNC monitor {attachedVirtual.VncMonitorIndex}.",
-            attachedVirtual.DeviceName,
-            attachedVirtual.VncMonitorIndex,
-            activeDisplays.ToArray());
-    }
-
-    private static void AttachDisplayBestEffort(string deviceName)
-    {
-        var attachedDisplays = GetDisplays();
-        var rightEdge = attachedDisplays
-            .Where(display => !string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
-            .Select(display => display.X + display.Width)
-            .DefaultIfEmpty(0)
-            .Max();
-
-        var mode = CreateDevMode();
-        if (!EnumDisplaySettingsEx(deviceName, EnumCurrentSettings, ref mode, 0) &&
-            !EnumDisplaySettingsEx(deviceName, EnumRegistrySettings, ref mode, 0) &&
-            !EnumDisplaySettingsEx(deviceName, 0, ref mode, 0))
-        {
-            return;
-        }
-
-        // A desktop position is required to attach an inactive monitor. Keep the monitor separate
-        // from Screen 1, but leave its existing/default resolution untouched during this phase.
-        mode.DmPositionX = rightEdge;
-        mode.DmPositionY = 0;
-        mode.DmFields = DmPosition;
-
-        var result = ChangeDisplaySettingsEx(
-            deviceName,
-            ref mode,
-            IntPtr.Zero,
-            CdsUpdateRegistry | CdsNoReset,
-            IntPtr.Zero);
-
-        if (result == 0)
-            ChangeDisplaySettingsEx(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+            $"Screen 2 active at {virtualDisplay.Width}x{virtualDisplay.Height}, matching the remote physical primary monitor.",
+            virtualDisplay.DeviceName,
+            virtualDisplay.VncMonitorIndex,
+            displays.ToArray());
     }
 
     private static bool SetDisplayResolution(string deviceName, int width, int height)
@@ -338,12 +296,9 @@ internal static class DisplaySessionHelper
         {
             var current = CreateDevMode();
             var currentOk = EnumDisplaySettingsEx(device.DeviceName, EnumCurrentSettings, ref current, 0);
-            var registry = CreateDevMode();
-            var registryOk = EnumDisplaySettingsEx(device.DeviceName, EnumRegistrySettings, ref registry, 0);
             return $"{device.DeviceName} [{device.DeviceString}] flags=0x{device.StateFlags:X8} " +
                    $"attached={((device.StateFlags & DisplayDeviceAttachedToDesktop) != 0)} " +
-                   $"virtual={IsVirtualDevice(device)} current={(currentOk ? $"{current.DmPelsWidth}x{current.DmPelsHeight}" : "none")} " +
-                   $"registry={(registryOk ? $"{registry.DmPelsWidth}x{registry.DmPelsHeight}" : "none")}";
+                   $"virtual={IsVirtualDevice(device)} current={(currentOk ? $"{current.DmPelsWidth}x{current.DmPelsHeight}" : "none")}";
         }));
     }
 
