@@ -12,6 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="VirtualDisplayService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\GrevUltraVNC.Contracts\GrevUltraVNC.Contracts.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.10" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.10" />
