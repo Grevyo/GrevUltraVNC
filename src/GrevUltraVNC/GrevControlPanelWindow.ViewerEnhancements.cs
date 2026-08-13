@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Contracts;
@@ -10,10 +11,15 @@ public partial class GrevControlPanelWindow
 {
     private readonly DispatcherTimer _adaptivePanelTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private bool _suppressScaleSlider;
+    private bool _viewerScaleDragging;
+    private DateTimeOffset _viewerScaleDockSuppressedUntil = DateTimeOffset.MinValue;
     private bool _virtualDisplayLeaseActive;
     private bool _virtualDisplayLeaseRefreshRunning;
     private DateTimeOffset _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.MinValue;
     private int _virtualMonitorIndex = -1;
+
+    private bool IsViewerScaleDockingSuppressed =>
+        _viewerScaleDragging || DateTimeOffset.UtcNow < _viewerScaleDockSuppressedUntil;
 
     private void AdaptivePanel_ContentRendered(object? sender, EventArgs e)
     {
@@ -65,6 +71,7 @@ public partial class GrevControlPanelWindow
         {
             if (string.Equals(tag, "fit", StringComparison.OrdinalIgnoreCase))
             {
+                SuppressDockingAfterScaleChange();
                 _vnc.FitToWindow(_machine.Id);
                 ZoomStatusText.Text = "Fit";
                 return;
@@ -80,6 +87,27 @@ public partial class GrevControlPanelWindow
             MessageBox.Show(this, ex.Message, "Viewer size", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
+
+    private void ViewerScaleSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _viewerScaleDragging = true;
+        _viewerScaleDockSuppressedUntil = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+    }
+
+    private void ViewerScaleSlider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e) =>
+        EndViewerScaleDrag();
+
+    private void ViewerScaleSlider_LostMouseCapture(object sender, MouseEventArgs e) =>
+        EndViewerScaleDrag();
+
+    private void EndViewerScaleDrag()
+    {
+        _viewerScaleDragging = false;
+        SuppressDockingAfterScaleChange();
+    }
+
+    private void SuppressDockingAfterScaleChange() =>
+        _viewerScaleDockSuppressedUntil = DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(750);
 
     private void ViewerScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -100,6 +128,7 @@ public partial class GrevControlPanelWindow
     private void ApplyViewerScale(int percent, bool syncSlider)
     {
         percent = Math.Clamp(percent, 10, 300);
+        SuppressDockingAfterScaleChange();
         _vnc.SetScale(_machine.Id, percent);
         ZoomStatusText.Text = $"{percent}%";
 
