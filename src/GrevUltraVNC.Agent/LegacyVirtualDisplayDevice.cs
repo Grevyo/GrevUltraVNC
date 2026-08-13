@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -142,8 +143,6 @@ internal static class LegacyVirtualDisplayDevice
                 return guid;
         }
 
-        // Display adapters class. UltraVNC's virtual display INF should declare this itself;
-        // the fallback keeps the error path deterministic if an unusual package omits ClassGuid.
         return new Guid("4d36e968-e325-11ce-bfc1-08002be10318");
     }
 
