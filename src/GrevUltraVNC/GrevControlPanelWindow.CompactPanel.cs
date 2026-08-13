@@ -37,10 +37,13 @@ public partial class GrevControlPanelWindow
 
     private async void CompactPanelTimer_Tick(object? sender, EventArgs e)
     {
-        // A running vncviewer.exe is not enough to keep the Grev session alive. UltraVNC can
-        // leave its process around after the connected viewer window has been manually closed.
-        // UltraVncSessionService now treats that as disconnected after the initial connect grace.
-        if (!_vnc.HasActiveSession(_machine.Id))
+        // The old companion-panel timer used to perform this session-ended check. When compact
+        // docking replaced that timer the check was accidentally lost, so manually closing the
+        // UltraVNC window left the Grev panel alive. Require both the tracked session and an
+        // actual viewer window to remain present.
+        if (!_vnc.HasActiveSession(_machine.Id) ||
+            !_vnc.TryGetViewerWindowHandle(_machine.Id, out var viewerHandle) ||
+            viewerHandle == IntPtr.Zero)
         {
             SessionStatusText.Text = "● SESSION ENDED";
             Close();
