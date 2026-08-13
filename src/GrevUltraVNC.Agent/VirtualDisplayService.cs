@@ -179,7 +179,7 @@ public sealed class VirtualDisplayService : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             var displays = GetDisplays();
             virtualDisplay = displays.FirstOrDefault(display =>
-                display.IsVirtual && !beforeNames.Contains(display.DeviceName));
+                !beforeNames.Contains(display.DeviceName));
             if (virtualDisplay is not null)
                 break;
             await Task.Delay(250, cancellationToken);
