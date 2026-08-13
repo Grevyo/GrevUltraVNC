@@ -14,8 +14,6 @@
   <ItemGroup>
     <Compile Remove="VirtualDisplayService.cs" />
     <Compile Remove="VirtualDisplayServiceV2.cs" />
-    <Compile Remove="DisplaySessionHelper.cs" />
-    <Compile Remove="InteractiveProcessLauncher.cs" />
   </ItemGroup>
 
   <ItemGroup>

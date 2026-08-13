@@ -27,9 +27,13 @@ public sealed class VirtualDisplayService : IDisposable
     private readonly Dictionary<string, DateTimeOffset> _leases = new(StringComparer.OrdinalIgnoreCase);
     private readonly Timer _leaseTimer;
     private readonly SecondaryUltraVncServer _secondaryServer;
+    private readonly InteractiveProcessLauncher _interactiveLauncher = new();
     private string? _virtualDeviceInstanceId;
     private int _width = 1920;
     private int _height = 1080;
+    private int _displayX;
+    private int _displayY;
+    private int _virtualMonitorIndex = SecondaryMonitorIndex;
     private bool _disposed;
 
     public VirtualDisplayService(AgentConfiguration configuration)
@@ -117,6 +121,27 @@ public sealed class VirtualDisplayService : IDisposable
         File.WriteAllText(OwnedDeviceStatePath, _virtualDeviceInstanceId);
 
         await Task.Delay(1500, cancellationToken);
+
+        // Display topology belongs to the logged-on user's interactive desktop, not Session 0.
+        // The helper reads the REMOTE primary display, gives Screen 2 the same resolution and
+        // places it directly to the right before the independent VNC server is exposed.
+        var bridge = await _interactiveLauncher.AttachDisplayAsync(_width, _height, cancellationToken);
+        if (!bridge.Success || bridge.VirtualMonitorIndex < 1)
+            throw new InvalidOperationException(bridge.Message);
+
+        _virtualMonitorIndex = bridge.VirtualMonitorIndex;
+        var virtualDisplay = bridge.Displays.FirstOrDefault(display =>
+            display.IsVirtual && display.VncMonitorIndex == bridge.VirtualMonitorIndex)
+            ?? bridge.Displays.FirstOrDefault(display => display.IsVirtual);
+
+        if (virtualDisplay is not null)
+        {
+            _displayX = virtualDisplay.X;
+            _displayY = virtualDisplay.Y;
+            _width = virtualDisplay.Width;
+            _height = virtualDisplay.Height;
+        }
+
         await _secondaryServer.StartAsync(cancellationToken);
     }
 
@@ -134,13 +159,13 @@ public sealed class VirtualDisplayService : IDisposable
                 new AgentDisplayInfo(
                     "Grev Screen 2",
                     "Grev Virtual Display",
-                    0,
-                    0,
+                    _displayX,
+                    _displayY,
                     _width,
                     _height,
                     false,
                     true,
-                    SecondaryMonitorIndex)
+                    _virtualMonitorIndex)
             }
             : Array.Empty<AgentDisplayInfo>();
 
@@ -149,7 +174,7 @@ public sealed class VirtualDisplayService : IDisposable
             message,
             active,
             active ? "Grev Screen 2" : null,
-            active ? SecondaryMonitorIndex : -1,
+            active ? _virtualMonitorIndex : -1,
             displays);
     }
 
@@ -204,6 +229,9 @@ public sealed class VirtualDisplayService : IDisposable
             LegacyVirtualDisplayDevice.TryRemove(_virtualDeviceInstanceId);
             _virtualDeviceInstanceId = null;
         }
+        _displayX = 0;
+        _displayY = 0;
+        _virtualMonitorIndex = SecondaryMonitorIndex;
         ClearOwnedDeviceState();
     }
 

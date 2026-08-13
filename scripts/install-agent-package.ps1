@@ -12,6 +12,7 @@ $installDir = Join-Path $env:ProgramFiles 'GrevUltraVNC Agent'
 $exePath = Join-Path $installDir 'GrevUltraVNC.Agent.exe'
 $dataDir = Join-Path $env:ProgramData 'GrevUltraVNC\Agent'
 $configPath = Join-Path $dataDir 'agent.json'
+$screen2ConfigDir = Join-Path $dataDir 'Screen2Server'
 
 function Wait-ProcessExit {
     param(
@@ -183,6 +184,12 @@ Copy-WithRetry -Source $sourceExe -Destination $exePath -TimeoutSeconds 30
 Write-Host 'Securing agent configuration folder...'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 & icacls.exe $dataDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'BUILTIN\Administrators:(OI)(CI)F' | Out-Null
+
+# winvnc.exe for Screen 2 is deliberately launched in the active interactive Windows session.
+# Give interactive users read-only access to this one temporary-config child folder while keeping
+# the rest of the Agent data directory restricted to SYSTEM/Administrators.
+New-Item -ItemType Directory -Force -Path $screen2ConfigDir | Out-Null
+& icacls.exe $screen2ConfigDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'BUILTIN\Administrators:(OI)(CI)F' '*S-1-5-4:(OI)(CI)RX' | Out-Null
 
 $binaryPath = [char]34 + $exePath + [char]34
 

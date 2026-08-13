@@ -69,8 +69,10 @@ public sealed class UltraVncSessionService
 
         // The Grev Agent has already created and attached the Windows virtual monitor. Viewer 2
         // must therefore be a plain VNC viewer: it must not request another display topology.
+        // Unlike Screen 1's initial collaboration gate, do not hard-force the second viewer into
+        // view-only: the control panel immediately applies the current collaboration owner state.
         var configPath = CreateSecondaryViewerConfig(machine.Id);
-        var process = StartViewer(machine, settings, configPath, startViewOnly: true);
+        var process = StartViewer(machine, settings, configPath, startViewOnly: false);
         _virtualSessions[machine.Id] = process;
 
         try
@@ -97,7 +99,6 @@ public sealed class UltraVncSessionService
                         SendMonitorSelection(process, monitorIndex);
                     }
 
-                    SetProcessViewOnly(process, true);
                     FocusViewer(process);
                     return process;
                 }
@@ -330,7 +331,7 @@ public sealed class UltraVncSessionService
         var content = """
                       [options]
                       shared=1
-                      viewonly=1
+                      viewonly=0
                       showtoolbar=1
                       fullscreen=0
                       AutoScaling=1
