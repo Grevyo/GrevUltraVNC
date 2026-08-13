@@ -6,21 +6,29 @@ using System.Text;
 namespace GrevUltraVNC.Agent;
 
 /// <summary>
-/// Fallback for hosts where the Software Device API cannot enumerate UVncVirtualDisplay.
-/// This mirrors DevCon/Device Manager's "Add legacy hardware" path: create a temporary
-/// root-enumerated device with UltraVNC's hardware ID, then bind the exact signed INF.
+/// Creates a temporary root-enumerated display device and binds an explicitly supplied signed
+/// INF package to it. This mirrors Device Manager/DevCon's "Add legacy hardware" path and is
+/// used by Grev Screen 2 for Indirect Display Driver providers.
 /// </summary>
 internal static class LegacyVirtualDisplayDevice
 {
-    private const string HardwareId = "UVncVirtualDisplay";
     private const uint DicdGenerateId = 0x00000001;
     private const uint SpdrpHardwareId = 0x00000001;
     private const uint DifRegisterDevice = 0x00000019;
     private const uint InstallFlagForce = 0x00000001;
     private const uint InstallFlagNonInteractive = 0x00000004;
 
-    public static string Create(string infPath)
+    public static string Create(
+        string infPath,
+        string hardwareId,
+        string deviceNodeName,
+        string deviceDescription)
     {
+        if (string.IsNullOrWhiteSpace(infPath) || !File.Exists(infPath))
+            throw new FileNotFoundException("The Screen 2 display-driver INF could not be found.", infPath);
+        if (string.IsNullOrWhiteSpace(hardwareId))
+            throw new ArgumentException("A Screen 2 hardware ID is required.", nameof(hardwareId));
+
         var classGuid = ReadClassGuid(infPath);
         var deviceInfoSet = SetupDiCreateDeviceInfoList(ref classGuid, IntPtr.Zero);
         if (deviceInfoSet == new IntPtr(-1))
@@ -36,17 +44,17 @@ internal static class LegacyVirtualDisplayDevice
 
             if (!SetupDiCreateDeviceInfo(
                     deviceInfoSet,
-                    "GrevUVncVirtualDisplay",
+                    deviceNodeName,
                     ref classGuid,
-                    "Grev UltraVNC Virtual Display",
+                    deviceDescription,
                     IntPtr.Zero,
                     DicdGenerateId,
                     ref deviceInfo))
             {
-                ThrowLastWin32("Windows could not create the temporary Screen 2 device node");
+                ThrowLastWin32("Windows could not create the temporary Screen 2 display device");
             }
 
-            var hardwareIds = Encoding.Unicode.GetBytes(HardwareId + "\0\0");
+            var hardwareIds = Encoding.Unicode.GetBytes(hardwareId + "\0\0");
             if (!SetupDiSetDeviceRegistryProperty(
                     deviceInfoSet,
                     ref deviceInfo,
@@ -54,7 +62,7 @@ internal static class LegacyVirtualDisplayDevice
                     hardwareIds,
                     (uint)hardwareIds.Length))
             {
-                ThrowLastWin32("Windows could not assign the UltraVNC hardware ID to Screen 2");
+                ThrowLastWin32("Windows could not assign the Screen 2 hardware ID");
             }
 
             if (!SetupDiCallClassInstaller(DifRegisterDevice, deviceInfoSet, ref deviceInfo))
@@ -65,17 +73,17 @@ internal static class LegacyVirtualDisplayDevice
             var rebootRequired = false;
             if (!UpdateDriverForPlugAndPlayDevices(
                     IntPtr.Zero,
-                    HardwareId,
+                    hardwareId,
                     Path.GetFullPath(infPath),
                     InstallFlagForce | InstallFlagNonInteractive,
                     out rebootRequired))
             {
-                ThrowLastWin32("Windows created the Screen 2 device node but could not bind the UltraVNC display driver");
+                ThrowLastWin32("Windows created Screen 2 but could not bind its display driver");
             }
 
             if (rebootRequired)
                 throw new InvalidOperationException(
-                    "Windows says the UltraVNC virtual-display driver requires a restart before Screen 2 can be used.");
+                    "Windows says the Screen 2 display driver requires a restart before it can be used.");
 
             return instanceId;
         }
@@ -89,6 +97,24 @@ internal static class LegacyVirtualDisplayDevice
         {
             SetupDiDestroyDeviceInfoList(deviceInfoSet);
         }
+    }
+
+    public static string DescribeStatus(string instanceId)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId))
+            return "No device instance ID is available.";
+
+        var locate = CM_Locate_DevNode(out var devInst, instanceId, 0);
+        if (locate != 0)
+            return $"Windows PnP could not locate the new display device (CONFIGRET 0x{locate:X8}).";
+
+        var statusResult = CM_Get_DevNode_Status(out var status, out var problemNumber, devInst, 0);
+        if (statusResult != 0)
+            return $"Windows PnP could not read the display-device status (CONFIGRET 0x{statusResult:X8}).";
+
+        return problemNumber == 0
+            ? $"PnP status 0x{status:X8}; Windows reports no device problem code."
+            : $"PnP status 0x{status:X8}; device problem code {problemNumber}.";
     }
 
     public static void TryRemove(string instanceId)
@@ -124,7 +150,8 @@ internal static class LegacyVirtualDisplayDevice
         }
         catch
         {
-            // Removal is best-effort. A subsequent Agent start/session can clean up a stale node.
+            // Removal is best-effort. A subsequent Agent start/session cleans up the exact
+            // Grev-owned instance ID persisted by VirtualDisplayService.
         }
     }
 
@@ -229,4 +256,14 @@ internal static class LegacyVirtualDisplayDevice
         string fullInfPath,
         uint installFlags,
         [MarshalAs(UnmanagedType.Bool)] out bool rebootRequired);
+
+    [DllImport("cfgmgr32.dll", EntryPoint = "CM_Locate_DevNodeW", CharSet = CharSet.Unicode)]
+    private static extern uint CM_Locate_DevNode(out uint deviceInstance, string deviceId, uint flags);
+
+    [DllImport("cfgmgr32.dll")]
+    private static extern uint CM_Get_DevNode_Status(
+        out uint status,
+        out uint problemNumber,
+        uint deviceInstance,
+        uint flags);
 }
