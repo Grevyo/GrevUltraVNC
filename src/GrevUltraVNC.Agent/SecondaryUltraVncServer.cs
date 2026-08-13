@@ -28,12 +28,11 @@ public sealed class SecondaryUltraVncServer : IDisposable
         ? _configuration.UltraVncPort + 1
         : throw new InvalidOperationException("Screen 2 needs a second VNC port, but the primary VNC port is already 65535.");
 
-    public async Task<int> StartAsync(string controllerAddress, CancellationToken cancellationToken)
+    public async Task<int> StartAsync(CancellationToken cancellationToken)
     {
         Stop();
 
-        controllerAddress = NormalizeControllerAddress(controllerAddress);
-
+        var controllerAddress = FindPrimaryVncControllerAddress();
         var serviceImagePath = ReadServiceImagePath();
         var serverPath = FindServerPath(serviceImagePath)
             ?? throw new InvalidOperationException("Grev could not find winvnc.exe on the target PC.");
@@ -45,10 +44,10 @@ public sealed class SecondaryUltraVncServer : IDisposable
         _configPath = Path.Combine(directory, "ultravnc-screen2.ini");
         File.Copy(sourceConfig, _configPath, true);
 
-        // Screen 2 is a short-lived independent server. It is created only through the already
-        // authenticated/encrypted Grev Agent API and is restricted to the exact controller IP
-        // that requested it. This avoids relying on a second UltraVNC password database while
-        // preventing other LAN hosts from using the temporary listener.
+        // Screen 2 is a short-lived independent server. It is only created while Screen 1 is
+        // already connected. Restrict the temporary listener to the one remote IP that currently
+        // owns the established primary UltraVNC connection, then disable password/MS-Logon auth
+        // for this isolated instance. Every other host is rejected by UltraVNC's AuthHosts rules.
         SetIniValue(_configPath, "admin", "SocketConnect", "1");
         SetIniValue(_configPath, "admin", "AutoPortSelect", "0");
         SetIniValue(_configPath, "admin", "PortNumber", Port.ToString());
@@ -62,9 +61,6 @@ public sealed class SecondaryUltraVncServer : IDisposable
         SetIniValue(_configPath, "admin", "QueryIfNoLogon", "0");
         SetIniValue(_configPath, "admin", "AuthHosts", $"-:+{controllerAddress}:");
 
-        // This process is already launched inside the logged-in user's interactive desktop.
-        // Use UltraVNC's normal app mode so Screen 2 is fully independent from the primary
-        // UltraVNC service worker and its global monitor-selection state.
         _process = LaunchInActiveSession(
             serverPath,
             $"-config \"{_configPath}\" -multi -run");
@@ -110,18 +106,45 @@ public sealed class SecondaryUltraVncServer : IDisposable
         }
     }
 
-    private static string NormalizeControllerAddress(string value)
+    private string FindPrimaryVncControllerAddress()
     {
-        if (!IPAddress.TryParse(value?.Trim(), out var address))
-            throw new InvalidOperationException("Grev could not determine the requesting controller IP for the temporary Screen 2 server.");
+        try
+        {
+            var addresses = IPGlobalProperties.GetIPGlobalProperties()
+                .GetActiveTcpConnections()
+                .Where(connection =>
+                    connection.State == TcpState.Established &&
+                    connection.LocalEndPoint.Port == _configuration.UltraVncPort)
+                .Select(connection => NormalizeAddress(connection.RemoteEndPoint.Address))
+                .Where(address => address is not null)
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
+            return addresses.Count switch
+            {
+                1 => addresses[0],
+                0 => throw new InvalidOperationException(
+                    $"Screen 2 could not find an established Screen 1 UltraVNC connection on TCP {_configuration.UltraVncPort}. Open Screen 1 first, then create Screen 2."),
+                _ => throw new InvalidOperationException(
+                    "Screen 2 found more than one remote IP connected to the primary UltraVNC server, so Grev cannot safely decide which host should be allowed onto the temporary Screen 2 server.")
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Grev could not identify the current Screen 1 controller address for Screen 2.", ex);
+        }
+    }
+
+    private static string? NormalizeAddress(IPAddress address)
+    {
         if (address.IsIPv4MappedToIPv6)
             address = address.MapToIPv4();
-
-        if (IPAddress.IsLoopback(address))
-            throw new InvalidOperationException("Grev received a loopback controller address and will not expose Screen 2 without a remote-host restriction.");
-
-        return address.ToString();
+        return IPAddress.IsLoopback(address) ? null : address.ToString();
     }
 
     private static string? ReadServiceImagePath()
