@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "screen2-activation-order-1.0.10"]
   pull_request:
 
 permissions:
