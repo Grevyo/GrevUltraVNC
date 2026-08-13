@@ -1,6 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using GrevUltraVNC.Contracts;
@@ -17,17 +15,6 @@ public sealed class VirtualDisplayService : IDisposable
     private const string DriverHardwareId = @"Root\MttVDD";
     private const string DriverInfName = "MttVDD.inf";
     private const string DriverCatalogName = "mttvdd.cat";
-
-    private const int DisplayDeviceAttachedToDesktop = 0x00000001;
-    private const int DisplayDevicePrimaryDevice = 0x00000004;
-    private const int DisplayDeviceMirroringDriver = 0x00000008;
-    private const int EnumCurrentSettings = -1;
-    private const int EnumRegistrySettings = -2;
-    private const uint CdsUpdateRegistry = 0x00000001;
-    private const uint CdsNoReset = 0x10000000;
-    private const uint DmPosition = 0x00000020;
-    private const uint DmPelsWidth = 0x00080000;
-    private const uint DmPelsHeight = 0x00100000;
     private static readonly TimeSpan LeaseLifetime = TimeSpan.FromSeconds(30);
 
     private static readonly string AgentDataDirectory = Path.Combine(
@@ -45,15 +32,19 @@ public sealed class VirtualDisplayService : IDisposable
         AgentDataDirectory,
         "screen2-device.txt");
 
+    private readonly InteractiveProcessLauncher _interactiveProcessLauncher;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, DateTimeOffset> _leases = new(StringComparer.OrdinalIgnoreCase);
     private readonly Timer _leaseTimer;
     private string? _virtualDeviceInstanceId;
     private string? _virtualDeviceName;
+    private AgentDisplayInfo? _virtualDisplay;
+    private IReadOnlyList<AgentDisplayInfo> _lastDisplays = Array.Empty<AgentDisplayInfo>();
     private bool _disposed;
 
-    public VirtualDisplayService()
+    public VirtualDisplayService(InteractiveProcessLauncher interactiveProcessLauncher)
     {
+        _interactiveProcessLauncher = interactiveProcessLauncher;
         Directory.CreateDirectory(AgentDataDirectory);
         CleanupStaleOwnedDevice();
         _leaseTimer = new Timer(_ => ExpireLeases(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
@@ -81,8 +72,7 @@ public sealed class VirtualDisplayService : IDisposable
                     var height = Math.Clamp(request.Height, 600, 4320);
                     _leases[controllerId] = DateTimeOffset.UtcNow;
 
-                    if (string.IsNullOrWhiteSpace(_virtualDeviceInstanceId) ||
-                        FindOwnedVirtualDisplay(GetDisplays()) is null)
+                    if (string.IsNullOrWhiteSpace(_virtualDeviceInstanceId) || _virtualDisplay is null)
                     {
                         try
                         {
@@ -96,20 +86,15 @@ public sealed class VirtualDisplayService : IDisposable
                         }
                     }
 
-                    var displays = GetDisplays();
-                    var virtualDisplay = FindOwnedVirtualDisplay(displays);
-                    if (virtualDisplay is null || displays.Count < 2)
+                    if (_virtualDisplay is null || _lastDisplays.Count < 2 || _virtualDisplay.VncMonitorIndex < 1)
                     {
                         _leases.Remove(controllerId);
                         ReleaseDeviceUnsafe();
-                        return Snapshot(false,
-                            "Windows did not attach Grev Screen 2 to the desktop. " + DescribeDisplays());
+                        return Snapshot(false, "Windows did not expose Grev Screen 2 as a usable extended desktop display.");
                     }
 
-                    _virtualDeviceName = virtualDisplay.DeviceName;
                     return Snapshot(true,
-                        $"Screen 2 ready: {virtualDisplay.Width}x{virtualDisplay.Height} on VNC monitor {virtualDisplay.VncMonitorIndex}.",
-                        displays);
+                        $"Screen 2 ready: {_virtualDisplay.Width}x{_virtualDisplay.Height} on VNC monitor {_virtualDisplay.VncMonitorIndex}.");
                 }
 
                 case "heartbeat":
@@ -150,12 +135,6 @@ public sealed class VirtualDisplayService : IDisposable
     {
         ReleaseDeviceUnsafe();
 
-        // A new IDD can be enumerated before Windows marks it ATTACHED_TO_DESKTOP.
-        // Therefore detection must use the raw display-adapter list, not GetDisplays().
-        var beforeNames = GetDisplayDevices()
-            .Select(device => device.DeviceName)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         var infPath = await EnsureDriverAsync(cancellationToken);
         _virtualDeviceInstanceId = LegacyVirtualDisplayDevice.Create(
             infPath,
@@ -164,139 +143,32 @@ public sealed class VirtualDisplayService : IDisposable
             "Grev Virtual Display");
         PersistOwnedDevice(_virtualDeviceInstanceId);
 
-        DisplayDevice? createdDevice = null;
-        var deadline = DateTime.UtcNow.AddSeconds(20);
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var devices = GetDisplayDevices();
-            var newDevices = devices
-                .Where(device => !beforeNames.Contains(device.DeviceName))
-                .ToArray();
+        // The Agent service runs in Session 0. Windows display APIs such as EnumDisplayDevices
+        // enumerate the current session, so all desktop discovery/attach work must happen inside
+        // the logged-in interactive Windows session rather than in this service process.
+        var interactiveResult = await _interactiveProcessLauncher.AttachDisplayAsync(
+            width,
+            height,
+            cancellationToken);
 
-            var preferred = newDevices.FirstOrDefault(IsVirtualDevice);
-            if (!string.IsNullOrWhiteSpace(preferred.DeviceName))
-            {
-                createdDevice = preferred;
-                break;
-            }
-
-            if (newDevices.Length > 0)
-            {
-                createdDevice = newDevices[0];
-                break;
-            }
-
-            var virtualDevices = devices.Where(IsVirtualDevice).ToArray();
-            if (virtualDevices.Length == 1)
-            {
-                createdDevice = virtualDevices[0];
-                break;
-            }
-
-            await Task.Delay(250, cancellationToken);
-        }
-
-        if (createdDevice is null)
+        if (!interactiveResult.Success)
         {
             var pnp = LegacyVirtualDisplayDevice.DescribeStatus(_virtualDeviceInstanceId);
+            throw new InvalidOperationException(interactiveResult.Message + " " + pnp);
+        }
+
+        _virtualDeviceName = interactiveResult.VirtualDeviceName;
+        _lastDisplays = interactiveResult.Displays;
+        _virtualDisplay = _lastDisplays.FirstOrDefault(display =>
+            string.Equals(display.DeviceName, _virtualDeviceName, StringComparison.OrdinalIgnoreCase))
+            ?? _lastDisplays.FirstOrDefault(display => display.IsVirtual);
+
+        if (_virtualDisplay is null || _lastDisplays.Count < 2 || _virtualDisplay.VncMonitorIndex < 1)
+        {
             throw new InvalidOperationException(
-                "Grev created the Screen 2 PnP device, but GDI did not enumerate a display adapter for it. " +
-                pnp + " " + DescribeDisplays());
+                "The interactive Windows session attached Screen 2 but did not return a usable VNC monitor index. " +
+                interactiveResult.Message);
         }
-
-        _virtualDeviceName = createdDevice.Value.DeviceName;
-        AttachDisplayBestEffort(_virtualDeviceName, width, height);
-
-        deadline = DateTime.UtcNow.AddSeconds(12);
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var displays = GetDisplays();
-            var virtualDisplay = FindOwnedVirtualDisplay(displays);
-            if (virtualDisplay is not null && displays.Count >= 2 &&
-                virtualDisplay.Width > 0 && virtualDisplay.Height > 0)
-            {
-                return;
-            }
-
-            await Task.Delay(250, cancellationToken);
-        }
-
-        throw new InvalidOperationException(
-            "Windows enumerated Grev Screen 2 but did not attach it as an extended desktop display. " +
-            DescribeDisplays());
-    }
-
-    private static void AttachDisplayBestEffort(string deviceName, int requestedWidth, int requestedHeight)
-    {
-        var attachedDisplays = GetDisplays();
-        var rightEdge = attachedDisplays
-            .Where(display => !string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
-            .Select(display => display.X + display.Width)
-            .DefaultIfEmpty(0)
-            .Max();
-
-        var mode = CreateDevMode();
-        if (!EnumDisplaySettingsEx(deviceName, EnumCurrentSettings, ref mode, 0) &&
-            !EnumDisplaySettingsEx(deviceName, EnumRegistrySettings, ref mode, 0) &&
-            !EnumDisplaySettingsEx(deviceName, 0, ref mode, 0))
-        {
-            return;
-        }
-
-        mode.DmPositionX = rightEdge;
-        mode.DmPositionY = 0;
-        mode.DmFields |= DmPosition;
-
-        var useRequestedSize = SupportsMode(deviceName, requestedWidth, requestedHeight);
-        if (useRequestedSize)
-        {
-            mode.DmPelsWidth = (uint)requestedWidth;
-            mode.DmPelsHeight = (uint)requestedHeight;
-            mode.DmFields |= DmPelsWidth | DmPelsHeight;
-        }
-
-        var result = ChangeDisplaySettingsEx(
-            deviceName,
-            ref mode,
-            IntPtr.Zero,
-            CdsUpdateRegistry | CdsNoReset,
-            IntPtr.Zero);
-
-        if (result != 0 && useRequestedSize)
-        {
-            mode = CreateDevMode();
-            if (EnumDisplaySettingsEx(deviceName, EnumRegistrySettings, ref mode, 0) ||
-                EnumDisplaySettingsEx(deviceName, 0, ref mode, 0))
-            {
-                mode.DmPositionX = rightEdge;
-                mode.DmPositionY = 0;
-                mode.DmFields |= DmPosition;
-                result = ChangeDisplaySettingsEx(
-                    deviceName,
-                    ref mode,
-                    IntPtr.Zero,
-                    CdsUpdateRegistry | CdsNoReset,
-                    IntPtr.Zero);
-            }
-        }
-
-        if (result == 0)
-            ChangeDisplaySettingsEx(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
-    }
-
-    private static bool SupportsMode(string deviceName, int width, int height)
-    {
-        for (var index = 0; index < 512; index++)
-        {
-            var mode = CreateDevMode();
-            if (!EnumDisplaySettingsEx(deviceName, index, ref mode, 0))
-                break;
-            if (mode.DmPelsWidth == (uint)width && mode.DmPelsHeight == (uint)height)
-                return true;
-        }
-        return false;
     }
 
     private static async Task<string> EnsureDriverAsync(CancellationToken cancellationToken)
@@ -329,14 +201,23 @@ public sealed class VirtualDisplayService : IDisposable
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken);
                 response.EnsureSuccessStatusCode();
-                await using var output = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+                await using var output = new FileStream(
+                    zipPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    81920,
+                    useAsync: true);
                 await response.Content.CopyToAsync(output, cancellationToken);
             }
 
             var actualHash = Convert.ToHexString(
                 SHA256.HashData(await File.ReadAllBytesAsync(zipPath, cancellationToken)));
             if (!string.Equals(actualHash, DriverAssetSha256, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("The Screen 2 driver download failed integrity verification.");
+            {
+                throw new InvalidOperationException(
+                    $"The Screen 2 driver download failed integrity verification. Expected {DriverAssetSha256}, got {actualHash}.");
+            }
 
             var payload = Path.Combine(staging, "payload");
             ZipFile.ExtractToDirectory(zipPath, payload, true);
@@ -392,113 +273,20 @@ public sealed class VirtualDisplayService : IDisposable
         }
     }
 
-    private AgentDisplayResponse Snapshot(
-        bool success,
-        string message,
-        IReadOnlyList<AgentDisplayInfo>? knownDisplays = null)
+    private AgentDisplayResponse Snapshot(bool success, string message)
     {
-        var displays = knownDisplays ?? GetDisplays();
-        var virtualDisplay = FindOwnedVirtualDisplay(displays);
+        var active = !string.IsNullOrWhiteSpace(_virtualDeviceInstanceId) &&
+                     _virtualDisplay is not null &&
+                     _lastDisplays.Count >= 2;
+
         return new AgentDisplayResponse(
             success,
             message,
-            virtualDisplay is not null && displays.Count >= 2,
-            virtualDisplay?.DeviceName ?? _virtualDeviceName,
-            virtualDisplay?.VncMonitorIndex ?? -1,
-            displays);
+            active,
+            _virtualDisplay?.DeviceName ?? _virtualDeviceName,
+            _virtualDisplay?.VncMonitorIndex ?? -1,
+            _lastDisplays);
     }
-
-    private AgentDisplayInfo? FindOwnedVirtualDisplay(IReadOnlyList<AgentDisplayInfo> displays)
-    {
-        if (string.IsNullOrWhiteSpace(_virtualDeviceInstanceId))
-            return null;
-
-        if (!string.IsNullOrWhiteSpace(_virtualDeviceName))
-        {
-            var exact = displays.FirstOrDefault(display =>
-                string.Equals(display.DeviceName, _virtualDeviceName, StringComparison.OrdinalIgnoreCase));
-            if (exact is not null)
-                return exact;
-        }
-
-        return displays.FirstOrDefault(display => display.IsVirtual);
-    }
-
-    private static List<AgentDisplayInfo> GetDisplays()
-    {
-        var result = new List<AgentDisplayInfo>();
-        var nonPrimaryIndex = 1;
-
-        foreach (var device in GetDisplayDevices())
-        {
-            if ((device.StateFlags & DisplayDeviceAttachedToDesktop) == 0 ||
-                (device.StateFlags & DisplayDeviceMirroringDriver) != 0)
-                continue;
-
-            var mode = CreateDevMode();
-            if (!EnumDisplaySettingsEx(device.DeviceName, EnumCurrentSettings, ref mode, 0))
-                continue;
-
-            var isPrimary = (device.StateFlags & DisplayDevicePrimaryDevice) != 0;
-            result.Add(new AgentDisplayInfo(
-                device.DeviceName,
-                device.DeviceString,
-                mode.DmPositionX,
-                mode.DmPositionY,
-                (int)mode.DmPelsWidth,
-                (int)mode.DmPelsHeight,
-                isPrimary,
-                IsVirtualDevice(device),
-                isPrimary ? 0 : nonPrimaryIndex++));
-        }
-
-        return result;
-    }
-
-    private static List<DisplayDevice> GetDisplayDevices()
-    {
-        var result = new List<DisplayDevice>();
-        for (uint index = 0; ; index++)
-        {
-            var device = CreateDisplayDevice();
-            if (!EnumDisplayDevices(null, index, ref device, 0))
-                break;
-            result.Add(device);
-        }
-        return result;
-    }
-
-    private static string DescribeDisplays()
-    {
-        try
-        {
-            var devices = GetDisplayDevices();
-            if (devices.Count == 0)
-                return "GDI returned no display adapters.";
-
-            return "GDI: " + string.Join(" | ", devices.Select(device =>
-            {
-                var current = CreateDevMode();
-                var currentOk = EnumDisplaySettingsEx(device.DeviceName, EnumCurrentSettings, ref current, 0);
-                var registry = CreateDevMode();
-                var registryOk = EnumDisplaySettingsEx(device.DeviceName, EnumRegistrySettings, ref registry, 0);
-                return $"{device.DeviceName} [{device.DeviceString}] flags=0x{device.StateFlags:X8} " +
-                       $"attached={((device.StateFlags & DisplayDeviceAttachedToDesktop) != 0)} " +
-                       $"virtual={IsVirtualDevice(device)} current={(currentOk ? $"{current.DmPelsWidth}x{current.DmPelsHeight}" : "none")} " +
-                       $"registry={(registryOk ? $"{registry.DmPelsWidth}x{registry.DmPelsHeight}" : "none")}";
-            }));
-        }
-        catch (Exception ex)
-        {
-            return "Display diagnostics failed: " + ex.Message;
-        }
-    }
-
-    private static bool IsVirtualDevice(DisplayDevice device) =>
-        device.DeviceString.Contains("Virtual Display Driver", StringComparison.OrdinalIgnoreCase) ||
-        device.DeviceString.Contains("MttVDD", StringComparison.OrdinalIgnoreCase) ||
-        device.DeviceString.Contains("Grev Virtual Display", StringComparison.OrdinalIgnoreCase) ||
-        device.DeviceId.Contains("MttVDD", StringComparison.OrdinalIgnoreCase);
 
     private void CleanupStaleOwnedDevice()
     {
@@ -556,25 +344,12 @@ public sealed class VirtualDisplayService : IDisposable
             LegacyVirtualDisplayDevice.TryRemove(_virtualDeviceInstanceId);
             _virtualDeviceInstanceId = null;
         }
+
         _virtualDeviceName = null;
+        _virtualDisplay = null;
+        _lastDisplays = Array.Empty<AgentDisplayInfo>();
         ClearOwnedDeviceState();
     }
-
-    private static DisplayDevice CreateDisplayDevice() => new()
-    {
-        Cb = Marshal.SizeOf<DisplayDevice>(),
-        DeviceName = string.Empty,
-        DeviceString = string.Empty,
-        DeviceId = string.Empty,
-        DeviceKey = string.Empty
-    };
-
-    private static DevMode CreateDevMode() => new()
-    {
-        DmDeviceName = string.Empty,
-        DmFormName = string.Empty,
-        DmSize = (ushort)Marshal.SizeOf<DevMode>()
-    };
 
     private void ThrowIfDisposed()
     {
@@ -599,82 +374,4 @@ public sealed class VirtualDisplayService : IDisposable
             _gate.Dispose();
         }
     }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct DisplayDevice
-    {
-        public int Cb;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
-        public int StateFlags;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceId;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct DevMode
-    {
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DmDeviceName;
-        public ushort DmSpecVersion;
-        public ushort DmDriverVersion;
-        public ushort DmSize;
-        public ushort DmDriverExtra;
-        public uint DmFields;
-        public int DmPositionX;
-        public int DmPositionY;
-        public uint DmDisplayOrientation;
-        public uint DmDisplayFixedOutput;
-        public short DmColor;
-        public short DmDuplex;
-        public short DmYResolution;
-        public short DmTTOption;
-        public short DmCollate;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DmFormName;
-        public ushort DmLogPixels;
-        public uint DmBitsPerPel;
-        public uint DmPelsWidth;
-        public uint DmPelsHeight;
-        public uint DmDisplayFlags;
-        public uint DmDisplayFrequency;
-        public uint DmICMMethod;
-        public uint DmICMIntent;
-        public uint DmMediaType;
-        public uint DmDitherType;
-        public uint DmReserved1;
-        public uint DmReserved2;
-        public uint DmPanningWidth;
-        public uint DmPanningHeight;
-    }
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EnumDisplayDevices(
-        string? device,
-        uint deviceIndex,
-        ref DisplayDevice displayDevice,
-        uint flags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EnumDisplaySettingsEx(
-        string deviceName,
-        int modeNum,
-        ref DevMode devMode,
-        uint flags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int ChangeDisplaySettingsEx(
-        string deviceName,
-        ref DevMode devMode,
-        IntPtr hwnd,
-        uint flags,
-        IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "ChangeDisplaySettingsExW")]
-    private static extern int ChangeDisplaySettingsEx(
-        IntPtr deviceName,
-        IntPtr devMode,
-        IntPtr hwnd,
-        uint flags,
-        IntPtr lParam);
 }
