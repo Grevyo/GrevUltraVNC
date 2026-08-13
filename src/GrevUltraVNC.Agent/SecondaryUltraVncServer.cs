@@ -13,6 +13,7 @@ public sealed class SecondaryUltraVncServer : IDisposable
     private const uint MaximumAllowed = 0x02000000;
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint DetachedProcess = 0x00000008;
+    private const int UltraVncPasswordSize = 8;
 
     private readonly AgentConfiguration _configuration;
     private Process? _process;
@@ -42,12 +43,27 @@ public sealed class SecondaryUltraVncServer : IDisposable
         _configPath = Path.Combine(directory, "ultravnc-screen2.ini");
         File.Copy(sourceConfig, _configPath, true);
 
-        // Preserve the primary server's authentication/password settings exactly. Only isolate
-        // the listener and disable HTTP for this temporary Screen 2 server.
+        if (!HasStoredVncPassword(_configPath))
+        {
+            throw new InvalidOperationException(
+                $"Grev found the UltraVNC configuration at '{sourceConfig}', but it does not contain a valid stored VNC password. " +
+                "The primary UltraVNC service may be using a different configuration file.");
+        }
+
+        // UltraVNC stores passwd/passwd2 with WritePrivateProfileStruct rather than as ordinary
+        // text values. Never rewrite the whole INI with File.WriteAllLines: doing so can invalidate
+        // those structured password entries. Change only the settings we own using the same Win32
+        // profile API family UltraVNC itself uses.
         SetIniValue(_configPath, "admin", "SocketConnect", "1");
         SetIniValue(_configPath, "admin", "AutoPortSelect", "0");
         SetIniValue(_configPath, "admin", "PortNumber", Port.ToString());
         SetIniValue(_configPath, "admin", "HTTPConnect", "0");
+
+        if (!HasStoredVncPassword(_configPath))
+        {
+            throw new InvalidOperationException(
+                "Grev could not preserve UltraVNC's stored password while preparing the temporary Screen 2 server configuration.");
+        }
 
         // This process is already launched inside the logged-in user's interactive desktop.
         // Use UltraVNC's normal app mode so Screen 2 is fully independent from the primary
@@ -128,35 +144,55 @@ public sealed class SecondaryUltraVncServer : IDisposable
 
     private static string? FindPrimaryConfig(string serverPath, string? serviceImagePath)
     {
+        var candidates = new List<string>();
+
         var explicitConfig = ExtractConfigPath(serviceImagePath);
         if (!string.IsNullOrWhiteSpace(explicitConfig))
         {
             explicitConfig = Environment.ExpandEnvironmentVariables(explicitConfig);
             if (!Path.IsPathRooted(explicitConfig))
                 explicitConfig = Path.GetFullPath(explicitConfig, Path.GetDirectoryName(serverPath) ?? Environment.CurrentDirectory);
-            if (File.Exists(explicitConfig))
-                return explicitConfig;
+            candidates.Add(explicitConfig);
         }
 
         var serverDirectory = Path.GetDirectoryName(serverPath) ?? string.Empty;
         var portableMarker = Path.Combine(serverDirectory, "ultravnc.portable");
         if (File.Exists(portableMarker))
-        {
-            var portableConfig = Path.Combine(serverDirectory, "ultravnc.ini");
-            if (File.Exists(portableConfig))
-                return portableConfig;
-        }
+            candidates.Add(Path.Combine(serverDirectory, "ultravnc.ini"));
 
-        // UltraVNC 1.8.x admin/service mode uses ProgramData by default. Prefer the same
-        // configuration as the actual service rather than a stale install-folder INI.
+        // UltraVNC 1.8.x admin/service mode normally uses ProgramData. Include the known legacy
+        // locations too, then prefer whichever existing config actually contains a VNC password.
         var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        var candidates = new[]
+        candidates.Add(Path.Combine(programData, "UltraVNC", "ultravnc.ini"));
+        candidates.Add(Path.Combine(programData, "uvnc bvba", "UltraVNC", "ultravnc.ini"));
+        candidates.Add(Path.Combine(serverDirectory, "ultravnc.ini"));
+
+        var existing = candidates
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return existing.FirstOrDefault(HasStoredVncPassword)
+            ?? existing.FirstOrDefault();
+    }
+
+    private static bool HasStoredVncPassword(string path)
+    {
+        try
         {
-            Path.Combine(programData, "UltraVNC", "ultravnc.ini"),
-            Path.Combine(programData, "uvnc bvba", "UltraVNC", "ultravnc.ini"),
-            Path.Combine(serverDirectory, "ultravnc.ini")
-        };
-        return candidates.FirstOrDefault(File.Exists);
+            var password = new byte[UltraVncPasswordSize];
+            return GetPrivateProfileStruct(
+                       "UltraVNC",
+                       "passwd",
+                       password,
+                       (uint)password.Length,
+                       path) &&
+                   password.Any(value => value != 0);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string? ExtractExecutablePath(string? imagePath)
@@ -257,40 +293,8 @@ public sealed class SecondaryUltraVncServer : IDisposable
 
     private static void SetIniValue(string path, string section, string key, string value)
     {
-        var lines = File.ReadAllLines(path).ToList();
-        var sectionHeader = $"[{section}]";
-        var sectionIndex = lines.FindIndex(line => string.Equals(line.Trim(), sectionHeader, StringComparison.OrdinalIgnoreCase));
-        if (sectionIndex < 0)
-        {
-            if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines[^1])) lines.Add(string.Empty);
-            lines.Add(sectionHeader);
-            lines.Add($"{key}={value}");
-            File.WriteAllLines(path, lines);
-            return;
-        }
-
-        var end = lines.Count;
-        for (var i = sectionIndex + 1; i < lines.Count; i++)
-        {
-            if (lines[i].TrimStart().StartsWith('['))
-            {
-                end = i;
-                break;
-            }
-        }
-
-        for (var i = sectionIndex + 1; i < end; i++)
-        {
-            var equals = lines[i].IndexOf('=');
-            if (equals <= 0) continue;
-            if (!string.Equals(lines[i][..equals].Trim(), key, StringComparison.OrdinalIgnoreCase)) continue;
-            lines[i] = $"{key}={value}";
-            File.WriteAllLines(path, lines);
-            return;
-        }
-
-        lines.Insert(end, $"{key}={value}");
-        File.WriteAllLines(path, lines);
+        if (!WritePrivateProfileString(section, key, value, path))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), $"Grev could not set UltraVNC option {section}/{key} for Screen 2.");
     }
 
     private static bool IsListening(int port)
@@ -354,6 +358,23 @@ public sealed class SecondaryUltraVncServer : IDisposable
         public uint dwProcessId;
         public uint dwThreadId;
     }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WritePrivateProfileString(
+        string section,
+        string key,
+        string value,
+        string filePath);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetPrivateProfileStruct(
+        string section,
+        string key,
+        [Out] byte[] buffer,
+        uint size,
+        string filePath);
 
     [DllImport("kernel32.dll")]
     private static extern uint WTSGetActiveConsoleSessionId();
