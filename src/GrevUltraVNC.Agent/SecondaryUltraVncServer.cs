@@ -49,9 +49,12 @@ public sealed class SecondaryUltraVncServer : IDisposable
         SetIniValue(_configPath, "admin", "PortNumber", Port.ToString());
         SetIniValue(_configPath, "admin", "HTTPConnect", "0");
 
+        // This process is already launched inside the logged-in user's interactive desktop.
+        // Use UltraVNC's normal app mode so Screen 2 is fully independent from the primary
+        // UltraVNC service worker and its global service-session signalling.
         _process = LaunchInActiveSession(
             serverPath,
-            $"-config \"{_configPath}\" -multi -service_run");
+            $"-config \"{_configPath}\" -multi -run");
 
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline)
