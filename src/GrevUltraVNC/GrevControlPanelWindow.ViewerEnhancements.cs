@@ -12,14 +12,10 @@ public partial class GrevControlPanelWindow
     private readonly DispatcherTimer _adaptivePanelTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private bool _suppressScaleSlider;
     private bool _viewerScaleDragging;
-    private DateTimeOffset _viewerScaleDockSuppressedUntil = DateTimeOffset.MinValue;
     private bool _virtualDisplayLeaseActive;
     private bool _virtualDisplayLeaseRefreshRunning;
     private DateTimeOffset _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.MinValue;
     private int _virtualMonitorIndex = -1;
-
-    private bool IsViewerScaleDockingSuppressed =>
-        _viewerScaleDragging || DateTimeOffset.UtcNow < _viewerScaleDockSuppressedUntil;
 
     private void AdaptivePanel_ContentRendered(object? sender, EventArgs e)
     {
@@ -71,7 +67,6 @@ public partial class GrevControlPanelWindow
         {
             if (string.Equals(tag, "fit", StringComparison.OrdinalIgnoreCase))
             {
-                SuppressDockingAfterScaleChange();
                 _vnc.FitToWindow(_machine.Id);
                 ZoomStatusText.Text = "Fit";
                 return;
@@ -91,7 +86,9 @@ public partial class GrevControlPanelWindow
     private void ViewerScaleSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _viewerScaleDragging = true;
-        _viewerScaleDockSuppressedUntil = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+        // Zooming changes the UltraVNC viewer window bounds. Freeze the companion panel while
+        // the thumb is being dragged so it does not chase the viewer around the desktop.
+        _dockTimer.Stop();
     }
 
     private void ViewerScaleSlider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e) =>
@@ -100,14 +97,23 @@ public partial class GrevControlPanelWindow
     private void ViewerScaleSlider_LostMouseCapture(object sender, MouseEventArgs e) =>
         EndViewerScaleDrag();
 
-    private void EndViewerScaleDrag()
+    private async void EndViewerScaleDrag()
     {
-        _viewerScaleDragging = false;
-        SuppressDockingAfterScaleChange();
-    }
+        if (!_viewerScaleDragging)
+            return;
 
-    private void SuppressDockingAfterScaleChange() =>
-        _viewerScaleDockSuppressedUntil = DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(750);
+        _viewerScaleDragging = false;
+
+        // Give UltraVNC a moment to settle on its final scaled bounds, then dock once and resume
+        // normal tracking. This avoids the feedback loop where scaling moves the viewer, which
+        // moves the panel, while the user's mouse is still dragging the slider.
+        await Task.Delay(800);
+        if (!IsLoaded)
+            return;
+
+        DockToViewer();
+        _dockTimer.Start();
+    }
 
     private void ViewerScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -128,7 +134,6 @@ public partial class GrevControlPanelWindow
     private void ApplyViewerScale(int percent, bool syncSlider)
     {
         percent = Math.Clamp(percent, 10, 300);
-        SuppressDockingAfterScaleChange();
         _vnc.SetScale(_machine.Id, percent);
         ZoomStatusText.Text = $"{percent}%";
 
