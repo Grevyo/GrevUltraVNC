@@ -99,6 +99,9 @@ public sealed class UltraVncSessionService
                         SendMonitorSelection(process, monitorIndex);
                     }
 
+                    // These are two separate UltraVNC viewer processes. Use Windows' own local
+                    // snap shortcuts to place Screen 1 on the left and Screen 2 on the right.
+                    SnapViewerWindowsSideBySide(machine.Id, process);
                     FocusViewer(process);
                     return process;
                 }
@@ -346,6 +349,22 @@ public sealed class UltraVncSessionService
 
         File.WriteAllText(path, content);
         return path;
+    }
+
+    private void SnapViewerWindowsSideBySide(Guid machineId, Process secondary)
+    {
+        if (!TryGetSession(machineId, out var primary) || primary is null)
+            return;
+
+        // The actual Windows key is intentionally used here so Windows 11 snaps the LOCAL
+        // UltraVNC windows. Grev's remote Windows-key command uses Ctrl+Esc + Scroll Lock instead.
+        FocusViewer(primary);
+        SendChord(VK_LWIN, VK_LEFT);
+        Thread.Sleep(250);
+
+        FocusViewer(secondary);
+        SendChord(VK_LWIN, VK_RIGHT);
+        Thread.Sleep(250);
     }
 
     private Process GetSession(Guid machineId) =>
@@ -681,6 +700,8 @@ public sealed class UltraVncSessionService
     private const byte VK_MENU = 0x12;
     private const byte VK_ESCAPE = 0x1B;
     private const byte VK_TAB = 0x09;
+    private const byte VK_LEFT = 0x25;
+    private const byte VK_RIGHT = 0x27;
     private const byte VK_F4 = 0x73;
     private const byte VK_F7 = 0x76;
     private const byte VK_F12 = 0x7B;
