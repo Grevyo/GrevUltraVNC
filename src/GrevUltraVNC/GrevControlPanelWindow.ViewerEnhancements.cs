@@ -1,7 +1,7 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Contracts;
 
@@ -9,7 +9,7 @@ namespace GrevUltraVNC;
 
 public partial class GrevControlPanelWindow
 {
-    private readonly DispatcherTimer _adaptivePanelTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer _adaptivePanelTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private bool _suppressScaleSlider;
     private bool _viewerScaleDragging;
     private bool _virtualDisplayLeaseActive;
@@ -19,33 +19,53 @@ public partial class GrevControlPanelWindow
 
     private void AdaptivePanel_ContentRendered(object? sender, EventArgs e)
     {
+        // The original companion-panel timer sizes itself from the viewer and was written for the
+        // old narrow 690px panel. The adaptive panel owns docking now so two loops never fight.
+        _dockTimer.Stop();
         _adaptivePanelTimer.Tick -= AdaptivePanelTimer_Tick;
         _adaptivePanelTimer.Tick += AdaptivePanelTimer_Tick;
         _adaptivePanelTimer.Start();
-        Dispatcher.BeginInvoke(ApplyAdaptivePanelSizing, DispatcherPriority.Loaded);
+        Dispatcher.BeginInvoke(DockAdaptivePanel, DispatcherPriority.Loaded);
     }
 
     private void AdaptivePanel_Closed(object? sender, EventArgs e) => _adaptivePanelTimer.Stop();
 
     private async void AdaptivePanelTimer_Tick(object? sender, EventArgs e)
     {
-        ApplyAdaptivePanelSizing();
+        if (!_viewerScaleDragging)
+            DockAdaptivePanel();
         await RefreshVirtualDisplayLeaseAsync();
     }
 
-    private void ApplyAdaptivePanelSizing()
+    private void DockAdaptivePanel()
     {
         if (!_vnc.TryGetViewerWindowHandle(_machine.Id, out var viewerHandle) || viewerHandle == IntPtr.Zero)
             return;
+        if (!GetWindowRect(viewerHandle, out var viewerRect))
+            return;
 
-        var screen = System.Windows.Forms.Screen.FromHandle(viewerHandle);
-        var dpi = VisualTreeHelper.GetDpi(this);
-        var scale = dpi.DpiScaleY <= 0 ? 1d : dpi.DpiScaleY;
-        var workHeight = screen.WorkingArea.Height / scale;
+        var monitor = MonitorFromWindow(viewerHandle, MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero)
+            return;
 
+        var info = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(monitor, ref info))
+            return;
+
+        var dpi = GetDpiForWindow(viewerHandle);
+        var scale = dpi == 0 ? 1d : dpi / 96d;
+        var workLeft = info.rcWork.Left / scale;
+        var workTop = info.rcWork.Top / scale;
+        var workRight = info.rcWork.Right / scale;
+        var workBottom = info.rcWork.Bottom / scale;
+        var viewerLeft = viewerRect.Left / scale;
+        var viewerRight = viewerRect.Right / scale;
+
+        const double gap = 8;
         const double desiredHeight = 900;
         const double chromeMargin = 14;
         const double minimumUsableHeight = 560;
+        var workHeight = Math.Max(minimumUsableHeight, workBottom - workTop);
         var availableHeight = Math.Max(minimumUsableHeight, workHeight - chromeMargin);
         var targetHeight = Math.Min(desiredHeight, availableHeight);
         var needsScroll = availableHeight + 1 < desiredHeight;
@@ -53,9 +73,18 @@ public partial class GrevControlPanelWindow
         MinHeight = targetHeight;
         MaxHeight = Math.Max(targetHeight, Math.Min(1040, availableHeight));
         Height = targetHeight;
+        Top = workTop + Math.Max(0, (workHeight - targetHeight) / 2d);
         PanelScrollViewer.VerticalScrollBarVisibility = needsScroll
             ? ScrollBarVisibility.Auto
             : ScrollBarVisibility.Disabled;
+
+        var panelWidth = ActualWidth > 0 ? ActualWidth : Width;
+        if (viewerRight + gap + panelWidth <= workRight)
+            Left = viewerRight + gap;
+        else if (viewerLeft - gap - panelWidth >= workLeft)
+            Left = viewerLeft - gap - panelWidth;
+        else
+            Left = Math.Max(workLeft, workRight - panelWidth);
     }
 
     private void ViewerScale_Click(object sender, RoutedEventArgs e)
@@ -86,9 +115,6 @@ public partial class GrevControlPanelWindow
     private void ViewerScaleSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _viewerScaleDragging = true;
-        // Zooming changes the UltraVNC viewer window bounds. Freeze the companion panel while
-        // the thumb is being dragged so it does not chase the viewer around the desktop.
-        _dockTimer.Stop();
     }
 
     private void ViewerScaleSlider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e) =>
@@ -104,15 +130,11 @@ public partial class GrevControlPanelWindow
 
         _viewerScaleDragging = false;
 
-        // Give UltraVNC a moment to settle on its final scaled bounds, then dock once and resume
-        // normal tracking. This avoids the feedback loop where scaling moves the viewer, which
-        // moves the panel, while the user's mouse is still dragging the slider.
-        await Task.Delay(800);
-        if (!IsLoaded)
-            return;
-
-        DockToViewer();
-        _dockTimer.Start();
+        // Let UltraVNC finish changing its final viewer bounds, then dock once. During the drag
+        // the panel remains completely still even though the viewer is continuously resizing.
+        await Task.Delay(650);
+        if (IsLoaded)
+            DockAdaptivePanel();
     }
 
     private void ViewerScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
