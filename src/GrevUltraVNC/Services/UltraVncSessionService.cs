@@ -52,6 +52,7 @@ public sealed class UltraVncSessionService
     public async Task<Process> OpenVirtualDisplayAsync(
         Machine machine,
         AppSettings settings,
+        int monitorIndex,
         CancellationToken cancellationToken = default)
     {
         if (TryGetVirtualSession(machine.Id, out var existing))
@@ -60,13 +61,15 @@ public sealed class UltraVncSessionService
             return existing!;
         }
 
+        if (monitorIndex < 1)
+            throw new InvalidOperationException("The host did not return a valid Screen 2 monitor index.");
+
         if (string.IsNullOrWhiteSpace(machine.ActiveAddress))
             throw new InvalidOperationException("No LAN or Grev Connect route is currently available for this machine.");
 
-        var bounds = System.Windows.Forms.Screen.PrimaryScreen?.Bounds;
-        var width = Math.Clamp(bounds?.Width ?? 1920, 800, 7680);
-        var height = Math.Clamp(bounds?.Height ?? 1080, 600, 4320);
-        var configPath = CreateVirtualDisplayConfig(machine.Id, width, height);
+        // The Grev Agent has already created and attached the Windows virtual monitor. Viewer 2
+        // must therefore be a plain VNC viewer: it must not request another display topology.
+        var configPath = CreateSecondaryViewerConfig(machine.Id);
         var process = StartViewer(machine, settings, configPath, startViewOnly: true);
         _virtualSessions[machine.Id] = process;
 
@@ -78,19 +81,21 @@ public sealed class UltraVncSessionService
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (process.HasExited)
-                    throw new InvalidOperationException(
-                        "UltraVNC closed the Screen 2 viewer while creating the virtual display. " +
-                        "The target must run UltraVNC Server as a service/administrator, use DDengine capture, " +
-                        "and have the UltraVNC virtual-display driver installed.");
+                    throw new InvalidOperationException("UltraVNC closed the Screen 2 viewer before it could select the virtual monitor.");
 
                 var handle = FindPrimaryViewerWindow(process);
                 if (handle != IntPtr.Zero)
                 {
-                    // showExtend=1 makes UltraVNC request dmExtendOnly: keep the physical desktop
-                    // and bind this viewer directly to the virtual display it creates.
-                    await Task.Delay(900, cancellationToken);
-                    if (process.HasExited)
-                        throw new InvalidOperationException("The Screen 2 viewer closed after the display topology changed.");
+                    // UltraVNC learns the server monitor count shortly after connection. Send its
+                    // exact SetMonitor command more than once so monitor selection cannot race the
+                    // initial ServerInit/monitor-capability messages.
+                    for (var attempt = 0; attempt < 4; attempt++)
+                    {
+                        await Task.Delay(attempt == 0 ? 900 : 450, cancellationToken);
+                        if (process.HasExited)
+                            throw new InvalidOperationException("The Screen 2 viewer closed while selecting the virtual monitor.");
+                        SendMonitorSelection(process, monitorIndex);
+                    }
 
                     SetProcessViewOnly(process, true);
                     FocusViewer(process);
@@ -100,9 +105,7 @@ public sealed class UltraVncSessionService
                 await Task.Delay(250, cancellationToken);
             }
 
-            throw new InvalidOperationException(
-                "Screen 2 did not create a persistent UltraVNC viewer window. " +
-                "The remote display may flicker once while Windows adds the virtual monitor, but the second viewer should remain open.");
+            throw new InvalidOperationException("Screen 2 did not create a persistent UltraVNC viewer window.");
         }
         catch
         {
@@ -178,7 +181,7 @@ public sealed class UltraVncSessionService
 
     public void SetScale(Guid machineId, int percent)
     {
-        percent = Math.Clamp(percent, 25, 300);
+        percent = Math.Clamp(percent, 10, 300);
 
         if (TryGetSession(machineId, out var primary) && primary is not null)
             SetProcessScale(primary, percent);
@@ -315,15 +318,16 @@ public sealed class UltraVncSessionService
         return Process.Start(psi) ?? throw new InvalidOperationException("UltraVNC Viewer did not start.");
     }
 
-    private static string CreateVirtualDisplayConfig(Guid machineId, int width, int height)
+    private static string CreateSecondaryViewerConfig(Guid machineId)
     {
         var directory = Path.Combine(Path.GetTempPath(), "GrevUltraVNC", "VirtualDisplays");
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, $"{machineId:N}-screen2.vnc");
 
-        // showExtend=1 is important. UltraVNC sends dmExtendOnly for this viewer: the host's
-        // physical display stays enabled and this viewer receives its own extended virtual display.
-        var content = $"""
+        // Screen 2 already exists as a real Windows display owned by Grev Agent. Do not let
+        // viewer 2 request ChangeServerRes/ExtendDisplay again; that was the source of duplicate
+        // Screen 1 sessions and unstable topology.
+        var content = """
                       [options]
                       shared=1
                       viewonly=1
@@ -332,13 +336,11 @@ public sealed class UltraVncSessionService
                       AutoScaling=1
                       directx=0
                       allowMonitorSpanning=0
-                      ChangeServerRes=1
-                      extendDisplay=1
-                      showExtend=1
+                      ChangeServerRes=0
+                      extendDisplay=0
+                      showExtend=0
                       use_virt=0
                       useAllMonitors=0
-                      requestedWidth={width}
-                      requestedHeight={height}
                       """;
 
         File.WriteAllText(path, content);
@@ -402,6 +404,29 @@ public sealed class UltraVncSessionService
 
     private static void SetProcessScale(Process process, int percent) =>
         SendViewerMessage(process, WM_SETSCALING, new IntPtr(percent), new IntPtr(100));
+
+    private static void SendMonitorSelection(Process process, int monitorIndex)
+    {
+        var main = FindPrimaryViewerWindow(process);
+        if (main == IntPtr.Zero) return;
+
+        var monitorPointer = Marshal.AllocHGlobal(sizeof(int));
+        try
+        {
+            Marshal.WriteInt32(monitorPointer, monitorIndex);
+            var data = new COPYDATASTRUCT
+            {
+                dwData = new UIntPtr(2),
+                cbData = sizeof(int),
+                lpData = monitorPointer
+            };
+            SendMessage(main, WM_COPYDATA, IntPtr.Zero, ref data);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(monitorPointer);
+        }
+    }
 
     private static void SendViewerMessage(Process process, uint message, IntPtr wParam, IntPtr lParam)
     {
@@ -581,6 +606,14 @@ public sealed class UltraVncSessionService
         public int Y;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct COPYDATASTRUCT
+    {
+        public UIntPtr dwData;
+        public int cbData;
+        public IntPtr lpData;
+    }
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
@@ -627,12 +660,16 @@ public sealed class UltraVncSessionService
     private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, ref COPYDATASTRUCT lParam);
+
+    [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
     private const int SW_SHOW = 5;
     private const int SW_RESTORE = 9;
     private const uint GW_OWNER = 4;
     private const uint WM_CLOSE = 0x0010;
+    private const uint WM_COPYDATA = 0x004A;
     private const uint WM_USER = 0x0400;
     private const uint WM_SETSCALING = WM_USER + 101;
     private const uint WM_SETVIEWONLY = WM_USER + 102;
