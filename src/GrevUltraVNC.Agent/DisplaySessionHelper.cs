@@ -70,8 +70,14 @@ internal static class DisplaySessionHelper
         }
     }
 
-    private static DisplaySessionBridgeResult CreateAndAttach(int width, int height)
+    private static DisplaySessionBridgeResult CreateAndAttach(int bootstrapWidth, int bootstrapHeight)
     {
+        // bootstrapWidth/bootstrapHeight are intentionally not used as the final Screen 2 mode.
+        // Windows must first expose Screen 2 as an active desktop monitor. Only after that happens
+        // do we read the REMOTE physical primary monitor and change Screen 2 to the exact same size.
+        _ = bootstrapWidth;
+        _ = bootstrapHeight;
+
         DisplayDevice? virtualDevice = null;
         var deadline = DateTime.UtcNow.AddSeconds(20);
         while (DateTime.UtcNow < deadline)
@@ -102,61 +108,114 @@ internal static class DisplaySessionHelper
         }
 
         var deviceName = virtualDevice.Value.DeviceName;
-        AttachDisplayBestEffort(deviceName, width, height);
 
+        // Phase 1: attach the display with its existing/default mode. Do not try to match the
+        // physical monitor's resolution until Windows reports Screen 2 as attached and active.
+        AttachDisplayBestEffort(deviceName);
+
+        AgentDisplayInfo? attachedVirtual = null;
+        List<AgentDisplayInfo> activeDisplays = [];
         deadline = DateTime.UtcNow.AddSeconds(12);
         while (DateTime.UtcNow < deadline)
         {
-            var displays = GetDisplays();
-            var attachedVirtual = displays.FirstOrDefault(display =>
+            activeDisplays = GetDisplays();
+            attachedVirtual = activeDisplays.FirstOrDefault(display =>
                 string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
 
-            if (attachedVirtual is not null && displays.Count >= 2 &&
+            if (attachedVirtual is not null && activeDisplays.Count >= 2 &&
                 attachedVirtual.Width > 0 && attachedVirtual.Height > 0 &&
                 attachedVirtual.VncMonitorIndex >= 1)
             {
-                return new DisplaySessionBridgeResult(
-                    true,
-                    $"Screen 2 ready in interactive session: {attachedVirtual.Width}x{attachedVirtual.Height} on VNC monitor {attachedVirtual.VncMonitorIndex}.",
-                    attachedVirtual.DeviceName,
-                    attachedVirtual.VncMonitorIndex,
-                    displays.ToArray());
+                break;
             }
 
+            attachedVirtual = null;
             Thread.Sleep(250);
         }
 
-        var finalDisplays = GetDisplays();
-        return new DisplaySessionBridgeResult(
-            false,
-            "The interactive Windows session found Grev Screen 2 but could not attach it as an extended desktop display. " + DescribeDisplays(),
-            deviceName,
-            -1,
-            finalDisplays.ToArray());
-    }
-
-    private static void AttachDisplayBestEffort(string deviceName, int requestedWidth, int requestedHeight)
-    {
-        var attachedDisplays = GetDisplays();
-        var primary = attachedDisplays.FirstOrDefault(display => display.IsPrimary && !display.IsVirtual)
-            ?? attachedDisplays.FirstOrDefault(display => !display.IsVirtual);
-
-        // Screen 2 should mirror the REMOTE primary monitor's geometry, not the controller PC's
-        // viewer-window monitor. Put it immediately to the right of that primary display.
-        if (primary is not null && primary.Width > 0 && primary.Height > 0)
+        if (attachedVirtual is null)
         {
-            requestedWidth = primary.Width;
-            requestedHeight = primary.Height;
+            return new DisplaySessionBridgeResult(
+                false,
+                "The interactive Windows session found Grev Screen 2 but could not attach it as an active desktop display. " + DescribeDisplays(),
+                deviceName,
+                -1,
+                GetDisplays().ToArray());
         }
 
-        var targetX = primary is not null
-            ? primary.X + primary.Width
-            : attachedDisplays
-                .Where(display => !string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
-                .Select(display => display.X + display.Width)
-                .DefaultIfEmpty(0)
-                .Max();
-        var targetY = primary?.Y ?? 0;
+        // Phase 2: Screen 2 is now active. Read the REMOTE physical primary monitor and change
+        // only Screen 2's resolution to match it. Do not change Screen 1 and do not span monitors.
+        var primary = activeDisplays.FirstOrDefault(display => display.IsPrimary && !display.IsVirtual)
+            ?? activeDisplays.FirstOrDefault(display => !display.IsVirtual);
+
+        if (primary is null || primary.Width <= 0 || primary.Height <= 0)
+        {
+            return new DisplaySessionBridgeResult(
+                false,
+                "Screen 2 became active, but Grev could not read the remote physical primary monitor resolution.",
+                deviceName,
+                attachedVirtual.VncMonitorIndex,
+                activeDisplays.ToArray());
+        }
+
+        if (attachedVirtual.Width != primary.Width || attachedVirtual.Height != primary.Height)
+        {
+            if (!SetDisplayResolution(deviceName, primary.Width, primary.Height))
+            {
+                return new DisplaySessionBridgeResult(
+                    false,
+                    $"Screen 2 became active, but Windows would not set it to the primary monitor resolution {primary.Width}x{primary.Height}.",
+                    deviceName,
+                    attachedVirtual.VncMonitorIndex,
+                    GetDisplays().ToArray());
+            }
+
+            deadline = DateTime.UtcNow.AddSeconds(12);
+            while (DateTime.UtcNow < deadline)
+            {
+                activeDisplays = GetDisplays();
+                attachedVirtual = activeDisplays.FirstOrDefault(display =>
+                    string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
+
+                if (attachedVirtual is not null &&
+                    attachedVirtual.Width == primary.Width &&
+                    attachedVirtual.Height == primary.Height)
+                {
+                    break;
+                }
+
+                Thread.Sleep(250);
+            }
+        }
+
+        if (attachedVirtual is null ||
+            attachedVirtual.Width != primary.Width ||
+            attachedVirtual.Height != primary.Height)
+        {
+            return new DisplaySessionBridgeResult(
+                false,
+                $"Screen 2 is active, but it did not settle at the primary monitor resolution {primary.Width}x{primary.Height}. " + DescribeDisplays(),
+                deviceName,
+                attachedVirtual?.VncMonitorIndex ?? -1,
+                GetDisplays().ToArray());
+        }
+
+        return new DisplaySessionBridgeResult(
+            true,
+            $"Screen 2 active at {attachedVirtual.Width}x{attachedVirtual.Height} to match the remote primary monitor; VNC monitor {attachedVirtual.VncMonitorIndex}.",
+            attachedVirtual.DeviceName,
+            attachedVirtual.VncMonitorIndex,
+            activeDisplays.ToArray());
+    }
+
+    private static void AttachDisplayBestEffort(string deviceName)
+    {
+        var attachedDisplays = GetDisplays();
+        var rightEdge = attachedDisplays
+            .Where(display => !string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
+            .Select(display => display.X + display.Width)
+            .DefaultIfEmpty(0)
+            .Max();
 
         var mode = CreateDevMode();
         if (!EnumDisplaySettingsEx(deviceName, EnumCurrentSettings, ref mode, 0) &&
@@ -166,17 +225,11 @@ internal static class DisplaySessionHelper
             return;
         }
 
-        mode.DmPositionX = targetX;
-        mode.DmPositionY = targetY;
-        mode.DmFields |= DmPosition;
-
-        var useRequestedSize = SupportsMode(deviceName, requestedWidth, requestedHeight);
-        if (useRequestedSize)
-        {
-            mode.DmPelsWidth = (uint)requestedWidth;
-            mode.DmPelsHeight = (uint)requestedHeight;
-            mode.DmFields |= DmPelsWidth | DmPelsHeight;
-        }
+        // A desktop position is required to attach an inactive monitor. Keep the monitor separate
+        // from Screen 1, but leave its existing/default resolution untouched during this phase.
+        mode.DmPositionX = rightEdge;
+        mode.DmPositionY = 0;
+        mode.DmFields = DmPosition;
 
         var result = ChangeDisplaySettingsEx(
             deviceName,
@@ -185,26 +238,35 @@ internal static class DisplaySessionHelper
             CdsUpdateRegistry | CdsNoReset,
             IntPtr.Zero);
 
-        if (result != 0 && useRequestedSize)
-        {
-            mode = CreateDevMode();
-            if (EnumDisplaySettingsEx(deviceName, EnumRegistrySettings, ref mode, 0) ||
-                EnumDisplaySettingsEx(deviceName, 0, ref mode, 0))
-            {
-                mode.DmPositionX = targetX;
-                mode.DmPositionY = targetY;
-                mode.DmFields |= DmPosition;
-                result = ChangeDisplaySettingsEx(
-                    deviceName,
-                    ref mode,
-                    IntPtr.Zero,
-                    CdsUpdateRegistry | CdsNoReset,
-                    IntPtr.Zero);
-            }
-        }
-
         if (result == 0)
             ChangeDisplaySettingsEx(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+    }
+
+    private static bool SetDisplayResolution(string deviceName, int width, int height)
+    {
+        if (!SupportsMode(deviceName, width, height))
+            return false;
+
+        var mode = CreateDevMode();
+        if (!EnumDisplaySettingsEx(deviceName, EnumCurrentSettings, ref mode, 0))
+            return false;
+
+        mode.DmPelsWidth = (uint)width;
+        mode.DmPelsHeight = (uint)height;
+        mode.DmFields = DmPelsWidth | DmPelsHeight;
+
+        var result = ChangeDisplaySettingsEx(
+            deviceName,
+            ref mode,
+            IntPtr.Zero,
+            CdsUpdateRegistry | CdsNoReset,
+            IntPtr.Zero);
+
+        if (result != 0)
+            return false;
+
+        ChangeDisplaySettingsEx(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+        return true;
     }
 
     private static bool SupportsMode(string deviceName, int width, int height)
