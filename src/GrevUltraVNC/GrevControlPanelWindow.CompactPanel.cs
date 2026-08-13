@@ -7,18 +7,20 @@ namespace GrevUltraVNC;
 
 public partial class GrevControlPanelWindow
 {
+    private const double CompactPanelDesiredHeight = 820d;
+    private const double CompactPanelMinimumHeight = 480d;
+
     /// <summary>
-    /// Compact-panel docking replaces the older fixed-height companion layout. The panel first
-    /// sizes itself to the controls it actually contains, and only turns on vertical scrolling
-    /// when the local monitor work area cannot fit that natural height.
+    /// Compact-panel docking is deterministic: the panel has one normal height and only becomes
+    /// shorter when the local monitor work area cannot fit it. This avoids feeding the current
+    /// ScrollViewer extent back into the next resize and producing the old slow-expansion loop.
     /// </summary>
     private void CompactPanel_ContentRendered(object? sender, EventArgs e)
     {
         _dockTimer.Stop();
 
-        // ViewerEnhancements owns the timer because it also refreshes the Screen 2 lease. Swap
-        // its old fixed-height handler for the compact adaptive handler rather than starting a
-        // second positioning loop.
+        // ViewerEnhancements owns this timer because it also refreshes the Screen 2 lease. Swap
+        // its old fixed-height handler for the compact handler so there is one positioning loop.
         _adaptivePanelTimer.Tick -= AdaptivePanelTimer_Tick;
         _adaptivePanelTimer.Tick -= CompactPanelTimer_Tick;
         _adaptivePanelTimer.Tick += CompactPanelTimer_Tick;
@@ -35,6 +37,16 @@ public partial class GrevControlPanelWindow
 
     private async void CompactPanelTimer_Tick(object? sender, EventArgs e)
     {
+        // A running vncviewer.exe is not enough to keep the Grev session alive. UltraVNC can
+        // leave its process around after the connected viewer window has been manually closed.
+        // UltraVncSessionService now treats that as disconnected after the initial connect grace.
+        if (!_vnc.HasActiveSession(_machine.Id))
+        {
+            SessionStatusText.Text = "● SESSION ENDED";
+            Close();
+            return;
+        }
+
         if (!_viewerScaleDragging)
             DockCompactPanel();
 
@@ -67,29 +79,27 @@ public partial class GrevControlPanelWindow
         var viewerLeft = viewerRect.Left / scale;
         var viewerRight = viewerRect.Right / scale;
 
-        var workHeight = Math.Max(520d, workBottom - workTop);
-        var availableHeight = Math.Max(520d, workHeight - 12d);
+        var workHeight = Math.Max(320d, workBottom - workTop);
+        var availableHeight = Math.Max(320d, workHeight - 12d);
+        var targetHeight = Math.Min(CompactPanelDesiredHeight, availableHeight);
+        var needsScroll = targetHeight + 1d < CompactPanelDesiredHeight;
 
-        // ScrollViewer measures its StackPanel content vertically, so ExtentHeight is the natural
-        // middle-section height even when the current window is smaller. Everything outside the
-        // ScrollViewer is fixed chrome/presence/footer and is kept visible at all times.
-        var fixedChromeHeight = ActualHeight > 0 && PanelScrollViewer.ActualHeight > 0
-            ? Math.Max(0d, ActualHeight - PanelScrollViewer.ActualHeight)
-            : 210d;
-        var middleContentHeight = PanelScrollViewer.ExtentHeight > 0
-            ? PanelScrollViewer.ExtentHeight
-            : 400d;
+        // Do not assign Height every 300 ms when nothing changed. Apart from avoiding needless
+        // WPF layout passes, this makes the panel appear at its final size immediately instead of
+        // visibly walking towards it over several timer ticks.
+        var minimumHeight = Math.Min(CompactPanelMinimumHeight, targetHeight);
+        if (Math.Abs(MinHeight - minimumHeight) > 0.5d)
+            MinHeight = minimumHeight;
+        if (Math.Abs(MaxHeight - targetHeight) > 0.5d)
+            MaxHeight = targetHeight;
+        if (Math.Abs(Height - targetHeight) > 0.5d)
+            Height = targetHeight;
 
-        var naturalHeight = Math.Clamp(fixedChromeHeight + middleContentHeight + 8d, 620d, 860d);
-        var needsScroll = naturalHeight > availableHeight + 1d;
-        var targetHeight = needsScroll ? availableHeight : naturalHeight;
-
-        MinHeight = Math.Min(520d, targetHeight);
-        MaxHeight = Math.Max(targetHeight, Math.Min(960d, availableHeight));
-        Height = targetHeight;
-        PanelScrollViewer.VerticalScrollBarVisibility = needsScroll
+        var requestedScrollMode = needsScroll
             ? ScrollBarVisibility.Auto
             : ScrollBarVisibility.Disabled;
+        if (PanelScrollViewer.VerticalScrollBarVisibility != requestedScrollMode)
+            PanelScrollViewer.VerticalScrollBarVisibility = requestedScrollMode;
 
         Top = workTop + Math.Max(0d, (workHeight - targetHeight) / 2d);
 
