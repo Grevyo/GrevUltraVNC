@@ -129,10 +129,6 @@ public partial class GrevControlPanelWindow
             return;
 
         _viewerScaleDragging = false;
-
-        // Let UltraVNC finish changing its final viewer bounds, then dock the CURRENT compact
-        // panel once. Calling the retired adaptive 900px routine here caused the panel to jump or
-        // slowly grow again after a slider drag.
         await Task.Delay(650);
         if (IsLoaded)
             DockCompactPanel();
@@ -223,8 +219,14 @@ public partial class GrevControlPanelWindow
                 ? "Host Screen 2 attached · opening viewer…"
                 : $"Host Screen 2 attached · {virtualInfo.Width}×{virtualInfo.Height} · opening viewer…";
 
+            if (_machine.VncPort >= 65535)
+                throw new InvalidOperationException("Screen 2 needs a second VNC port, but the primary VNC port is already 65535.");
+
+            var screen2Machine = _machine.Clone();
+            screen2Machine.VncPort = _machine.VncPort + 1;
+
             await _vnc.OpenVirtualDisplayAsync(
-                _machine,
+                screen2Machine,
                 _collaborationSettings,
                 display.VirtualMonitorIndex);
 
@@ -236,8 +238,8 @@ public partial class GrevControlPanelWindow
             _vnc.SetViewOnly(_machine.Id, !localHasControl);
             UpdateDisplayState();
             DisplayStatusText.Text = virtualInfo is null
-                ? "Screen 1 physical · Screen 2 virtual Windows display"
-                : $"Screen 1 physical · Screen 2 virtual · {virtualInfo.Width}×{virtualInfo.Height}";
+                ? $"Screen 1 physical · Screen 2 virtual · VNC {_machine.VncPort + 1}"
+                : $"Screen 1 physical · Screen 2 virtual · {virtualInfo.Width}×{virtualInfo.Height} · VNC {_machine.VncPort + 1}";
             CollaborationStatusText.Text = "Screen 2 ready";
         }
         catch (Exception ex)
@@ -283,8 +285,6 @@ public partial class GrevControlPanelWindow
         if (!_virtualDisplayLeaseActive || _virtualDisplayLeaseRefreshRunning)
             return;
 
-        // If viewer 2 was closed outside Grev, release the host display rather than leaving a
-        // phantom Screen 2 until the lease timer expires.
         if (!_vnc.HasVirtualSession(_machine.Id))
         {
             await ReleaseVirtualDisplayLeaseAsync(closeViewer: false);
@@ -310,8 +310,6 @@ public partial class GrevControlPanelWindow
         }
         catch
         {
-            // Do not interrupt an active VNC session for one missed heartbeat. The Agent keeps a
-            // 30-second lease, so transient LAN/Zima packet loss has room to recover.
         }
         finally
         {
