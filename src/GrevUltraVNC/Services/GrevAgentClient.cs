@@ -200,6 +200,18 @@ public sealed class GrevAgentClient : IDisposable
             "remote computer audio",
             cancellationToken);
 
+    public Task<AgentDisplayResponse> RunDisplayAsync(
+        Machine machine,
+        AgentDisplayRequest displayRequest,
+        CancellationToken cancellationToken = default) =>
+        PostEncryptedAsync<AgentDisplayRequest, AgentDisplayResponse>(
+            machine,
+            AgentProtocol.DisplayPath,
+            displayRequest,
+            TimeSpan.FromSeconds(35),
+            "virtual display management",
+            cancellationToken);
+
     private async Task<TResponse> PostEncryptedAsync<TRequest, TResponse>(
         Machine machine,
         string path,
