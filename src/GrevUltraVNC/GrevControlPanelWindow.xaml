@@ -157,6 +157,7 @@
                                 <Button Style="{StaticResource ScaleButton}" Content="125%" Tag="125" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="150%" Tag="150" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="200%" Tag="200" Click="ViewerScale_Click" />
+                                <Button Style="{StaticResource ScaleButton}" Content="300%" Tag="300" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="Fit" Tag="fit" Click="ViewerScale_Click" />
                             </UniformGrid>
                             <Grid Margin="4,0,4,9">
@@ -167,6 +168,9 @@
                                 <Slider x:Name="ViewerScaleSlider" Minimum="10" Maximum="300" Value="100"
                                         TickFrequency="5" IsSnapToTickEnabled="True"
                                         ValueChanged="ViewerScaleSlider_ValueChanged"
+                                        PreviewMouseLeftButtonDown="ViewerScaleSlider_PreviewMouseLeftButtonDown"
+                                        PreviewMouseLeftButtonUp="ViewerScaleSlider_PreviewMouseLeftButtonUp"
+                                        LostMouseCapture="ViewerScaleSlider_LostMouseCapture"
                                         VerticalAlignment="Center" ToolTip="Viewer scale 10%–300%" />
                                 <TextBlock Grid.Column="1" Text="300%" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
