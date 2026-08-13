@@ -169,3 +169,28 @@ public sealed record AgentAudioResponse(
     int BitsPerSample,
     string DataBase64,
     long LastSequence);
+
+public sealed record AgentDisplayRequest(
+    string Operation,
+    string ControllerId,
+    int Width = 1920,
+    int Height = 1080);
+
+public sealed record AgentDisplayInfo(
+    string DeviceName,
+    string DeviceString,
+    int X,
+    int Y,
+    int Width,
+    int Height,
+    bool IsPrimary,
+    bool IsVirtual,
+    int VncMonitorIndex);
+
+public sealed record AgentDisplayResponse(
+    bool Success,
+    string Message,
+    bool VirtualDisplayActive,
+    string? VirtualDeviceName,
+    int VirtualMonitorIndex,
+    IReadOnlyList<AgentDisplayInfo> Displays);
