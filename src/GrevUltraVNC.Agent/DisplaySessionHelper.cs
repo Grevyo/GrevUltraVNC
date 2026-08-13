@@ -138,11 +138,25 @@ internal static class DisplaySessionHelper
     private static void AttachDisplayBestEffort(string deviceName, int requestedWidth, int requestedHeight)
     {
         var attachedDisplays = GetDisplays();
-        var rightEdge = attachedDisplays
-            .Where(display => !string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
-            .Select(display => display.X + display.Width)
-            .DefaultIfEmpty(0)
-            .Max();
+        var primary = attachedDisplays.FirstOrDefault(display => display.IsPrimary && !display.IsVirtual)
+            ?? attachedDisplays.FirstOrDefault(display => !display.IsVirtual);
+
+        // Screen 2 should mirror the REMOTE primary monitor's geometry, not the controller PC's
+        // viewer-window monitor. Put it immediately to the right of that primary display.
+        if (primary is not null && primary.Width > 0 && primary.Height > 0)
+        {
+            requestedWidth = primary.Width;
+            requestedHeight = primary.Height;
+        }
+
+        var targetX = primary is not null
+            ? primary.X + primary.Width
+            : attachedDisplays
+                .Where(display => !string.Equals(display.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
+                .Select(display => display.X + display.Width)
+                .DefaultIfEmpty(0)
+                .Max();
+        var targetY = primary?.Y ?? 0;
 
         var mode = CreateDevMode();
         if (!EnumDisplaySettingsEx(deviceName, EnumCurrentSettings, ref mode, 0) &&
@@ -152,8 +166,8 @@ internal static class DisplaySessionHelper
             return;
         }
 
-        mode.DmPositionX = rightEdge;
-        mode.DmPositionY = 0;
+        mode.DmPositionX = targetX;
+        mode.DmPositionY = targetY;
         mode.DmFields |= DmPosition;
 
         var useRequestedSize = SupportsMode(deviceName, requestedWidth, requestedHeight);
@@ -177,8 +191,8 @@ internal static class DisplaySessionHelper
             if (EnumDisplaySettingsEx(deviceName, EnumRegistrySettings, ref mode, 0) ||
                 EnumDisplaySettingsEx(deviceName, 0, ref mode, 0))
             {
-                mode.DmPositionX = rightEdge;
-                mode.DmPositionY = 0;
+                mode.DmPositionX = targetX;
+                mode.DmPositionY = targetY;
                 mode.DmFields |= DmPosition;
                 result = ChangeDisplaySettingsEx(
                     deviceName,
