@@ -1,4 +1,5 @@
 <Project>
+  <!-- Explicit Agent version used to identify the exact installed Screen 2 build. -->
   <PropertyGroup>
     <Version>1.0.7</Version>
     <AssemblyVersion>1.0.7.0</AssemblyVersion>
