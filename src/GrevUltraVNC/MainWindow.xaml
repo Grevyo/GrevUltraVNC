@@ -79,8 +79,10 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Style="{StaticResource HeaderAction}" Content="↻  Refresh" Click="Refresh_Click" Margin="0,0,7,0" />
                     <Button Style="{StaticResource HeaderAction}" Content="⚙  Settings" Click="Settings_Click" Margin="0,0,7,0" />
-                    <Button Style="{StaticResource PrimaryButton}" Content="＋  Add PC" Click="AddMachine_Click"
-                            Padding="14,8" MinHeight="38" FontSize="11" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="◇  Connect by ID" Click="QuickConnect_Click"
+                            Padding="14,8" MinHeight="38" FontSize="11" Margin="0,0,7,0" />
+                    <Button Style="{StaticResource HeaderAction}" Content="＋  Add PC" Click="AddMachine_Click"
+                            Padding="14,8" MinHeight="38" FontSize="11" ToolTip="Advanced/manual machine setup" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -247,9 +249,11 @@
                     <TextBlock x:Name="EmptyStateTitle" Text="No machines yet"
                                HorizontalAlignment="Center" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock x:Name="EmptyStateDetail"
-                               Text="Add your first PC to start a LAN or Grev Connect session."
+                               Text="Got a GC- ID? Use Connect by ID and GrevUltraVNC will find the current route for you."
                                HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
                                Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,6,0,0" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="◇  Connect by GrevConnect ID"
+                            Click="QuickConnect_Click" HorizontalAlignment="Center" Margin="0,16,0,0" Padding="15,8" />
                 </StackPanel>
             </Border>
         </Grid>
