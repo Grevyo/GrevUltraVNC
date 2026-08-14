@@ -16,7 +16,7 @@ public partial class SettingsWindow : Window
     private readonly string _originalTheme;
     private bool _initializing = true;
     private string _selectedCollaborationColor = CollaborationColors.Default;
-    private ComboBox? _cursorStyleCombo;
+    private CursorStyleSelector? _cursorStyleSelector;
 
     public SettingsWindow(AppSettings settings, UltraVncSessionService vnc)
     {
@@ -71,28 +71,27 @@ public partial class SettingsWindow : Window
             Margin = new Thickness(0, 16, 0, 6)
         };
 
-        _cursorStyleCombo = new ComboBox
-        {
-            Width = 250,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            ItemsSource = CursorStyleCatalog.Options,
-            DisplayMemberPath = nameof(CursorStyleOption.Name),
-            SelectedValuePath = nameof(CursorStyleOption.Id),
-            SelectedValue = CursorStyleCatalog.Normalize(_settings.CursorStyle)
-        };
-
         var description = new TextBlock
         {
-            Text = "Choose the shape used for your named collaboration cursor. Grev squiggle is the new cyan-outline style.",
+            Text = "Pick the exact pointer other Grev users see beside your name. Every option below is a live preview using your collaboration colour.",
             FontSize = 11,
-            Margin = new Thickness(0, 7, 0, 0),
+            Margin = new Thickness(0, 0, 0, 7),
             TextWrapping = TextWrapping.Wrap
         };
         description.SetResourceReference(TextBlock.ForegroundProperty, "MutedTextBrush");
 
+        _cursorStyleSelector = new CursorStyleSelector(
+            _settings.CursorStyle,
+            _selectedCollaborationColor,
+            compact: false)
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MaxWidth = 560
+        };
+
         host.Children.Insert(insertIndex++, heading);
-        host.Children.Insert(insertIndex++, _cursorStyleCombo);
-        host.Children.Insert(insertIndex, description);
+        host.Children.Insert(insertIndex++, description);
+        host.Children.Insert(insertIndex, _cursorStyleSelector);
     }
 
     private void CollaborationColour_Click(object sender, RoutedEventArgs e)
@@ -102,6 +101,7 @@ public partial class SettingsWindow : Window
 
         _selectedCollaborationColor = CollaborationColors.Normalize(colour);
         UpdateCollaborationColourSelection(button);
+        _cursorStyleSelector?.SetColor(_selectedCollaborationColor);
         e.Handled = true;
     }
 
@@ -181,7 +181,7 @@ public partial class SettingsWindow : Window
         if (string.IsNullOrWhiteSpace(_settings.ControllerId))
             _settings.ControllerId = Guid.NewGuid().ToString("N");
         _settings.CollaborationColor = CollaborationColors.Normalize(_selectedCollaborationColor);
-        _settings.CursorStyle = CursorStyleCatalog.Normalize(_cursorStyleCombo?.SelectedValue?.ToString());
+        _settings.CursorStyle = CursorStyleCatalog.Normalize(_cursorStyleSelector?.SelectedStyle);
         _settings.UltraVncViewerPath = path;
         _settings.AutoScaling = AutoScaleCheck.IsChecked == true;
         _settings.FullScreenByDefault = FullScreenCheck.IsChecked == true;
