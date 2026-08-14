@@ -137,7 +137,8 @@ public partial class GrevControlPanelWindow
             cursorVisible ? cursorX : null,
             cursorVisible ? cursorY : null,
             cursorVisible,
-            cursorVisible ? surface : "screen1");
+            cursorVisible ? surface : "screen1",
+            CollaborationColors.Normalize(_collaborationSettings.CollaborationColor));
     }
 
     private void ApplyCollaborationResponse(AgentCollaborationResponse response)
@@ -218,7 +219,11 @@ public partial class GrevControlPanelWindow
     {
         if (_screen1CursorOverlay is null && _vnc.HasActiveSession(_machine.Id))
         {
-            var overlay = new NamedCursorOverlayWindow(_machine, _vnc, virtualDisplay: false);
+            var overlay = new NamedCursorOverlayWindow(
+                _machine,
+                _vnc,
+                virtualDisplay: false,
+                _collaborationSettings.CollaborationColor);
             _screen1CursorOverlay = overlay;
             overlay.Closed += (_, _) =>
             {
@@ -231,7 +236,11 @@ public partial class GrevControlPanelWindow
         var needsScreen2 = _vnc.HasVirtualSession(_machine.Id);
         if (needsScreen2 && _screen2CursorOverlay is null)
         {
-            var overlay = new NamedCursorOverlayWindow(_machine, _vnc, virtualDisplay: true);
+            var overlay = new NamedCursorOverlayWindow(
+                _machine,
+                _vnc,
+                virtualDisplay: true,
+                _collaborationSettings.CollaborationColor);
             _screen2CursorOverlay = overlay;
             overlay.Closed += (_, _) =>
             {

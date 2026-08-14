@@ -6,6 +6,40 @@
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}">
+    <Window.Resources>
+        <Style x:Key="CollaborationColourButton" TargetType="Button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderBrush" Value="#66708090" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Swatch"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Swatch" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Swatch" Property="Opacity" Value="0.62" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="28" Background="{DynamicResource WindowBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -36,7 +70,40 @@
                         <TextBox x:Name="GrevNameBox" MaxLength="40" />
                         <TextBlock Text="Shown to other GrevUltraVNC users when you are connected to the same machine."
                                    Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="0,7,0,0" TextWrapping="Wrap" />
-                        <TextBlock x:Name="ControllerIdText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,6,0,0" />
+
+                        <TextBlock Text="Preferred session colour" Margin="0,16,0,6" />
+                        <TextBlock Text="GrevUltraVNC tries to give you this colour when you join. If somebody already has it, the Agent assigns the next free colour for that session only."
+                                   Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" />
+                        <Grid Margin="0,9,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <UniformGrid x:Name="CollaborationColourPalette" Columns="8" Rows="2">
+                                <Button x:Name="DefaultCollaborationColourButton" Style="{StaticResource CollaborationColourButton}" Background="#32CFF0" Tag="#32CFF0" ToolTip="Grev cyan" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#8C7CFF" Tag="#8C7CFF" ToolTip="Violet" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#50DC91" Tag="#50DC91" ToolTip="Green" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#FFB84D" Tag="#FFB84D" ToolTip="Orange" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#FF6B8A" Tag="#FF6B8A" ToolTip="Pink" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#5EA8FF" Tag="#5EA8FF" ToolTip="Blue" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#FFE066" Tag="#FFE066" ToolTip="Yellow" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#2DD4BF" Tag="#2DD4BF" ToolTip="Teal" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#FF4D5E" Tag="#FF4D5E" ToolTip="Red" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#A3E635" Tag="#A3E635" ToolTip="Lime" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#EC4899" Tag="#EC4899" ToolTip="Magenta" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#A855F7" Tag="#A855F7" ToolTip="Purple" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#6366F1" Tag="#6366F1" ToolTip="Indigo" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#38BDF8" Tag="#38BDF8" ToolTip="Sky" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#F59E0B" Tag="#F59E0B" ToolTip="Amber" Click="CollaborationColour_Click" />
+                                <Button Style="{StaticResource CollaborationColourButton}" Background="#6EE7B7" Tag="#6EE7B7" ToolTip="Mint" Click="CollaborationColour_Click" />
+                            </UniformGrid>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                                <TextBlock Text="SELECTED" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" FontWeight="SemiBold" />
+                                <TextBlock x:Name="SelectedCollaborationColourText" Text="Grev cyan" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock x:Name="ControllerIdText" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,10,0,0" />
                     </StackPanel>
                 </Border>
 

@@ -12,30 +12,26 @@ namespace GrevUltraVNC;
 
 public partial class NamedCursorOverlayWindow : Window
 {
-    private static readonly string[] CursorPalette =
-    [
-        "#32CFF0",
-        "#8C7CFF",
-        "#50DC91",
-        "#FFB84D",
-        "#FF6B8A",
-        "#5EA8FF"
-    ];
-
     private readonly Machine _machine;
     private readonly UltraVncSessionService _vnc;
     private readonly bool _virtualDisplay;
+    private readonly string _preferredColor;
     private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private IReadOnlyList<AgentPresenceInfo> _participants = Array.Empty<AgentPresenceInfo>();
     private string _localControllerId = string.Empty;
     private FrameworkElement? _localCursorVisual;
 
-    public NamedCursorOverlayWindow(Machine machine, UltraVncSessionService vnc, bool virtualDisplay)
+    public NamedCursorOverlayWindow(
+        Machine machine,
+        UltraVncSessionService vnc,
+        bool virtualDisplay,
+        string preferredColor)
     {
         InitializeComponent();
         _machine = machine;
         _vnc = vnc;
         _virtualDisplay = virtualDisplay;
+        _preferredColor = CollaborationColors.Normalize(preferredColor);
 
         SourceInitialized += NamedCursorOverlayWindow_SourceInitialized;
         Loaded += NamedCursorOverlayWindow_Loaded;
@@ -145,10 +141,10 @@ public partial class NamedCursorOverlayWindow : Window
                 continue;
 
             var visual = CreateCursorVisual(
-                participant.ControllerId,
                 participant.DisplayName,
                 participant.HasControl,
-                isLocal: false);
+                isLocal: false,
+                participant.Color);
             CursorCanvas.Children.Add(visual);
             PositionCursor(visual, participant.CursorX.Value, participant.CursorY.Value);
         }
@@ -156,22 +152,23 @@ public partial class NamedCursorOverlayWindow : Window
         if (!string.IsNullOrWhiteSpace(_localControllerId))
         {
             _localCursorVisual = CreateCursorVisual(
-                _localControllerId,
                 localParticipant?.DisplayName ?? "YOU",
                 localParticipant?.HasControl == true,
-                isLocal: true);
+                isLocal: true,
+                localParticipant?.Color ?? _preferredColor);
             CursorCanvas.Children.Add(_localCursorVisual);
             MoveLocalCursor();
         }
     }
 
     private FrameworkElement CreateCursorVisual(
-        string controllerId,
         string displayName,
         bool hasControl,
-        bool isLocal)
+        bool isLocal,
+        string color)
     {
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(GetCursorColor(controllerId))!);
+        var normalizedColor = CollaborationColors.Normalize(color);
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(normalizedColor)!);
         brush.Freeze();
 
         var label = hasControl
@@ -232,17 +229,6 @@ public partial class NamedCursorOverlayWindow : Window
         var desired = visual.DesiredSize;
         Canvas.SetLeft(visual, Math.Clamp(x, 0, Math.Max(0, CursorCanvas.ActualWidth - desired.Width)));
         Canvas.SetTop(visual, Math.Clamp(y, 0, Math.Max(0, CursorCanvas.ActualHeight - desired.Height)));
-    }
-
-    private static string GetCursorColor(string controllerId)
-    {
-        unchecked
-        {
-            var hash = 17;
-            foreach (var character in controllerId)
-                hash = hash * 31 + char.ToUpperInvariant(character);
-            return CursorPalette[(hash & int.MaxValue) % CursorPalette.Length];
-        }
     }
 
     private static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex) =>
