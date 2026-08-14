@@ -61,7 +61,6 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Machine identity -->
         <Border Background="{DynamicResource SubtlePanelBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
@@ -97,6 +96,8 @@
                                    Foreground="{DynamicResource MutedTextBrush}"
                                    FontSize="9" FontWeight="SemiBold" />
                     </Border>
+                    <Button Style="{StaticResource ManageSmallButton}"
+                            Content="Files" Click="Files_Click" Margin="0,0,7,0" ToolTip="Open remote file manager" />
                     <Button x:Name="RefreshScreenButton" Style="{StaticResource ManageSmallButton}"
                             Content="Refresh screen" Click="RefreshScreen_Click" Margin="0,0,7,0" />
                     <Button Style="{StaticResource ManageSmallButton}"
@@ -105,25 +106,22 @@
             </Grid>
         </Border>
 
-        <!-- Navigation -->
         <Border Grid.Row="1" Margin="22,13,22,12"
                 Background="{DynamicResource PanelBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1" CornerRadius="12" Padding="5">
-            <UniformGrid Columns="8">
+            <UniformGrid Columns="7">
                 <Button x:Name="OverviewButton" Style="{StaticResource ManageNavActiveButton}" Content="Overview" Click="OverviewTab_Click" />
                 <Button x:Name="ProcessesButton" Style="{StaticResource ManageNavButton}" Content="Processes" Click="ProcessesTab_Click" />
                 <Button x:Name="ServicesButton" Style="{StaticResource ManageNavButton}" Content="Services" Click="ServicesTab_Click" />
                 <Button x:Name="SessionButton" Style="{StaticResource ManageNavButton}" Content="Session" Click="SessionTab_Click" />
-                <Button Style="{StaticResource ManageNavButton}" Content="Files" Click="Files_Click" />
-                <Button x:Name="ToolsButton" Style="{StaticResource ManageNavButton}" Content="Tools" Click="ToolsTab_Click" />
+                <Button x:Name="ToolsButton" Style="{StaticResource ManageNavButton}" Content="Admin Tools" Click="ToolsTab_Click" />
                 <Button x:Name="TerminalButton" Style="{StaticResource ManageNavButton}" Content="Terminal" Click="TerminalTab_Click" />
                 <Button x:Name="ActivityButton" Style="{StaticResource ManageNavButton}" Content="Activity" Click="ActivityTab_Click" />
             </UniformGrid>
         </Border>
 
         <Grid Grid.Row="2" Margin="22,0,22,14">
-            <!-- OVERVIEW -->
             <Grid x:Name="OverviewPanel">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -178,8 +176,8 @@
                     <Border Grid.Column="1" Style="{StaticResource ManageSurface}" Padding="15" Margin="5,0,0,0">
                         <StackPanel>
                             <TextBlock Text="INVENTORY" Foreground="{DynamicResource Accent2Brush}" FontSize="9" FontWeight="SemiBold" />
-                            <TextBlock x:Name="ProcessSummaryText" Text="Processes: —" Margin="0,7,0,0" FontSize="11" />
-                            <TextBlock x:Name="ServiceSummaryText" Text="Services: —" Margin="0,4,0,0" FontSize="11" />
+                            <TextBlock x:Name="ProcessSummaryText" Text="Processes: open tab to load" Margin="0,7,0,0" FontSize="11" />
+                            <TextBlock x:Name="ServiceSummaryText" Text="Services: open tab to load" Margin="0,4,0,0" FontSize="11" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -209,7 +207,6 @@
                 </Border>
             </Grid>
 
-            <!-- PROCESSES -->
             <Grid x:Name="ProcessesPanel" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -239,7 +236,10 @@
                 <Border Grid.Row="2" Style="{StaticResource ManageSurface}" Padding="10">
                     <ListView x:Name="ProcessesList" Background="Transparent" BorderThickness="0"
                               Foreground="{DynamicResource TextBrush}"
-                              ItemContainerStyle="{StaticResource ManageListItem}">
+                              ItemContainerStyle="{StaticResource ManageListItem}"
+                              ScrollViewer.CanContentScroll="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
                         <ListView.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="3,5">
@@ -260,7 +260,6 @@
                 </Border>
             </Grid>
 
-            <!-- SERVICES -->
             <Grid x:Name="ServicesPanel" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -291,7 +290,10 @@
                 <Border Grid.Row="2" Style="{StaticResource ManageSurface}" Padding="10">
                     <ListView x:Name="ServicesList" Background="Transparent" BorderThickness="0"
                               Foreground="{DynamicResource TextBrush}"
-                              ItemContainerStyle="{StaticResource ManageListItem}">
+                              ItemContainerStyle="{StaticResource ManageListItem}"
+                              ScrollViewer.CanContentScroll="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
                         <ListView.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="3,5">
@@ -311,7 +313,6 @@
                 </Border>
             </Grid>
 
-            <!-- SESSION -->
             <Grid x:Name="SessionPanel" Visibility="Collapsed">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                 <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="0,0,0,10">
@@ -337,7 +338,6 @@
                 </Grid>
             </Grid>
 
-            <!-- TOOLS -->
             <Grid x:Name="ToolsPanel" Visibility="Collapsed">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="2*" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                 <Border Style="{StaticResource ManageSurface}" Padding="12" Margin="0,0,0,10">
@@ -403,7 +403,6 @@
                 </Border>
             </Grid>
 
-            <!-- TERMINAL -->
             <Grid x:Name="TerminalPanel" Visibility="Collapsed">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                 <Border Style="{StaticResource ManageSurface}" Padding="11" Margin="0,0,0,8">
@@ -423,7 +422,6 @@
                 </Border>
             </Grid>
 
-            <!-- ACTIVITY -->
             <Grid x:Name="ActivityPanel" Visibility="Collapsed">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                 <Grid Margin="0,0,0,8">
@@ -441,7 +439,10 @@
                 <Border Grid.Row="2" Style="{StaticResource ManageSurface}" Padding="10">
                     <ListView x:Name="ActivityList" Background="Transparent" BorderThickness="0"
                               Foreground="{DynamicResource TextBrush}"
-                              ItemContainerStyle="{StaticResource ManageListItem}">
+                              ItemContainerStyle="{StaticResource ManageListItem}"
+                              ScrollViewer.CanContentScroll="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
                         <ListView.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="3,6">
