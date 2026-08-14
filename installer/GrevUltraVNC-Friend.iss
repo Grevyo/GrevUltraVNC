@@ -1,5 +1,5 @@
 #define MyAppName "GrevUltraVNC"
-#define MyAppVersion "1.1.2"
+#define MyAppVersion "1.1.3"
 #define MyAppPublisher "Grev"
 #define MyAppExeName "GrevUltraVNC.exe"
 
@@ -23,12 +23,12 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=GrevUltraVNC-1.1.2-Friend-Setup
+OutputBaseFilename=GrevUltraVNC-1.1.3-Friend-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
-UninstallDisplayName=GrevUltraVNC 1.1.2 Friend Test
+UninstallDisplayName=GrevUltraVNC 1.1.3 Friend Test
 UninstallDisplayIcon={app}\GrevUltraVNC.exe
 CloseApplications=yes
 RestartApplications=no
@@ -227,7 +227,7 @@ begin
     wpWelcome:
       begin
         WizardForm.WelcomeLabel2.Caption :=
-          'This installs GrevUltraVNC 1.1.2 and the UltraVNC viewer it needs.' + #13#10 + #13#10 +
+          'This installs GrevUltraVNC 1.1.3 and the UltraVNC viewer it needs.' + #13#10 + #13#10 +
           GrevQuote(1) + #13#10 + #13#10 + GrevQuote(83);
       end;
 
