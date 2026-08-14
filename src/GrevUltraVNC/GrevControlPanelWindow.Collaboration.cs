@@ -374,12 +374,6 @@ public partial class GrevControlPanelWindow
         }
     }
 
-    // Kept as compatibility handlers for any older XAML/code path; all Screen 2 work now goes
-    // through the Agent-owned display implementation in ViewerEnhancements.
-    private void VirtualDisplay_Click(object sender, RoutedEventArgs e) => CreateScreen2_Click(sender, e);
-
-    private void CloseVirtualDisplay_Click(object sender, RoutedEventArgs e) => CloseScreen2_Click(sender, e);
-
     private void UpdateDisplayState()
     {
         if (_virtualDisplayStarting) return;
