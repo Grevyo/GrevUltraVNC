@@ -254,7 +254,12 @@ public sealed class CollaborationService
             "target" or
             "square" or
             "bolt" or
-            "hand"
+            "hand" or
+            "banana" or
+            "fish" or
+            "ghost" or
+            "crown" or
+            "mug"
             ? normalized
             : "arrow";
     }
