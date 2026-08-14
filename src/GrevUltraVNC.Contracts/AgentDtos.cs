@@ -119,7 +119,8 @@ public sealed record AgentPresenceInfo(
     bool CursorVisible = false,
     string CursorSurface = "screen1",
     bool HasControl = false,
-    string Color = CollaborationColors.Default);
+    string Color = CollaborationColors.Default,
+    string CursorStyle = "arrow");
 
 public sealed record AgentWhiteboardPoint(
     double X,
@@ -146,7 +147,8 @@ public sealed record AgentCollaborationRequest(
     double? CursorY = null,
     bool CursorVisible = false,
     string CursorSurface = "screen1",
-    string PreferredColor = CollaborationColors.Default);
+    string PreferredColor = CollaborationColors.Default,
+    string PreferredCursorStyle = "grev");
 
 public sealed record AgentCollaborationResponse(
     bool Success,
