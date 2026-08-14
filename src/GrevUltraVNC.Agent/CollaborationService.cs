@@ -65,7 +65,15 @@ public sealed class CollaborationService
                         return Snapshot(false, "Whiteboard event was invalid.", request.LastEventId);
 
                     if (string.Equals(published.Kind, "clear", StringComparison.OrdinalIgnoreCase))
+                    {
                         _whiteboardEvents.Clear();
+                    }
+                    else if (string.Equals(published.Kind, "delete", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _whiteboardEvents.RemoveAll(item =>
+                            string.Equals(item.Kind, "stroke", StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(item.StrokeId, published.StrokeId, StringComparison.OrdinalIgnoreCase));
+                    }
 
                     _whiteboardEvents.Add(published);
                     if (_whiteboardEvents.Count > MaxWhiteboardEvents)
@@ -191,16 +199,19 @@ public sealed class CollaborationService
         string displayName)
     {
         var kind = input.Kind?.Trim().ToLowerInvariant();
-        if (kind is not ("stroke" or "clear")) return null;
+        if (kind is not ("stroke" or "clear" or "delete")) return null;
 
-        var points = kind == "clear"
-            ? Array.Empty<AgentWhiteboardPoint>()
-            : (input.Points ?? [])
+        if (kind == "delete" && string.IsNullOrWhiteSpace(input.StrokeId))
+            return null;
+
+        var points = kind == "stroke"
+            ? (input.Points ?? [])
                 .Take(MaxStrokePoints)
                 .Select(point => new AgentWhiteboardPoint(
                     Math.Clamp(point.X, 0, 1),
                     Math.Clamp(point.Y, 0, 1)))
-                .ToArray();
+                .ToArray()
+            : Array.Empty<AgentWhiteboardPoint>();
 
         if (kind == "stroke" && points.Length < 2) return null;
 
