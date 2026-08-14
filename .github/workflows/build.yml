@@ -38,7 +38,7 @@ jobs:
         shell: powershell
         run: choco install innosetup -y --no-progress
 
-      - name: Build GrevUltraVNC 1.1.3 friend installer
+      - name: Build GrevUltraVNC 1.1.4 friend installer
         shell: powershell
         run: .\scripts\build-friend-installer.ps1
 
@@ -68,24 +68,27 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
           }
 
-      - name: Publish GrevUltraVNC 1.1.3 friend release
+      - name: Publish GrevUltraVNC 1.1.4 friend release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.1.3-friend'
-          $asset = 'dist\GrevUltraVNC-1.1.3-Friend-Setup.exe'
+          $tag = 'v1.1.4-friend'
+          $asset = 'dist\GrevUltraVNC-1.1.4-Friend-Setup.exe'
           $notes = @(
-            'GrevUltraVNC 1.1.3 Friend Test'
+            'GrevUltraVNC 1.1.4 Friend Test'
             ''
-            '- Shows all six cursor styles as real visual previews in Settings instead of a text-only picker.'
-            '- Shows the same six clickable cursor previews inside Grev Control for live switching during a session.'
-            '- Cursor previews use your current collaboration colour and are built from the same vector shapes as the live overlay.'
-            '- Fixes local cursor selection being overridden by the previous Agent snapshot, so the chosen shape changes immediately under your own mouse.'
-            '- Pushes live cursor-style changes to the Agent immediately so other connected Grev users see the new shape without waiting for the next heartbeat.'
-            '- Keeps the 1.1.2 right-edge hotspot fix, shared whiteboard eraser/undo and 160 installer messages.'
-            '- No Agent protocol bump beyond protocol 15 is required for this controller fix.'
+            '- Makes Classic Arrow the default cursor for fresh or invalid settings.'
+            '- Expands the cursor pack from six to thirteen styles.'
+            '- Adds a completely redrawn Grev Squiggle plus the new original ChatGPT Squiggle.'
+            '- Adds Slim Arrow, Chevron, Target, Hollow Square, Bolt Pointer and Hand Pointer.'
+            '- Grev Control now uses a tiny icon-only cursor picker with names available only as tooltips.'
+            '- Settings keeps named previews but makes them smaller and more compact so the full cursor pack remains easy to scan.'
+            '- Live collaboration cursor name labels remain unchanged on the remote desktop.'
+            '- The Agent now accepts and shares every 1.1.4 cursor style between connected controllers.'
+            '- Keeps the right-edge hotspot fix, live cursor switching, shared whiteboard eraser/undo and 160 installer messages.'
+            '- Agent protocol remains 15 because the collaboration schema itself is unchanged, but remote PCs should update Agent to share the new style IDs.'
             '- Single Windows installer with the bundled UltraVNC viewer.'
             '- Connect your Zima / private Grev Connect network before using an external GC- ID.'
             '- This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
@@ -96,9 +99,9 @@ jobs:
 
           if ($releaseExists) {
             gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.3-friend release asset.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.4-friend release asset.' }
           }
           else {
-            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.3 Friend Test' --notes $notes --prerelease
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.3-friend release.' }
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.4 Friend Test' --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.4-friend release.' }
           }
