@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -12,11 +11,9 @@ public partial class GrevControlPanelWindow : Window
     private readonly Machine _machine;
     private readonly UltraVncSessionService _vnc;
     private readonly GrevAgentClient _agent = new();
-    private readonly AgentUpdateService _agentUpdater;
     private readonly PowerService _power = new();
     private readonly DispatcherTimer _agentTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _agentRefreshRunning;
-    private bool _agentUpdateRunning;
     private bool _agentActionRunning;
     private MachineOverviewWindow? _machineOverview;
 
@@ -25,11 +22,9 @@ public partial class GrevControlPanelWindow : Window
         InitializeComponent();
         _machine = machine;
         _vnc = vnc;
-        _agentUpdater = new AgentUpdateService(_agent);
 
         MachineNameText.Text = machine.Name;
-        MachineAddressText.Text = $"{machine.ConnectDisplayText}  ·  VNC {machine.VncPort}";
-        UpdateAgentButton.IsEnabled = false;
+        UpdateConnectionHealthText();
         SessionActionPanel.IsEnabled = false;
 
         Loaded += GrevControlPanelWindow_Loaded;
@@ -54,12 +49,12 @@ public partial class GrevControlPanelWindow : Window
 
     private async Task RefreshAgentHealthAsync()
     {
-        if (_agentRefreshRunning || _agentUpdateRunning || _agentActionRunning) return;
+        if (_agentRefreshRunning || _agentActionRunning) return;
         _agentRefreshRunning = true;
 
         try
         {
-            MachineAddressText.Text = $"{_machine.ConnectDisplayText}  ·  VNC {_machine.VncPort}";
+            UpdateConnectionHealthText();
             var result = await _agent.ProbeAsync(_machine);
             _machine.AgentState = result.State;
             _machine.AgentStatus = result.Status;
@@ -67,10 +62,6 @@ public partial class GrevControlPanelWindow : Window
 
             var sessionActionsReady = result.State == GrevAgentState.Connected && string.IsNullOrWhiteSpace(result.Message);
             SessionActionPanel.IsEnabled = sessionActionsReady;
-            UpdateAgentButton.IsEnabled = result.State == GrevAgentState.Connected;
-            UpdateAgentButton.Content = result.State == GrevAgentState.Connected && !string.IsNullOrWhiteSpace(result.Message)
-                ? "⇩ Update Grev Agent · recommended"
-                : "⇩ Update Grev Agent";
 
             if (result.State == GrevAgentState.Connected && result.Status is not null)
             {
@@ -81,12 +72,6 @@ public partial class GrevControlPanelWindow : Window
                     ? new SolidColorBrush(Color.FromRgb(80, 220, 145))
                     : (Brush)FindResource("Accent2Brush");
                 AgentCpuRamText.Text = $"CPU {status.CpuUsagePercent:0.#}%   ·   RAM {FormatGiB(usedMemory)} / {FormatGiB(status.TotalMemoryBytes)}";
-                AgentUserUptimeText.Text = $"{status.InteractiveUser ?? "No console user"}   ·   Uptime {FormatUptime(status.UptimeSeconds)}";
-                AgentVncHealthText.Text = $"UltraVNC {status.UltraVncServiceStatus}   ·   TCP {status.UltraVncPort} {(status.UltraVncPortListening ? "listening" : "not listening")}";
-                AgentDiskText.Text = status.Disks.Count == 0
-                    ? "No fixed-disk telemetry"
-                    : string.Join("   ·   ", status.Disks.Take(2).Select(d => $"{d.Name.TrimEnd('\\')} {FormatGiB(d.FreeBytes)} free"));
-                AgentUpdateStatusText.Text = string.IsNullOrWhiteSpace(result.Message) ? string.Empty : result.Message;
                 return;
             }
 
@@ -103,10 +88,6 @@ public partial class GrevControlPanelWindow : Window
                 ? new SolidColorBrush(Color.FromRgb(255, 107, 119))
                 : new SolidColorBrush(Color.FromRgb(98, 111, 130));
             AgentCpuRamText.Text = result.Message ?? "Install or pair Grev Agent to enable system telemetry.";
-            AgentUserUptimeText.Text = string.Empty;
-            AgentVncHealthText.Text = string.Empty;
-            AgentDiskText.Text = string.Empty;
-            AgentUpdateStatusText.Text = string.Empty;
         }
         finally
         {
@@ -114,47 +95,16 @@ public partial class GrevControlPanelWindow : Window
         }
     }
 
-    private async void UpdateAgent_Click(object sender, RoutedEventArgs e)
+    private void UpdateConnectionHealthText()
     {
-        if (_agentUpdateRunning) return;
+        MachineAddressText.Text = $"{_machine.ConnectDisplayText}  ·  VNC {_machine.VncPort}";
 
-        if (MessageBox.Show(this,
-                $"Update Grev Agent on {_machine.Name} from the latest GitHub release?\n\nThe Agent service will restart. Your VNC session should remain open and the existing pairing key will be preserved.",
-                "Update Grev Agent",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question) != MessageBoxResult.Yes)
-            return;
-
-        _agentUpdateRunning = true;
-        UpdateAgentButton.IsEnabled = false;
-        SessionActionPanel.IsEnabled = false;
-        AgentUpdateStatusText.Text = "Preparing Agent update…";
-
-        try
-        {
-            var progress = new Progress<string>(message => AgentUpdateStatusText.Text = message);
-            var result = await _agentUpdater.UpdateFromGitHubAsync(_machine, progress);
-            _machine.AgentState = result.State;
-            _machine.AgentStatus = result.Status;
-            _machine.AgentMessage = result.Message;
-            AgentUpdateStatusText.Text = "Grev Agent updated successfully.";
-
-            MessageBox.Show(this,
-                $"Grev Agent on {_machine.Name} updated successfully and is responding again.",
-                "Grev Agent updated",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            AgentUpdateStatusText.Text = ex.Message;
-            MessageBox.Show(this, ex.Message, "Grev Agent update", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            _agentUpdateRunning = false;
-            await RefreshAgentHealthAsync();
-        }
+        var route = !string.IsNullOrWhiteSpace(_machine.ResolvedRoute)
+            ? _machine.ResolvedRoute
+            : string.IsNullOrWhiteSpace(_machine.ConnectId) ? "LAN" : "Grev Connect";
+        var latency = _machine.LatencyMs is not null ? $"{_machine.LatencyMs} ms" : "ping —";
+        var vnc = _vnc.HasActiveSession(_machine.Id) ? "VNC ACTIVE" : _machine.VncAvailable ? "VNC READY" : "VNC CHECKING";
+        RouteHealthText.Text = $"{route.ToUpperInvariant()}  ·  {latency}  ·  {vnc}";
     }
 
     private void ManageMachine_Click(object sender, RoutedEventArgs e)
@@ -199,24 +149,24 @@ public partial class GrevControlPanelWindow : Window
             return;
 
         _agentActionRunning = true;
-        AgentUpdateStatusText.Text = $"{title}…";
+        AgentCpuRamText.Text = $"{title}…";
 
         try
         {
             var result = await _agent.RunQuickActionAsync(_machine, action);
-            AgentUpdateStatusText.Text = result.Message;
+            AgentCpuRamText.Text = result.Message;
 
             if (!result.Success)
                 MessageBox.Show(this, result.Message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
-            AgentUpdateStatusText.Text = ex.Message;
             MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             _agentActionRunning = false;
+            await RefreshAgentHealthAsync();
         }
     }
 
@@ -298,44 +248,4 @@ public partial class GrevControlPanelWindow : Window
     private void HidePanel_Click(object sender, RoutedEventArgs e) => Hide();
 
     private static string FormatGiB(long bytes) => $"{Math.Max(0, bytes) / 1024d / 1024d / 1024d:0.#} GB";
-
-    private static string FormatUptime(long seconds)
-    {
-        var span = TimeSpan.FromSeconds(Math.Max(0, seconds));
-        return span.TotalDays >= 1
-            ? $"{(int)span.TotalDays}d {span.Hours}h"
-            : $"{(int)span.TotalHours}h {span.Minutes}m";
-    }
-
-    private const uint MONITOR_DEFAULTTONEAREST = 2;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MONITORINFO
-    {
-        public uint cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public uint dwFlags;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
-
-    [DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(IntPtr hwnd);
 }
