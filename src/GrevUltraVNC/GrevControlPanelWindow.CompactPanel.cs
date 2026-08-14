@@ -64,7 +64,7 @@ public partial class GrevControlPanelWindow
             return;
         }
 
-        if (!_viewerScaleDragging && viewerWindowAlive)
+        if (!_viewerScaleDragging && viewerWindowAlive && !_compactPanelManualPosition)
             DockCompactPanel();
 
         // Keep the existing Screen 2 lease behaviour intact while this timer owns docking.
