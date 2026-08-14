@@ -228,13 +228,31 @@ public partial class NamedCursorOverlayWindow : Window
 
     private void PositionCursor(FrameworkElement visual, double normalizedX, double normalizedY)
     {
-        var x = Math.Clamp(normalizedX, 0, 1) * CursorCanvas.ActualWidth;
-        var y = Math.Clamp(normalizedY, 0, 1) * CursorCanvas.ActualHeight;
+        var canvasWidth = CursorCanvas.ActualWidth;
+        var canvasHeight = CursorCanvas.ActualHeight;
+        var x = Math.Clamp(normalizedX, 0, 1) * Math.Max(0, canvasWidth - 1);
+        var y = Math.Clamp(normalizedY, 0, 1) * Math.Max(0, canvasHeight - 1);
+
+        // The pointer tip is the hotspot. Do not clamp the entire pointer + name label inside
+        // the viewer or a long label makes the cursor stop early at the right/bottom edges.
+        Canvas.SetLeft(visual, x);
+        Canvas.SetTop(visual, y);
 
         visual.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var desired = visual.DesiredSize;
-        Canvas.SetLeft(visual, Math.Clamp(x, 0, Math.Max(0, CursorCanvas.ActualWidth - desired.Width)));
-        Canvas.SetTop(visual, Math.Clamp(y, 0, Math.Max(0, CursorCanvas.ActualHeight - desired.Height)));
+        if (visual is not StackPanel panel || panel.Children.Count < 2 ||
+            panel.Children[0] is not FrameworkElement pointer ||
+            panel.Children[1] is not FrameworkElement label)
+            return;
+
+        pointer.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+        // Keep the hotspot at the real cursor position. When the label would run off the right
+        // edge, move only the label to the left side of the pointer instead of moving the cursor.
+        var wouldOverflowRight = x + pointer.DesiredSize.Width + label.DesiredSize.Width > canvasWidth;
+        label.RenderTransform = wouldOverflowRight
+            ? new TranslateTransform(-(pointer.DesiredSize.Width + label.DesiredSize.Width + 4), 0)
+            : new TranslateTransform(0, 0);
     }
 
     private static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex) =>
