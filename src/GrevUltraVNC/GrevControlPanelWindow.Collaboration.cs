@@ -16,14 +16,13 @@ public partial class GrevControlPanelWindow
     private readonly SemaphoreSlim _whiteboardPublishGate = new(1, 1);
     private bool _collaborationRefreshRunning;
     private bool _virtualDisplayStarting;
-    private bool _updatingCursorStylePicker;
     private long _lastWhiteboardEventId;
     private string? _controlOwnerId;
     private RemoteAudioPlaybackService? _remoteAudio;
     private WhiteboardOverlayWindow? _whiteboardOverlay;
     private NamedCursorOverlayWindow? _screen1CursorOverlay;
     private NamedCursorOverlayWindow? _screen2CursorOverlay;
-    private ComboBox? _cursorStyleQuickCombo;
+    private CursorStyleSelector? _cursorStyleQuickSelector;
 
     public event EventHandler? CollaborationSettingsChanged;
 
@@ -54,67 +53,100 @@ public partial class GrevControlPanelWindow
         if (ParticipantsItems.Parent is not StackPanel host)
             return;
 
-        var row = new Grid { Margin = new Thickness(1, 5, 1, 0) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var heading = new Grid { Margin = new Thickness(1, 6, 1, 4) };
+        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var label = new TextBlock
         {
-            Text = "YOUR CURSOR",
+            Text = "YOUR CURSOR · CLICK A PREVIEW",
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 8,
             FontWeight = FontWeights.SemiBold
         };
         label.SetResourceReference(TextBlock.ForegroundProperty, "FaintTextBrush");
-        row.Children.Add(label);
+        heading.Children.Add(label);
 
-        _cursorStyleQuickCombo = new ComboBox
+        var current = new TextBlock
         {
-            Width = 132,
-            MinHeight = 24,
-            Padding = new Thickness(6, 2, 6, 2),
-            ItemsSource = CursorStyleCatalog.Options,
-            DisplayMemberPath = nameof(CursorStyleOption.Name),
-            SelectedValuePath = nameof(CursorStyleOption.Id),
-            ToolTip = "Change your collaboration cursor without leaving this session"
+            Text = CursorStyleCatalog.DisplayName(_collaborationSettings.CursorStyle),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 8,
+            FontWeight = FontWeights.SemiBold
         };
-        _cursorStyleQuickCombo.SelectionChanged += CursorStyleQuickCombo_SelectionChanged;
-        Grid.SetColumn(_cursorStyleQuickCombo, 1);
-        row.Children.Add(_cursorStyleQuickCombo);
+        current.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
+        current.Tag = "cursor-current-label";
+        Grid.SetColumn(current, 1);
+        heading.Children.Add(current);
 
-        host.Children.Add(row);
-        UpdateCursorStyleQuickPickerSelection();
+        _cursorStyleQuickSelector = new CursorStyleSelector(
+            _collaborationSettings.CursorStyle,
+            _collaborationSettings.CollaborationColor,
+            compact: true)
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MaxWidth = 360
+        };
+        _cursorStyleQuickSelector.SelectedStyleChanged += CursorStyleQuickSelector_SelectedStyleChanged;
+
+        host.Children.Add(heading);
+        host.Children.Add(_cursorStyleQuickSelector);
     }
 
     private void UpdateCursorStyleQuickPickerSelection()
     {
-        if (_cursorStyleQuickCombo is null) return;
+        if (_cursorStyleQuickSelector is null) return;
+        _cursorStyleQuickSelector.SetColor(_collaborationSettings.CollaborationColor);
+        _cursorStyleQuickSelector.SetSelectedStyle(_collaborationSettings.CursorStyle);
+        UpdateCursorStyleCurrentLabel();
+    }
 
-        _updatingCursorStylePicker = true;
-        try
+    private void UpdateCursorStyleCurrentLabel()
+    {
+        if (ParticipantsItems.Parent is not StackPanel host) return;
+
+        foreach (var grid in host.Children.OfType<Grid>())
         {
-            _cursorStyleQuickCombo.SelectedValue = CursorStyleCatalog.Normalize(_collaborationSettings.CursorStyle);
-        }
-        finally
-        {
-            _updatingCursorStylePicker = false;
+            var label = grid.Children
+                .OfType<TextBlock>()
+                .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), "cursor-current-label", StringComparison.Ordinal));
+            if (label is null) continue;
+            label.Text = CursorStyleCatalog.DisplayName(_collaborationSettings.CursorStyle);
+            return;
         }
     }
 
-    private void CursorStyleQuickCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void CursorStyleQuickSelector_SelectedStyleChanged(string selected)
     {
-        if (_updatingCursorStylePicker || _cursorStyleQuickCombo?.SelectedValue is not string selected)
-            return;
-
         var normalized = CursorStyleCatalog.Normalize(selected);
         if (string.Equals(_collaborationSettings.CursorStyle, normalized, StringComparison.OrdinalIgnoreCase))
             return;
 
         _collaborationSettings.CursorStyle = normalized;
+
+        // Change the controller's own overlay immediately. Do not wait for the Agent heartbeat to
+        // echo the new preference back before showing the chosen shape under the local mouse.
         _screen1CursorOverlay?.UpdatePreferredCursorStyle(normalized);
         _screen2CursorOverlay?.UpdatePreferredCursorStyle(normalized);
+        UpdateCursorStyleCurrentLabel();
         CollaborationStatusText.Text = $"Cursor · {CursorStyleCatalog.DisplayName(normalized)}";
         CollaborationSettingsChanged?.Invoke(this, EventArgs.Empty);
+
+        // Also push a cursor snapshot immediately so the other connected Grev controllers see the
+        // new shape straight away instead of waiting for the next periodic heartbeat.
+        try
+        {
+            var response = await _collaborationClient.RunCollaborationAsync(
+                _machine,
+                BuildCollaborationRequest("cursor"));
+            if (response.Success)
+                ApplyCollaborationResponse(response);
+        }
+        catch
+        {
+            // The local choice remains selected/saved. The normal heartbeat will retry Agent sync.
+            CollaborationStatusText.Text = $"Cursor · {CursorStyleCatalog.DisplayName(normalized)} · sync pending";
+        }
     }
 
     private async void GrevCollaboration_Loaded(object sender, RoutedEventArgs e)
