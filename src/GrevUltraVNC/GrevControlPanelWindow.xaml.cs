@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
@@ -14,11 +13,7 @@ public partial class GrevControlPanelWindow : Window
     private readonly UltraVncSessionService _vnc;
     private readonly GrevAgentClient _agent = new();
     private readonly AgentUpdateService _agentUpdater;
-    private readonly WakeOnLanService _wake = new();
     private readonly PowerService _power = new();
-    private readonly NetworkStatusService _network = new();
-    private readonly RemoteUltraVncService _remoteVnc = new();
-    private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private readonly DispatcherTimer _agentTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _agentRefreshRunning;
     private bool _agentUpdateRunning;
@@ -39,35 +34,20 @@ public partial class GrevControlPanelWindow : Window
 
         Loaded += GrevControlPanelWindow_Loaded;
         Closed += GrevControlPanelWindow_Closed;
-        _dockTimer.Tick += DockTimer_Tick;
         _agentTimer.Tick += AgentTimer_Tick;
     }
 
     private async void GrevControlPanelWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        _dockTimer.Start();
         _agentTimer.Start();
-        DockToViewer();
+        DockCompactPanel();
         await RefreshAgentHealthAsync();
     }
 
     private void GrevControlPanelWindow_Closed(object? sender, EventArgs e)
     {
-        _dockTimer.Stop();
         _agentTimer.Stop();
         _agent.Dispose();
-    }
-
-    private void DockTimer_Tick(object? sender, EventArgs e)
-    {
-        if (!_vnc.HasActiveSession(_machine.Id))
-        {
-            SessionStatusText.Text = "● SESSION ENDED";
-            Close();
-            return;
-        }
-
-        DockToViewer();
     }
 
     private async void AgentTimer_Tick(object? sender, EventArgs e) => await RefreshAgentHealthAsync();
@@ -177,54 +157,6 @@ public partial class GrevControlPanelWindow : Window
         }
     }
 
-    private void DockToViewer()
-    {
-        if (!_vnc.TryGetViewerWindowHandle(_machine.Id, out var handle) || handle == IntPtr.Zero)
-            return;
-
-        if (!GetWindowRect(handle, out var viewerRect))
-            return;
-
-        var monitor = MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST);
-        if (monitor == IntPtr.Zero)
-            return;
-
-        var info = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
-        if (!GetMonitorInfo(monitor, ref info))
-            return;
-
-        var dpi = GetDpiForWindow(handle);
-        var scale = dpi == 0 ? 1.0 : dpi / 96.0;
-
-        var workLeft = info.rcWork.Left / scale;
-        var workTop = info.rcWork.Top / scale;
-        var workRight = info.rcWork.Right / scale;
-        var workBottom = info.rcWork.Bottom / scale;
-
-        var viewerLeft = viewerRect.Left / scale;
-        var viewerTop = viewerRect.Top / scale;
-        var viewerRight = viewerRect.Right / scale;
-        var viewerBottom = viewerRect.Bottom / scale;
-
-        const double gap = 8.0;
-        const double preferredPanelHeight = 690.0;
-        var panelWidth = Width;
-        var availableHeight = Math.Max(MinHeight, workBottom - workTop);
-        var viewerHeight = Math.Max(MinHeight, viewerBottom - viewerTop);
-
-        Height = Math.Min(availableHeight, Math.Min(preferredPanelHeight, Math.Max(MinHeight, viewerHeight)));
-
-        var centeredTop = viewerTop + Math.Max(0, (viewerHeight - Height) / 2.0);
-        Top = Math.Clamp(centeredTop, workTop, Math.Max(workTop, workBottom - Height));
-
-        if (viewerRight + gap + panelWidth <= workRight)
-            Left = viewerRight + gap;
-        else if (viewerLeft - gap - panelWidth >= workLeft)
-            Left = viewerLeft - gap - panelWidth;
-        else
-            Left = Math.Max(workLeft, workRight - panelWidth);
-    }
-
     private void ManageMachine_Click(object sender, RoutedEventArgs e)
     {
         if (_machineOverview is not null)
@@ -248,8 +180,6 @@ public partial class GrevControlPanelWindow : Window
     private void AltTab_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltTab(_machine.Id));
     private void AltF4_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltF4(_machine.Id));
     private void WinR_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinR(_machine.Id));
-    private void WinE_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinE(_machine.Id));
-    private void WinL_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinL(_machine.Id));
     private void FullScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.ToggleFullScreen(_machine.Id));
     private void RefreshScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.RequestScreenRefresh(_machine.Id));
     private void FileTransfer_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.OpenFileTransfer(_machine.Id));
@@ -259,24 +189,6 @@ public partial class GrevControlPanelWindow : Window
 
     private async void RestartExplorerAgent_Click(object sender, RoutedEventArgs e) =>
         await RunAgentQuickActionAsync("restart-explorer", "Restart Explorer");
-
-    private async void SignOutMachine_Click(object sender, RoutedEventArgs e) =>
-        await RunAgentQuickActionAsync(
-            "sign-out",
-            "Sign out",
-            $"Sign out the active user on {_machine.Name}?\n\nAny unsaved work in that Windows session can be lost.");
-
-    private async void SleepMachine_Click(object sender, RoutedEventArgs e) =>
-        await RunAgentQuickActionAsync(
-            "sleep",
-            "Sleep machine",
-            $"Put {_machine.Name} to sleep?\n\nThe VNC session will disconnect until the machine wakes again.");
-
-    private async void HibernateMachine_Click(object sender, RoutedEventArgs e) =>
-        await RunAgentQuickActionAsync(
-            "hibernate",
-            "Hibernate machine",
-            $"Hibernate {_machine.Name}?\n\nThe VNC session will disconnect until the machine is powered or woken again.");
 
     private async Task RunAgentQuickActionAsync(string action, string title, string? confirmation = null)
     {
@@ -342,68 +254,11 @@ public partial class GrevControlPanelWindow : Window
         Close();
     }
 
-    private async void Wake_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            await _wake.SendAsync(_machine.MacAddress);
-            MessageBox.Show(this, "Wake-on-LAN packet sent.", "GrevUltraVNC", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Wake-on-LAN", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
     private string CurrentHost()
     {
         if (string.IsNullOrWhiteSpace(_machine.ActiveAddress))
             throw new InvalidOperationException("The current LAN / Grev Connect route is no longer available.");
         return _machine.ActiveAddress;
-    }
-
-    private async void StartVncService_Click(object sender, RoutedEventArgs e)
-    {
-        await RunVncServiceActionAsync(host => _remoteVnc.StartAsync(host), "Start UltraVNC");
-    }
-
-    private async void RestartVncService_Click(object sender, RoutedEventArgs e)
-    {
-        if (MessageBox.Show(this,
-                "Restarting the UltraVNC service will normally disconnect this active VNC session. Continue?",
-                "Restart UltraVNC service", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-            return;
-
-        await RunVncServiceActionAsync(host => _remoteVnc.RestartAsync(host), "Restart UltraVNC");
-    }
-
-    private async void StopVncService_Click(object sender, RoutedEventArgs e)
-    {
-        if (MessageBox.Show(this,
-                "Stopping the UltraVNC service will disconnect this session. Continue?",
-                "Stop UltraVNC service", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-            return;
-
-        await RunVncServiceActionAsync(host => _remoteVnc.StopAsync(host), "Stop UltraVNC");
-    }
-
-    private async Task RunVncServiceActionAsync(Func<string, Task<RemoteServiceResult>> action, string title)
-    {
-        try
-        {
-            var result = await action(CurrentHost());
-            MessageBox.Show(this, result.Message, title, MessageBoxButton.OK,
-                result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private async void EnableVncAutoStart_Click(object sender, RoutedEventArgs e)
-    {
-        await RunVncServiceActionAsync(host => _remoteVnc.EnableAutoStartAndStartAsync(host), "UltraVNC at boot");
     }
 
     private async void Restart_Click(object sender, RoutedEventArgs e)
@@ -438,42 +293,6 @@ public partial class GrevControlPanelWindow : Window
         {
             MessageBox.Show(this, ex.Message, "Shut down", MessageBoxButton.OK, MessageBoxImage.Error);
         }
-    }
-
-    private void Shares_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"\\\\{CurrentHost()}\\",
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Network shares", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private async void Diagnostics_Click(object sender, RoutedEventArgs e)
-    {
-        var networkResult = await _network.ProbeAsync(_machine);
-        var serviceResult = string.IsNullOrWhiteSpace(_machine.ActiveAddress)
-            ? new RemoteServiceResult(false, "No current route")
-            : await _remoteVnc.QueryAsync(_machine.ActiveAddress);
-        var agentResult = await _agent.ProbeAsync(_machine);
-        var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
-        var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
-        var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
-        var agent = agentResult.Status is null
-            ? $"{agentResult.State}: {agentResult.Message}"
-            : $"Connected · CPU {agentResult.Status.CpuUsagePercent:0.#}% · RAM {FormatGiB(agentResult.Status.TotalMemoryBytes - agentResult.Status.AvailableMemoryBytes)}/{FormatGiB(agentResult.Status.TotalMemoryBytes)}";
-
-        MessageBox.Show(this,
-            $"Machine: {_machine.Name}\nGrev Connect ID: {(_machine.ConnectId.Length == 0 ? "Not assigned" : _machine.ConnectId)}\nRoute: {_machine.ConnectDisplayText}\nPing: {latency}\nVNC port: {vnc}\nUltraVNC service: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
-            "Connection info", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void HidePanel_Click(object sender, RoutedEventArgs e) => Hide();
