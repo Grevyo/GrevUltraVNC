@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -15,77 +14,6 @@ public partial class GrevControlPanelWindow
     private bool _virtualDisplayLeaseActive;
     private bool _virtualDisplayLeaseRefreshRunning;
     private DateTimeOffset _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.MinValue;
-    private int _virtualMonitorIndex = -1;
-
-    private void AdaptivePanel_ContentRendered(object? sender, EventArgs e)
-    {
-        // Compatibility path for older XAML. The compact panel is the current layout and swaps
-        // this handler out in CompactPanel_ContentRendered.
-        _dockTimer.Stop();
-        _adaptivePanelTimer.Tick -= AdaptivePanelTimer_Tick;
-        _adaptivePanelTimer.Tick += AdaptivePanelTimer_Tick;
-        _adaptivePanelTimer.Start();
-        Dispatcher.BeginInvoke(DockAdaptivePanel, DispatcherPriority.Loaded);
-    }
-
-    private void AdaptivePanel_Closed(object? sender, EventArgs e) => _adaptivePanelTimer.Stop();
-
-    private async void AdaptivePanelTimer_Tick(object? sender, EventArgs e)
-    {
-        if (!_viewerScaleDragging)
-            DockAdaptivePanel();
-        await RefreshVirtualDisplayLeaseAsync();
-    }
-
-    private void DockAdaptivePanel()
-    {
-        if (!_vnc.TryGetViewerWindowHandle(_machine.Id, out var viewerHandle) || viewerHandle == IntPtr.Zero)
-            return;
-        if (!GetWindowRect(viewerHandle, out var viewerRect))
-            return;
-
-        var monitor = MonitorFromWindow(viewerHandle, MONITOR_DEFAULTTONEAREST);
-        if (monitor == IntPtr.Zero)
-            return;
-
-        var info = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
-        if (!GetMonitorInfo(monitor, ref info))
-            return;
-
-        var dpi = GetDpiForWindow(viewerHandle);
-        var scale = dpi == 0 ? 1d : dpi / 96d;
-        var workLeft = info.rcWork.Left / scale;
-        var workTop = info.rcWork.Top / scale;
-        var workRight = info.rcWork.Right / scale;
-        var workBottom = info.rcWork.Bottom / scale;
-        var viewerLeft = viewerRect.Left / scale;
-        var viewerRight = viewerRect.Right / scale;
-
-        const double gap = 8;
-        const double desiredHeight = 900;
-        const double chromeMargin = 14;
-        const double minimumUsableHeight = 560;
-        var workHeight = Math.Max(minimumUsableHeight, workBottom - workTop);
-        var availableHeight = Math.Max(minimumUsableHeight, workHeight - chromeMargin);
-        var targetHeight = Math.Min(desiredHeight, availableHeight);
-        var needsScroll = availableHeight + 1 < desiredHeight;
-
-        MinHeight = targetHeight;
-        MaxHeight = Math.Max(targetHeight, Math.Min(1040, availableHeight));
-        Height = targetHeight;
-        Top = workTop + Math.Max(0, (workHeight - targetHeight) / 2d);
-        PanelScrollViewer.VerticalScrollBarVisibility = needsScroll
-            ? ScrollBarVisibility.Auto
-            : ScrollBarVisibility.Disabled;
-
-        var panelWidth = ActualWidth > 0 ? ActualWidth : Width;
-        if (viewerRight + gap + panelWidth <= workRight)
-            Left = viewerRight + gap;
-        else if (viewerLeft - gap - panelWidth >= workLeft)
-            Left = viewerLeft - gap - panelWidth;
-        else
-            Left = Math.Max(workLeft, workRight - panelWidth);
-    }
 
     private void ViewerScale_Click(object sender, RoutedEventArgs e)
     {
@@ -211,7 +139,6 @@ public partial class GrevControlPanelWindow
 
             leaseCreated = true;
             _virtualDisplayLeaseActive = true;
-            _virtualMonitorIndex = display.VirtualMonitorIndex;
             _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.UtcNow;
 
             var virtualInfo = display.Displays.FirstOrDefault(item => item.IsVirtual);
@@ -303,7 +230,6 @@ public partial class GrevControlPanelWindow
             if (!response.Success || !response.VirtualDisplayActive)
             {
                 _virtualDisplayLeaseActive = false;
-                _virtualMonitorIndex = -1;
                 return;
             }
             _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.UtcNow;
@@ -325,10 +251,7 @@ public partial class GrevControlPanelWindow
         }
 
         if (!_virtualDisplayLeaseActive)
-        {
-            _virtualMonitorIndex = -1;
             return;
-        }
 
         try
         {
@@ -339,7 +262,6 @@ public partial class GrevControlPanelWindow
         finally
         {
             _virtualDisplayLeaseActive = false;
-            _virtualMonitorIndex = -1;
             _lastVirtualDisplayLeaseRefreshUtc = DateTimeOffset.MinValue;
         }
     }
