@@ -9,6 +9,7 @@ public partial class GrevControlPanelWindow
 {
     private const double CompactPanelDesiredHeight = 820d;
     private const double CompactPanelMinimumHeight = 480d;
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
     private static readonly TimeSpan ViewerStartupGrace = TimeSpan.FromSeconds(12);
 
     private readonly DateTimeOffset _compactPanelOpenedUtc = DateTimeOffset.UtcNow;
@@ -57,6 +58,13 @@ public partial class GrevControlPanelWindow
             DockCompactPanel();
 
         await RefreshVirtualDisplayLeaseAsync();
+    }
+
+    private void RedockPanel_Click(object sender, RoutedEventArgs e)
+    {
+        _compactPanelManualPosition = false;
+        DockCompactPanel();
+        Activate();
     }
 
     private void DockCompactPanel()
@@ -114,4 +122,34 @@ public partial class GrevControlPanelWindow
         else
             Left = Math.Max(workLeft, workRight - panelWidth);
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 }

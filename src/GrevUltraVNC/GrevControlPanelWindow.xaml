@@ -11,11 +11,15 @@
         Background="Transparent"
         Foreground="{DynamicResource TextBrush}">
     <Window.Resources>
-        <Style x:Key="PanelSectionLabel" TargetType="TextBlock">
+        <Style x:Key="PanelSectionButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}" />
+            <Setter Property="Padding" Value="2,4" />
             <Setter Property="FontSize" Value="9" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="2,0,0,6" />
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
 
         <Style x:Key="PanelActionButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
@@ -76,6 +80,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <Border Width="32" Height="32" CornerRadius="9" Background="#030509"
@@ -90,11 +95,15 @@
                                    Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
 
-                    <TextBlock Grid.Column="2" Text="⋮⋮  DRAG" VerticalAlignment="Center"
+                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="↦"
+                            Click="RedockPanel_Click" ToolTip="Redock beside Screen 1"
+                            Padding="7,4" MinWidth="30" Margin="0,0,6,0" VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="3" Text="⋮⋮  DRAG" VerticalAlignment="Center"
                                Foreground="{DynamicResource FaintTextBrush}" FontSize="8" FontWeight="SemiBold"
                                Margin="0,0,9,0" ToolTip="Drag this header to move the control panel" />
 
-                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="—"
+                    <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="—"
                             Click="HidePanel_Click" ToolTip="Hide control panel" Padding="7,4"
                             MinWidth="30" VerticalAlignment="Center" />
                 </Grid>
@@ -111,6 +120,9 @@
                     <StackPanel MinWidth="0">
                         <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}"
                                    FontSize="8" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="RouteHealthText" Text="ROUTE CHECKING"
+                                   Foreground="{DynamicResource AccentBrush}" FontSize="8" FontWeight="SemiBold"
+                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock x:Name="SessionStatusText" Text="● SCREEN 1 ACTIVE" Foreground="#50DC91"
                                        FontSize="8" FontWeight="SemiBold" Margin="0,0,8,0" />
@@ -125,20 +137,15 @@
                 </Grid>
             </Border>
 
-            <StackPanel Visibility="Collapsed">
-                <TextBlock x:Name="AgentUserUptimeText" />
-                <TextBlock x:Name="AgentVncHealthText" />
-                <TextBlock x:Name="AgentDiskText" />
-                <Button x:Name="UpdateAgentButton" Click="UpdateAgent_Click" />
-                <TextBlock x:Name="AgentUpdateStatusText" />
-            </StackPanel>
-
             <ScrollViewer x:Name="PanelScrollViewer" Grid.Row="2"
                           VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"
                           Margin="0,8,0,0" Padding="0" CanContentScroll="False">
                 <StackPanel Margin="12,0,12,6">
-                    <TextBlock Text="VIEWER" Style="{StaticResource PanelSectionLabel}" />
-                    <Border Background="{DynamicResource SubtlePanelBrush}"
+                    <Button x:Name="ViewerSectionButton" Style="{StaticResource PanelSectionButton}"
+                            Content="VIEWER  ▾" Tag="viewer" Click="TogglePanelSection_Click"
+                            ToolTip="Expand or collapse viewer controls" />
+                    <Border x:Name="ViewerSectionBody"
+                            Background="{DynamicResource SubtlePanelBrush}"
                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                             CornerRadius="12" Padding="8">
                         <StackPanel>
@@ -261,10 +268,12 @@
                         </StackPanel>
                     </Border>
 
-                    <Grid Margin="2,9,2,5">
-                        <TextBlock Text="REMOTE KEYS" Style="{StaticResource PanelSectionLabel}" Margin="0" />
-                        <TextBlock Text="CONTROL REQUIRED" HorizontalAlignment="Right"
-                                   Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
+                    <Grid Margin="0,7,0,1">
+                        <Button x:Name="RemoteKeysSectionButton" Style="{StaticResource PanelSectionButton}"
+                                Content="REMOTE KEYS  ▾" Tag="keys" Click="TogglePanelSection_Click"
+                                ToolTip="Expand or collapse remote key shortcuts" />
+                        <TextBlock Text="CONTROL REQUIRED" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource FaintTextBrush}" FontSize="8" Margin="0,0,4,0" />
                     </Grid>
                     <Border x:Name="RemoteKeysPanel" IsEnabled="False"
                             Background="{DynamicResource SubtlePanelBrush}"
@@ -286,8 +295,11 @@
                         </UniformGrid>
                     </Border>
 
-                    <TextBlock Text="PC" Style="{StaticResource PanelSectionLabel}" Margin="2,9,0,5" />
-                    <Border Background="{DynamicResource SubtlePanelBrush}"
+                    <Button x:Name="PcSectionButton" Style="{StaticResource PanelSectionButton}"
+                            Content="PC  ▾" Tag="pc" Click="TogglePanelSection_Click"
+                            ToolTip="Expand or collapse PC controls" Margin="0,7,0,1" />
+                    <Border x:Name="PcSectionBody"
+                            Background="{DynamicResource SubtlePanelBrush}"
                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                             CornerRadius="12" Padding="6">
                         <Grid>
