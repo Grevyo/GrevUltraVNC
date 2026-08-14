@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -20,6 +21,7 @@ public partial class WhiteboardOverlayWindow : Window
     private readonly List<Point> _activePoints = [];
     private Polyline? _activePolyline;
     private bool _drawing;
+    private string _selectedColour = "#32CFF0";
 
     public event Action<AgentWhiteboardEvent>? WhiteboardEventCreated;
 
@@ -38,6 +40,7 @@ public partial class WhiteboardOverlayWindow : Window
 
     private void WhiteboardOverlayWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateColourSelection(DefaultColourButton);
         DockToViewer();
         _dockTimer.Start();
     }
@@ -100,6 +103,29 @@ public partial class WhiteboardOverlayWindow : Window
         if (changed) RenderAll();
     }
 
+    private void Colour_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string colour || string.IsNullOrWhiteSpace(colour))
+            return;
+
+        _selectedColour = colour;
+        UpdateColourSelection(button);
+        e.Handled = true;
+    }
+
+    private void UpdateColourSelection(Button selectedButton)
+    {
+        foreach (var swatch in ColourPalette.Children.OfType<Button>())
+        {
+            swatch.ClearValue(Control.BorderBrushProperty);
+            swatch.ClearValue(Control.BorderThicknessProperty);
+        }
+
+        selectedButton.BorderBrush = Brushes.White;
+        selectedButton.BorderThickness = new Thickness(3);
+        SelectedColourText.Text = selectedButton.ToolTip?.ToString() ?? _selectedColour;
+    }
+
     private void DrawingCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (DrawingCanvas.ActualWidth <= 0 || DrawingCanvas.ActualHeight <= 0) return;
@@ -111,7 +137,7 @@ public partial class WhiteboardOverlayWindow : Window
 
         _activePolyline = new Polyline
         {
-            Stroke = (Brush)FindResource("AccentBrush"),
+            Stroke = GetStrokeBrush(_selectedColour),
             StrokeThickness = 3,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
@@ -158,7 +184,7 @@ public partial class WhiteboardOverlayWindow : Window
                 _settings.GrevName,
                 "stroke",
                 Guid.NewGuid().ToString("N"),
-                "#32CFF0",
+                _selectedColour,
                 3,
                 points,
                 DateTimeOffset.UtcNow);
@@ -184,7 +210,7 @@ public partial class WhiteboardOverlayWindow : Window
             _settings.GrevName,
             "clear",
             $"clear-{Guid.NewGuid():N}",
-            "#32CFF0",
+            _selectedColour,
             3,
             Array.Empty<AgentWhiteboardPoint>(),
             DateTimeOffset.UtcNow));
@@ -202,19 +228,9 @@ public partial class WhiteboardOverlayWindow : Window
             if (!string.Equals(stroke.Kind, "stroke", StringComparison.OrdinalIgnoreCase) || stroke.Points.Count < 2)
                 continue;
 
-            Brush brush;
-            try
-            {
-                brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(stroke.Color)!);
-            }
-            catch
-            {
-                brush = (Brush)FindResource("AccentBrush");
-            }
-
             var line = new Polyline
             {
-                Stroke = brush,
+                Stroke = GetStrokeBrush(stroke.Color),
                 StrokeThickness = Math.Clamp(stroke.Thickness, 1, 20),
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
@@ -230,6 +246,18 @@ public partial class WhiteboardOverlayWindow : Window
             }
 
             DrawingCanvas.Children.Add(line);
+        }
+    }
+
+    private Brush GetStrokeBrush(string colour)
+    {
+        try
+        {
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(colour)!);
+        }
+        catch
+        {
+            return (Brush)FindResource("AccentBrush");
         }
     }
 

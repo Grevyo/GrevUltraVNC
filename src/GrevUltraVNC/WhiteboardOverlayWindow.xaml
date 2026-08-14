@@ -5,6 +5,40 @@
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" Topmost="True">
+    <Window.Resources>
+        <Style x:Key="WhiteboardColourButton" TargetType="Button">
+            <Setter Property="Width" Value="25" />
+            <Setter Property="Height" Value="25" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderBrush" Value="#66708090" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Swatch"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Swatch" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Swatch" Property="Opacity" Value="0.62" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Canvas x:Name="DrawingCanvas" Background="#01000000"
                 MouseLeftButtonDown="DrawingCanvas_MouseLeftButtonDown"
@@ -12,19 +46,58 @@
                 MouseLeftButtonUp="DrawingCanvas_MouseLeftButtonUp" />
 
         <Border HorizontalAlignment="Center" VerticalAlignment="Top"
-                Margin="0,14,0,0" Padding="9,7" CornerRadius="12"
+                Margin="0,14,0,0" Padding="10,8" CornerRadius="12"
                 Background="{DynamicResource PanelBrush}"
                 BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
             <Border.Effect>
                 <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="3" Opacity="0.55" />
             </Border.Effect>
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="✎  GREV WHITEBOARD" Foreground="{DynamicResource AccentBrush}"
-                           FontSize="10" FontWeight="Bold" VerticalAlignment="Center" Margin="3,0,12,0" />
-                <Button Style="{StaticResource CardActionButton}" Content="Clear all"
-                        Click="Clear_Click" Padding="10,6" Margin="0,0,6,0" />
-                <Button Style="{StaticResource SecondaryButton}" Content="Done"
-                        Click="Done_Click" Padding="10,6" />
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="✎  GREV WHITEBOARD" Foreground="{DynamicResource AccentBrush}"
+                               FontSize="10" FontWeight="Bold" VerticalAlignment="Center" Margin="3,0,14,0" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Style="{StaticResource CardActionButton}" Content="Clear all"
+                                Click="Clear_Click" Padding="10,6" Margin="0,0,6,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Done"
+                                Click="Done_Click" Padding="10,6" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Margin="2,8,2,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                        <TextBlock Text="COLOUR" Foreground="{DynamicResource FaintTextBrush}"
+                                   FontSize="8" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SelectedColourText" Text="Grev cyan"
+                                   Foreground="{DynamicResource MutedTextBrush}" FontSize="8" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <UniformGrid x:Name="ColourPalette" Grid.Column="1" Columns="8" Rows="2">
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#FFFFFF" Tag="#FFFFFF" ToolTip="White" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#B8C0CC" Tag="#B8C0CC" ToolTip="Light grey" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#4B5563" Tag="#4B5563" ToolTip="Grey" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#111827" Tag="#111827" ToolTip="Black" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#FF4D5E" Tag="#FF4D5E" ToolTip="Red" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#FF8A3D" Tag="#FF8A3D" ToolTip="Orange" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#FFD84D" Tag="#FFD84D" ToolTip="Yellow" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#A16207" Tag="#A16207" ToolTip="Brown" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#9BE15D" Tag="#9BE15D" ToolTip="Lime" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#32D583" Tag="#32D583" ToolTip="Green" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#2DD4BF" Tag="#2DD4BF" ToolTip="Teal" Click="Colour_Click" />
+                        <Button x:Name="DefaultColourButton" Style="{StaticResource WhiteboardColourButton}" Background="#32CFF0" Tag="#32CFF0" ToolTip="Grev cyan" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#3B82F6" Tag="#3B82F6" ToolTip="Blue" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#6366F1" Tag="#6366F1" ToolTip="Indigo" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#A855F7" Tag="#A855F7" ToolTip="Purple" Click="Colour_Click" />
+                        <Button Style="{StaticResource WhiteboardColourButton}" Background="#EC4899" Tag="#EC4899" ToolTip="Pink" Click="Colour_Click" />
+                    </UniformGrid>
+                </Grid>
             </StackPanel>
         </Border>
 
