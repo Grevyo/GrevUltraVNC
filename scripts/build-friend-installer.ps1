@@ -17,7 +17,7 @@ Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $downloadDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $publish, $downloadDir, $licenses -Force | Out-Null
 
-Write-Host 'Publishing GrevUltraVNC 1.1.0 self-contained win-x64...'
+Write-Host 'Publishing GrevUltraVNC 1.1.1 self-contained win-x64...'
 dotnet publish (Join-Path $root 'src\GrevUltraVNC\GrevUltraVNC.csproj') `
     --configuration $Configuration `
     --runtime win-x64 `
@@ -87,7 +87,7 @@ Write-Host 'Building single EXE installer...'
 & $iscc "/DSourceDir=$publish" "/DOutputDir=$dist" $iss
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
 
-$installer = Join-Path $dist 'GrevUltraVNC-1.1.0-Friend-Setup.exe'
+$installer = Join-Path $dist 'GrevUltraVNC-1.1.1-Friend-Setup.exe'
 if (-not (Test-Path $installer)) {
     throw 'Expected installer EXE was not created.'
 }
