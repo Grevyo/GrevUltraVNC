@@ -37,6 +37,13 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="WhiteboardToolButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="MinWidth" Value="92" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="FontSize" Value="9" />
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -74,6 +81,25 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                        <TextBlock Text="TOOL" Foreground="{DynamicResource FaintTextBrush}"
+                                   FontSize="8" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SelectedToolText" Text="Pen · 3 px"
+                                   Foreground="{DynamicResource MutedTextBrush}" FontSize="8" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="PenButton" Style="{StaticResource WhiteboardToolButton}"
+                                Content="✎  Pen" Tag="pen" Click="Tool_Click" />
+                        <Button x:Name="HighlighterButton" Style="{StaticResource WhiteboardToolButton}"
+                                Content="▰  Highlighter" Tag="highlighter" Click="Tool_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Margin="2,7,2,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
                         <TextBlock Text="COLOUR" Foreground="{DynamicResource FaintTextBrush}"
                                    FontSize="8" FontWeight="SemiBold" />
                         <TextBlock x:Name="SelectedColourText" Text="Grev cyan"
@@ -106,7 +132,7 @@
                 Background="{DynamicResource PanelBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 IsHitTestVisible="False">
-            <TextBlock Text="Draw anywhere · strokes are shared with connected Grev users"
+            <TextBlock Text="Draw anywhere · pen and highlighter strokes are shared with connected Grev users"
                        Foreground="{DynamicResource MutedTextBrush}" FontSize="9" />
         </Border>
     </Grid>
