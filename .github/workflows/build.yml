@@ -76,17 +76,17 @@ jobs:
         run: |
           $tag = 'v1.1.0-friend'
           $asset = 'dist\GrevUltraVNC-1.1.0-Friend-Setup.exe'
-          $notes = @'
-          GrevUltraVNC 1.1 Friend Test
-
-          - Single Windows installer for the GrevUltraVNC controller.
-          - Includes the UltraVNC viewer required by GrevUltraVNC.
-          - First run offers Connect by GrevConnect ID.
-          - Fresh installs use User as the default collaboration name.
-          - Connect your Zima / private Grev Connect network before using an external GC- ID.
-          - First-time pairing may require the VNC password and Grev Agent pairing key supplied by the PC owner.
-          - This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.
-          '@
+          $notes = @(
+            'GrevUltraVNC 1.1 Friend Test'
+            ''
+            '- Single Windows installer for the GrevUltraVNC controller.'
+            '- Includes the UltraVNC viewer required by GrevUltraVNC.'
+            '- First run offers Connect by GrevConnect ID.'
+            '- Fresh installs use User as the default collaboration name.'
+            '- Connect your Zima / private Grev Connect network before using an external GC- ID.'
+            '- First-time pairing may require the VNC password and Grev Agent pairing key supplied by the PC owner.'
+            '- This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
+          ) -join [Environment]::NewLine
 
           cmd /c "gh release view $tag --repo $env:GITHUB_REPOSITORY >nul 2>nul"
           $releaseExists = $LASTEXITCODE -eq 0
