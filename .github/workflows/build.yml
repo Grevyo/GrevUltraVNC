@@ -38,7 +38,7 @@ jobs:
         shell: powershell
         run: choco install innosetup -y --no-progress
 
-      - name: Build GrevUltraVNC 1.1.5 friend installer
+      - name: Build GrevUltraVNC 1.1.6 friend installer
         shell: powershell
         run: .\scripts\build-friend-installer.ps1
 
@@ -68,29 +68,25 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
           }
 
-      - name: Publish GrevUltraVNC 1.1.5 friend release
+      - name: Publish GrevUltraVNC 1.1.6 friend release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.1.5-friend'
-          $asset = 'dist\GrevUltraVNC-1.1.5-Friend-Setup.exe'
+          $tag = 'v1.1.6-friend'
+          $asset = 'dist\GrevUltraVNC-1.1.6-Friend-Setup.exe'
           $notes = @(
-            'GrevUltraVNC 1.1.5 Friend Test'
+            'GrevUltraVNC 1.1.6 Friend Test'
             ''
-            '- Restores Grev Squiggle exactly to the original pre-1.1.4 vector instead of the redrawn version.'
-            '- Adds five deliberately ridiculous cursor choices: Banana, Fish, Ghost, Crown and Coffee Mug.'
-            '- The cursor pack is now eighteen styles total.'
-            '- Grev Control now lays the eighteen tiny icon-only cursor buttons out as two even rows of nine.'
-            '- Settings still shows the named cursor previews.'
-            '- Classic Arrow remains the default cursor.'
-            '- Live collaboration cursor name labels remain beside the mouse on the VNC overlay.'
-            '- The Agent now accepts and shares all five new cursor IDs between connected controllers.'
-            '- Keeps the right-edge hotspot fix, live cursor switching, whiteboard eraser/undo and 160 installer messages.'
-            '- Agent protocol remains 15 because the collaboration schema is unchanged, but remote PCs should update Agent to share the new cursor IDs.'
-            '- Single Windows installer with the bundled UltraVNC viewer.'
-            '- Connect your Zima / private Grev Connect network before using an external GC- ID.'
+            '- Turns the entire installer experience into deliberately stupid, rude and childish nonsense while keeping the actual installation behaviour normal.'
+            '- Rewrites the welcome, destination, task, ready, installing and finished page text as jokes.'
+            '- Replaces the normal Back, Next, Cancel, Browse and Finish button captions with stupid versions.'
+            '- Rewrites the desktop-shortcut and post-install launch descriptions as jokes.'
+            '- Expands the installer quote pool from 160 to 224 messages, including a much ruder progress-message set.'
+            '- The actual per-user install path, bundled UltraVNC viewer, shortcuts, file copy, launch action and uninstall behaviour are unchanged.'
+            '- No GrevUltraVNC remote-control, cursor, whiteboard, Screen 2 or Agent protocol behaviour changes are included in 1.1.6.'
+            '- Classic Arrow remains the default cursor and the 18-cursor pack from 1.1.5 is unchanged.'
             '- This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
           ) -join [Environment]::NewLine
 
@@ -99,9 +95,9 @@ jobs:
 
           if ($releaseExists) {
             gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.5-friend release asset.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.6-friend release asset.' }
           }
           else {
-            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.5 Friend Test' --notes $notes --prerelease
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.5-friend release.' }
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.6 Friend Test' --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.6-friend release.' }
           }
