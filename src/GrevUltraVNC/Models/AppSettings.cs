@@ -11,4 +11,5 @@ public sealed class AppSettings
     public bool MinimizeToTray { get; set; } = true;
     public string GrevName { get; set; } = Environment.UserName;
     public string ControllerId { get; set; } = string.Empty;
+    public string CollaborationColor { get; set; } = "#32CFF0";
 }
