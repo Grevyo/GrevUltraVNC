@@ -1,5 +1,5 @@
 #define MyAppName "GrevUltraVNC"
-#define MyAppVersion "1.1.4"
+#define MyAppVersion "1.1.6"
 #define MyAppPublisher "Grev"
 #define MyAppExeName "GrevUltraVNC.exe"
 
@@ -23,18 +23,18 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=GrevUltraVNC-1.1.4-Friend-Setup
+OutputBaseFilename=GrevUltraVNC-1.1.6-Friend-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
-UninstallDisplayName=GrevUltraVNC 1.1.4 Friend Test
+UninstallDisplayName=GrevUltraVNC 1.1.6 Friend Test
 UninstallDisplayIcon={app}\GrevUltraVNC.exe
 CloseApplications=yes
 RestartApplications=no
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
+Name: "desktopicon"; Description: "Put a tiny Grev thing on the desktop because apparently the Start menu is too much effort"; GroupDescription: "Optional bollocks:"; Flags: unchecked
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -44,7 +44,7 @@ Name: "{group}\GrevUltraVNC"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\GrevUltraVNC"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch GrevUltraVNC"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Open GrevUltraVNC immediately and start poking buttons like a responsible adult"; Flags: nowait postinstall skipifsilent
 
 [Code]
 var
@@ -52,7 +52,7 @@ var
 
 function GrevQuote(Index: Integer): String;
 begin
-  case Index mod 160 of
+  case Index mod 224 of
     0: Result := 'It promises not to rearrange the furniture. Probably.';
     1: Result := 'Installing serious remote access software with deeply unserious supervision.';
     2: Result := 'No computers were consulted before beginning this installation.';
@@ -136,7 +136,7 @@ begin
     80: Result := 'Placing the files alphabetically. Windows will ruin this later.';
     81: Result := 'Training the eraser to distinguish whiteboard from actual monitor.';
     82: Result := 'Teaching Undo that consequences are sometimes optional.';
-    83: Result := 'Preparing thirteen different ways to point at the same thing.';
+    83: Result := 'Preparing eighteen different ways to point at the same thing.';
     84: Result := 'Adding cursors with absolutely unnecessary personality.';
     85: Result := 'Checking the Grev squiggle for structural integrity.';
     86: Result := 'ChatGPT made its own squiggle. Nobody asked it to behave.';
@@ -213,48 +213,157 @@ begin
     157: Result := 'Returning the imaginary screwdriver to its imaginary drawer.';
     158: Result := 'Tidying up the evidence and pretending this was professional.';
     159: Result := 'Installation complete. Please release the network hamster.';
+    160: Result := 'Windows is doing some computer bollocks. Please look impressed.';
+    161: Result := 'Shoving bytes into folders until the app stops complaining.';
+    162: Result := 'The progress bar is moving. Nobody knows why. Do not scare it.';
+    163: Result := 'Checking the CPU for crumbs, Lego and suspicious fingerprints.';
+    164: Result := 'Telling the DLLs to stop touching each other inappropriately.';
+    165: Result := 'One moment. The installer has gone for a piss.';
+    166: Result := 'Applying a highly technical dollop of computer mayonnaise.';
+    167: Result := 'The router has requested a union representative.';
+    168: Result := 'Installing the banana cursor because standards are for cowards.';
+    169: Result := 'Putting the fish cursor somewhere damp.';
+    170: Result := 'The ghost cursor has vanished. Brilliant. Very useful.';
+    171: Result := 'Polishing the crown cursor for the absolute knobhead in charge.';
+    172: Result := 'Filling the coffee mug cursor with dangerously virtual coffee.';
+    173: Result := 'Checking whether the mouse has done a poo in the USB port.';
+    174: Result := 'Removing one tiny goblin from the networking stack.';
+    175: Result := 'Adding two replacement goblins. This is why software gets bigger.';
+    176: Result := 'Windows asked what this app does. We said computer stuff.';
+    177: Result := 'Pretending the registry is not a haunted filing cabinet.';
+    178: Result := 'Installing the important bit. No, not that bit. The other bit.';
+    179: Result := 'Poking the firewall with a stick to see if it hisses.';
+    180: Result := 'Firewall hissed. Excellent. It is alive.';
+    181: Result := 'Making sure nothing catches fire in a way visible from the desktop.';
+    182: Result := 'Checking the internet tube for spiders.';
+    183: Result := 'Spider removed. It had admin rights somehow.';
+    184: Result := 'Putting a tiny traffic cone around port 5900.';
+    185: Result := 'Reboot not required. Emotional recovery may be required.';
+    186: Result := 'The computer has made a noise. We are choosing optimism.';
+    187: Result := 'Giving the EXE a little slap and saying that will do.';
+    188: Result := 'Installing premium-grade fuckery with standard-grade permissions.';
+    189: Result := 'Checking if the computer is still computer-shaped.';
+    190: Result := 'Computer remains rectangular. Passing inspection.';
+    191: Result := 'Asking the monitor to keep this between us.';
+    192: Result := 'Feeding Windows another spoonful of files.';
+    193: Result := 'Windows made the aeroplane noise. That seems promising.';
+    194: Result := 'Making a shortcut because clicking folders is for archaeologists.';
+    195: Result := 'Installing absolutely zero maturity.';
+    196: Result := 'Adding a fart noise spiritually. No audio file required.';
+    197: Result := 'Checking under the bonnet. Yep, wires and disappointment.';
+    198: Result := 'Tightening the last imaginary screw with our imaginary arse wrench.';
+    199: Result := 'The installer would like to remind you that it cannot read.';
+    200: Result := 'Asking the packets to form an orderly queue. They told us to piss off.';
+    201: Result := 'Giving the network hamster a Red Bull. This was a mistake.';
+    202: Result := 'Hamster now operating at 2.5 gigabollocks per second.';
+    203: Result := 'Checking for viruses by shouting VIRUS into the case.';
+    204: Result := 'No answer. Good enough.';
+    205: Result := 'Installing the remote desktop equivalent of a long poking stick.';
+    206: Result := 'Putting GrevUltraVNC in the good folder, away from the weird stuff.';
+    207: Result := 'Discovering the weird stuff was already in the good folder.';
+    208: Result := 'Moving on quickly and deleting the meeting minutes.';
+    209: Result := 'Teaching the mouse several new and deeply unhelpful shapes.';
+    210: Result := 'Making sure the banana is correctly calibrated to banana.';
+    211: Result := 'The fish cursor has failed its driving test again.';
+    212: Result := 'Ghost cursor passed because the examiner could not find it.';
+    213: Result := 'Crown cursor demanded a throne. Request denied.';
+    214: Result := 'Coffee mug cursor is on its fourth imaginary espresso.';
+    215: Result := 'Checking the logs. The logs say stop checking the logs.';
+    216: Result := 'Running final diagnostics: beep, boop, bollocks, done.';
+    217: Result := 'Wiping fingerprints off the crime scene.';
+    218: Result := 'Returning borrowed RAM to the RAM cupboard.';
+    219: Result := 'Closing all seventeen tiny doors we definitely opened.';
+    220: Result := 'The computer survived. Lower your expectations next time.';
+    221: Result := 'Installation nearly complete. Try not to lick anything.';
+    222: Result := 'Putting the last byte in with a tiny plastic hammer.';
+    223: Result := 'Done. Nobody move. We might get away with this.';
   end;
+end;
+
+procedure SetStupidButtons;
+begin
+  WizardForm.BackButton.Caption := '< &Undo that nonsense';
+  WizardForm.CancelButton.Caption := '&Panic and leave';
+  WizardForm.DirBrowseButton.Caption := '&Pick another hole...';
 end;
 
 procedure InitializeWizard;
 begin
   LastInstallQuoteBucket := -1;
+  WizardForm.Caption := 'GrevUltraVNC Setup - professional software was not consulted';
+  WizardForm.WelcomeLabel1.Caption := 'Right then. Time to put GrevUltraVNC on this poor computer.';
+  WizardForm.WelcomeLabel2.Caption :=
+    'This installer will now perform several suspicious-looking but completely intentional computer rituals.' + #13#10 + #13#10 +
+    'Press Next if you are emotionally prepared to make this machine slightly more Grev.';
+  SetStupidButtons;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
+  SetStupidButtons;
+
   case CurPageID of
     wpWelcome:
       begin
+        WizardForm.NextButton.Caption := '&Do the stupid thing >';
+        WizardForm.WelcomeLabel1.Caption := 'Welcome, you reckless little clicker.';
         WizardForm.WelcomeLabel2.Caption :=
-          'This installs GrevUltraVNC 1.1.4 and the UltraVNC viewer it needs.' + #13#10 + #13#10 +
-          GrevQuote(1) + #13#10 + #13#10 + GrevQuote(83);
+          'You are about to install GrevUltraVNC 1.1.6.' + #13#10 + #13#10 +
+          'What does it do? Remote desktop bollocks, mostly.' + #13#10 +
+          'What could possibly go wrong? Do not answer that.' + #13#10 + #13#10 +
+          GrevQuote(188);
       end;
 
     wpSelectDir:
       begin
+        WizardForm.PageNameLabel.Caption := 'Where should we dump this crap?';
+        WizardForm.PageDescriptionLabel.Caption := 'Pick a folder. Any folder. Try not to choose the Recycle Bin.';
         WizardForm.SelectDirLabel.Caption :=
-          'Pick where GrevUltraVNC should live.' + #13#10 + #13#10 + GrevQuote(0);
+          'Choose the hole where GrevUltraVNC should live.' + #13#10 + #13#10 +
+          'The default is sensible, which is disappointing, but probably best.';
+        WizardForm.DiskSpaceLabel.Caption := 'Disk space requirement: some. Your computer will complain if it gets upset.';
+        WizardForm.NextButton.Caption := '&Shove it in there >';
+      end;
+
+    wpSelectTasks:
+      begin
+        WizardForm.PageNameLabel.Caption := 'Optional desktop litter';
+        WizardForm.PageDescriptionLabel.Caption := 'Tick the box if you want a shortcut staring at you forever.';
+        WizardForm.SelectTasksLabel.Caption :=
+          'Would you like a desktop shortcut?' + #13#10 + #13#10 +
+          'Tick it for convenience. Leave it unticked if your desktop is already a fucking landfill.';
+        WizardForm.NextButton.Caption := '&Whatever, carry on >';
       end;
 
     wpReady:
       begin
+        WizardForm.PageNameLabel.Caption := 'Last chance to run away';
+        WizardForm.PageDescriptionLabel.Caption := 'Everything is ready. This is where confidence becomes consequences.';
         WizardForm.ReadyLabel.Caption :=
-          'Everything is ready. Zima is not installed by this setup, so make sure your Grev Connect network is connected before the first remote test.' + #13#10 + #13#10 +
-          'Press Install when emotionally prepared.' + #13#10 + #13#10 + GrevQuote(64);
+          'Right. The files know where they are going and the computer has not called the police.' + #13#10 + #13#10 +
+          'Press Install to begin the sacred ritual of copying files into other files.' + #13#10 + #13#10 +
+          'Zima / Grev Connect is still your problem afterwards. This installer is not a wizard, despite literally being a wizard.';
+        WizardForm.NextButton.Caption := '&Install the bloody thing';
       end;
 
     wpInstalling:
       begin
-        WizardForm.StatusLabel.Caption := GrevQuote(10);
+        WizardForm.PageNameLabel.Caption := 'Computer bollocks in progress';
+        WizardForm.PageDescriptionLabel.Caption := 'Do not kick it. It is trying its best.';
+        WizardForm.StatusLabel.Caption := GrevQuote(160);
+        WizardForm.CancelButton.Caption := '&Abort this masterpiece';
       end;
 
     wpFinished:
       begin
+        WizardForm.PageNameLabel.Caption := 'Somehow, it worked';
+        WizardForm.PageDescriptionLabel.Caption := 'Against all available evidence, GrevUltraVNC is installed.';
+        WizardForm.FinishedHeadingLabel.Caption := 'Holy shit. The computer survived.';
         WizardForm.FinishedLabel.Caption :=
-          GrevQuote(159) + #13#10 + #13#10 +
-          'Launch GrevUltraVNC, paste the GC- ID Grev gave you, and off you go.' + #13#10 + #13#10 +
-          GrevQuote(158);
+          'GrevUltraVNC has been installed without visibly setting fire to anything.' + #13#10 + #13#10 +
+          'Tick the launch box if you fancy immediately pressing buttons you do not understand.' + #13#10 + #13#10 +
+          GrevQuote(223);
+        WizardForm.NextButton.Caption := '&Fuck off, we are done';
       end;
   end;
 end;
@@ -268,9 +377,9 @@ begin
   if MaxProgress <= 0 then
     exit;
 
-  if MaxProgress > 48 then
+  if MaxProgress > 64 then
   begin
-    BucketSize := MaxProgress div 48;
+    BucketSize := MaxProgress div 64;
     if BucketSize < 1 then
       BucketSize := 1;
     QuoteBucket := CurProgress div BucketSize;
@@ -278,14 +387,14 @@ begin
   else
     QuoteBucket := CurProgress;
 
-  if QuoteBucket > 48 then
-    QuoteBucket := 48;
+  if QuoteBucket > 64 then
+    QuoteBucket := 64;
 
   if QuoteBucket <> LastInstallQuoteBucket then
   begin
-    QuoteIndex := 10 + ((QuoteBucket * 149) div 48);
-    if QuoteIndex > 159 then
-      QuoteIndex := 159;
+    QuoteIndex := 160 + ((QuoteBucket * 63) div 64);
+    if QuoteIndex > 223 then
+      QuoteIndex := 223;
     WizardForm.StatusLabel.Caption := GrevQuote(QuoteIndex);
     LastInstallQuoteBucket := QuoteBucket;
   end;

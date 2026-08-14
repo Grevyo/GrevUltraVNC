@@ -17,7 +17,7 @@ Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $downloadDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $publish, $downloadDir, $licenses -Force | Out-Null
 
-Write-Host 'Publishing GrevUltraVNC 1.1.5 self-contained win-x64...'
+Write-Host 'Publishing GrevUltraVNC 1.1.6 self-contained win-x64...'
 dotnet publish (Join-Path $root 'src\GrevUltraVNC\GrevUltraVNC.csproj') `
     --configuration $Configuration `
     --runtime win-x64 `
@@ -82,20 +82,12 @@ if (-not $iscc) {
     throw 'Inno Setup 6 was not found. Install it before building the friend installer.'
 }
 
-# Keep the long installer quote template in one place, but stamp this release number into a
-# temporary script so every visible/versioned 1.1.4 string becomes 1.1.5 for this build.
-$issSource = Join-Path $root 'installer\GrevUltraVNC-Friend.iss'
-$iss = Join-Path $dist 'GrevUltraVNC-Friend-1.1.5.iss'
-$issText = Get-Content -Path $issSource -Raw
-$issText = $issText.Replace('1.1.4', '1.1.5')
-$issText = $issText.Replace('thirteen different ways', 'eighteen different ways')
-Set-Content -Path $iss -Value $issText -Encoding UTF8
-
+$iss = Join-Path $root 'installer\GrevUltraVNC-Friend.iss'
 Write-Host 'Building single EXE installer...'
 & $iscc "/DSourceDir=$publish" "/DOutputDir=$dist" $iss
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
 
-$installer = Join-Path $dist 'GrevUltraVNC-1.1.5-Friend-Setup.exe'
+$installer = Join-Path $dist 'GrevUltraVNC-1.1.6-Friend-Setup.exe'
 if (-not (Test-Path $installer)) {
     throw 'Expected installer EXE was not created.'
 }
