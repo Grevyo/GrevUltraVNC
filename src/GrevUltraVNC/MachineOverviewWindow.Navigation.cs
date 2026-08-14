@@ -58,12 +58,34 @@ public partial class MachineOverviewWindow
         StatusText.Text = "Machine activity history cleared.";
     }
 
-    private void ProcessSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderProcesses();
-    private void ServiceSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderServices();
+    private void ProcessSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_processesLoaded)
+            RenderProcesses();
+    }
+
+    private void ServiceSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_servicesLoaded)
+            RenderServices();
+    }
 
     private void OverviewTab_Click(object sender, RoutedEventArgs e) => ShowSection(OverviewPanel, OverviewButton);
-    private void ProcessesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ProcessesPanel, ProcessesButton);
-    private void ServicesTab_Click(object sender, RoutedEventArgs e) => ShowSection(ServicesPanel, ServicesButton);
+
+    private async void ProcessesTab_Click(object sender, RoutedEventArgs e)
+    {
+        ShowSection(ProcessesPanel, ProcessesButton);
+        if (!_processesLoaded)
+            await RefreshAllAsync();
+    }
+
+    private async void ServicesTab_Click(object sender, RoutedEventArgs e)
+    {
+        ShowSection(ServicesPanel, ServicesButton);
+        if (!_servicesLoaded)
+            await RefreshAllAsync();
+    }
+
     private void SessionTab_Click(object sender, RoutedEventArgs e) => ShowSection(SessionPanel, SessionButton);
     private void ToolsTab_Click(object sender, RoutedEventArgs e) => ShowSection(ToolsPanel, ToolsButton);
 
