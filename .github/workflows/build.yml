@@ -38,7 +38,7 @@ jobs:
         shell: powershell
         run: choco install innosetup -y --no-progress
 
-      - name: Build GrevUltraVNC 1.1.6 friend installer
+      - name: Build GrevUltraVNC 1.1.7 friend installer
         shell: powershell
         run: .\scripts\build-friend-installer.ps1
 
@@ -68,25 +68,26 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
           }
 
-      - name: Publish GrevUltraVNC 1.1.6 friend release
+      - name: Publish GrevUltraVNC 1.1.7 friend release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.1.6-friend'
-          $asset = 'dist\GrevUltraVNC-1.1.6-Friend-Setup.exe'
+          $tag = 'v1.1.7-friend'
+          $asset = 'dist\GrevUltraVNC-1.1.7-Friend-Setup.exe'
           $notes = @(
-            'GrevUltraVNC 1.1.6 Friend Test'
+            'GrevUltraVNC 1.1.7 Friend Test'
             ''
-            '- Turns the entire installer experience into deliberately stupid, rude and childish nonsense while keeping the actual installation behaviour normal.'
-            '- Rewrites the welcome, destination, task, ready, installing and finished page text as jokes.'
-            '- Replaces the normal Back, Next, Cancel, Browse and Finish button captions with stupid versions.'
-            '- Rewrites the desktop-shortcut and post-install launch descriptions as jokes.'
-            '- Expands the installer quote pool from 160 to 224 messages, including a much ruder progress-message set.'
-            '- The actual per-user install path, bundled UltraVNC viewer, shortcuts, file copy, launch action and uninstall behaviour are unchanged.'
-            '- No GrevUltraVNC remote-control, cursor, whiteboard, Screen 2 or Agent protocol behaviour changes are included in 1.1.6.'
-            '- Classic Arrow remains the default cursor and the 18-cursor pack from 1.1.5 is unchanged.'
+            '- Keeps the full stupid/rude/childish installer from 1.1.6.'
+            '- Shortens every joke navigation button so the captions actually fit inside the buttons.'
+            '- Adds a completely pointless Mandatory Englishness Checkpoint with a proper St George cross built directly into the installer UI.'
+            '- Adds a second completely pointless Critical Biscuit Compatibility Test whose answer is deliberately ignored.'
+            '- The British page asks for weather complaining, orderly queueing, tutting and apologising to furniture before continuing.'
+            '- The biscuit page offers Custard Cream, Digestive, Hobnob, Rich Tea or suspicious no-biscuit behaviour.'
+            '- The actual per-user install path, bundled UltraVNC viewer, shortcuts, file copy, launch action and uninstall behaviour remain unchanged.'
+            '- No remote-control, cursor, whiteboard, Screen 2 or Agent protocol behaviour changes are included in 1.1.7.'
+            '- Classic Arrow remains the default cursor and the 18-cursor pack is unchanged.'
             '- This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
           ) -join [Environment]::NewLine
 
@@ -95,9 +96,9 @@ jobs:
 
           if ($releaseExists) {
             gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.6-friend release asset.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.7-friend release asset.' }
           }
           else {
-            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.6 Friend Test' --notes $notes --prerelease
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.6-friend release.' }
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.7 Friend Test' --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.7-friend release.' }
           }
