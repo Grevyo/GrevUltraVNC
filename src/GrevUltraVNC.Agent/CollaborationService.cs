@@ -241,9 +241,22 @@ public sealed class CollaborationService
     private static string NormalizeCursorStyle(string? value)
     {
         var normalized = value?.Trim().ToLowerInvariant();
-        return normalized is "grev" or "arrow" or "crosshair" or "ring" or "diamond" or "pixel"
+        return normalized is
+            "arrow" or
+            "grev" or
+            "chatgpt" or
+            "crosshair" or
+            "ring" or
+            "diamond" or
+            "pixel" or
+            "slimarrow" or
+            "chevron" or
+            "target" or
+            "square" or
+            "bolt" or
+            "hand"
             ? normalized
-            : "grev";
+            : "arrow";
     }
 
     private static string? NormalizeControllerId(string? value)
