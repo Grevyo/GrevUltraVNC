@@ -19,7 +19,8 @@ public partial class MainWindow
             MinimizeToTray = _settings.MinimizeToTray,
             GrevName = _settings.GrevName,
             ControllerId = _settings.ControllerId,
-            CollaborationColor = _settings.CollaborationColor
+            CollaborationColor = _settings.CollaborationColor,
+            CursorStyle = _settings.CursorStyle
         };
 
         var dialog = new SettingsWindow(working, _vnc) { Owner = this };
@@ -27,6 +28,7 @@ public partial class MainWindow
 
         _settings = working;
         _settings.Theme = ThemeService.Normalize(_settings.Theme);
+        _settings.CursorStyle = CursorStyleCatalog.Normalize(_settings.CursorStyle);
         ThemeService.Apply(_settings.Theme);
         await _storage.SaveSettingsAsync(_settings);
         ConfigureStatusTimer();
