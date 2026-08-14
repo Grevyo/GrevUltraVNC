@@ -1,0 +1,14 @@
+GrevUltraVNC 1.1 Friend Test - Third-Party Notices
+
+UltraVNC Viewer 1.8.2.4
+Copyright UltraVNC Team and contributors.
+Licensed under the GNU General Public License v3.0.
+
+Official project: https://github.com/ultravnc/UltraVNC
+Official downloads: https://uvnc.com/downloads/ultravnc.html
+Source revision used for the bundled 1.8.2.4 viewer:
+b1f54118e74124407705b342f4cc2269c74e8ca0
+
+The build downloads the official UltraVNC binary ZIP and verifies the SHA-256 published by UltraVNC before packaging it. The matching UltraVNC LICENSE file is copied into the installed Licenses folder during the release build.
+
+GrevUltraVNC is not affiliated with or endorsed by the UltraVNC project.

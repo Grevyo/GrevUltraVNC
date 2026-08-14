@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
     private AppSettings _settings = new();
     private bool _statusRefreshRunning;
     private bool _uiReady;
+    private bool _firstRunPromptShown;
     private string _searchText = string.Empty;
     private string _machineFilter = "all";
     private TrayIconService? _tray;
@@ -53,23 +55,28 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         _settings = await _storage.LoadSettingsAsync();
-        var identityChanged = false;
+        var settingsChanged = false;
 
         if (string.IsNullOrWhiteSpace(_settings.ControllerId))
         {
             _settings.ControllerId = Guid.NewGuid().ToString("N");
-            identityChanged = true;
+            settingsChanged = true;
         }
 
         if (string.IsNullOrWhiteSpace(_settings.GrevName))
         {
-            _settings.GrevName = string.IsNullOrWhiteSpace(Environment.UserName)
-                ? "Grev User"
-                : Environment.UserName;
-            identityChanged = true;
+            _settings.GrevName = "User";
+            settingsChanged = true;
         }
 
-        if (identityChanged)
+        var bundledViewer = Path.Combine(AppContext.BaseDirectory, "UltraVNC", "vncviewer.exe");
+        if (string.IsNullOrWhiteSpace(_settings.UltraVncViewerPath) && File.Exists(bundledViewer))
+        {
+            _settings.UltraVncViewerPath = bundledViewer;
+            settingsChanged = true;
+        }
+
+        if (settingsChanged)
             await _storage.SaveSettingsAsync(_settings);
 
         _settings.Theme = ThemeService.Normalize(_settings.Theme);
@@ -92,6 +99,12 @@ public partial class MainWindow : Window
         UpdateMachineFilterStyles();
         RefreshMachineView();
         await RefreshStatusesAsync();
+
+        if (Machines.Count == 0 && !_firstRunPromptShown)
+        {
+            _firstRunPromptShown = true;
+            await OpenQuickConnectAsync();
+        }
     }
 
     private void MainWindow_Closed(object? sender, EventArgs e)

@@ -44,9 +44,32 @@ public partial class MainWindow
         {
             EmptyStateTitle.Text = Machines.Count == 0 ? "No machines yet" : "No matching machines";
             EmptyStateDetail.Text = Machines.Count == 0
-                ? "Add your first PC to start a LAN or Grev Connect session."
+                ? "Got a GC- ID? Use Connect by ID and GrevUltraVNC will find the current route for you."
                 : "Try another search or switch back to All machines.";
         }
+    }
+
+    private async void QuickConnect_Click(object sender, RoutedEventArgs e) =>
+        await OpenQuickConnectAsync();
+
+    private async Task OpenQuickConnectAsync()
+    {
+        var dialog = new GrevConnectQuickWindow(Machines, _connectResolver, _credentials, _agentCredentials)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true || dialog.ResultMachine is null)
+            return;
+
+        var machine = dialog.ResultMachine;
+        if (!Machines.Any(item => item.Id == machine.Id))
+        {
+            Machines.Add(machine);
+            await _storage.SaveMachinesAsync(Machines);
+            RefreshMachineView();
+        }
+
+        ConnectMachine(machine);
     }
 
     private async void AddMachine_Click(object sender, RoutedEventArgs e)

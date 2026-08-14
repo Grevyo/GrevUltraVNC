@@ -34,6 +34,14 @@ jobs:
 
           Stop-Process -Id $process.Id -Force
 
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+
+      - name: Build GrevUltraVNC 1.1 friend installer
+        shell: powershell
+        run: .\scripts\build-friend-installer.ps1
+
       - name: Build Grev Agent package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
@@ -58,4 +66,36 @@ jobs:
           else {
             gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC Agent - Latest' --notes 'Automatically built from the latest main branch.' --prerelease
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
+          }
+
+      - name: Publish GrevUltraVNC 1.1 friend release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'v1.1.0-friend'
+          $asset = 'dist\GrevUltraVNC-1.1.0-Friend-Setup.exe'
+          $notes = @(
+            'GrevUltraVNC 1.1 Friend Test'
+            ''
+            '- Single Windows installer for the GrevUltraVNC controller.'
+            '- Includes the UltraVNC viewer required by GrevUltraVNC.'
+            '- First run offers Connect by GrevConnect ID.'
+            '- Fresh installs use User as the default collaboration name.'
+            '- Connect your Zima / private Grev Connect network before using an external GC- ID.'
+            '- First-time pairing may require the VNC password and Grev Agent pairing key supplied by the PC owner.'
+            '- This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
+          ) -join [Environment]::NewLine
+
+          cmd /c "gh release view $tag --repo $env:GITHUB_REPOSITORY >nul 2>nul"
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+            gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.0-friend release asset.' }
+          }
+          else {
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1 Friend Test' --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.0-friend release.' }
           }

@@ -9,7 +9,7 @@ public sealed class AppSettings
     public string Theme { get; set; } = "Dark";
     public bool StartWithWindows { get; set; }
     public bool MinimizeToTray { get; set; } = true;
-    public string GrevName { get; set; } = Environment.UserName;
+    public string GrevName { get; set; } = "User";
     public string ControllerId { get; set; } = string.Empty;
     public string CollaborationColor { get; set; } = "#32CFF0";
 }
