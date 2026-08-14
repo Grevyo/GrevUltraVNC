@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:GrevUltraVNC.Converters"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
-        Title="GrevUltraVNC" Width="1180" Height="790" MinWidth="900" MinHeight="600"
+        Title="GrevUltraVNC" Width="1220" Height="820" MinWidth="920" MinHeight="620"
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}"
@@ -11,9 +11,17 @@
     <Window.Resources>
         <conv:MachineStatusBrushConverter x:Key="StatusBrushConverter" />
         <conv:AgentStateBrushConverter x:Key="AgentStateBrushConverter" />
+
         <Style x:Key="HeaderAction" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-            <Setter Property="Padding" Value="13,8" />
+            <Setter Property="Padding" Value="12,8" />
             <Setter Property="MinHeight" Value="38" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+
+        <Style x:Key="MachineMetaLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}" />
+            <Setter Property="FontSize" Value="9" />
+            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
     </Window.Resources>
 
@@ -26,8 +34,11 @@
         </Grid.RowDefinitions>
 
         <!-- Product header -->
-        <Border Grid.Row="0" Background="{DynamicResource SubtlePanelBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="26,18">
+        <Border Grid.Row="0"
+                Background="{DynamicResource SubtlePanelBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,15">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -35,60 +46,76 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Border Width="58" Height="58" CornerRadius="15" Background="#030509"
-                        BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
+                <Border Width="52" Height="52" CornerRadius="14"
+                        Background="#030509"
+                        BorderBrush="{DynamicResource Accent2Brush}"
+                        BorderThickness="1">
                     <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
                 </Border>
 
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="13,0,0,0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Grev" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
-                        <TextBlock Text="UltraVNC" FontSize="28" FontWeight="Bold" Margin="1,0,0,0" />
+                        <TextBlock Text="Grev" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="UltraVNC" FontSize="26" FontWeight="Bold" Margin="1,0,0,0" />
                     </StackPanel>
-                    <TextBlock Text="One place for local and Grev Connect remote control"
-                               Foreground="{DynamicResource MutedTextBrush}" FontSize="12" Margin="1,2,0,0" />
+                    <TextBlock Text="Remote control, machine management and Grev Connect"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               FontSize="11" Margin="1,2,0,0" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource HeaderAction}" Content="↻  Refresh" Click="Refresh_Click" Margin="0,0,8,0" />
-                    <Button Style="{StaticResource HeaderAction}" Content="⚙  Settings" Click="Settings_Click" Margin="0,0,8,0" />
-                    <Button Style="{StaticResource PrimaryButton}" Content="＋  Add PC" Click="AddMachine_Click" Padding="15,8" MinHeight="38" />
+                    <Button Style="{StaticResource HeaderAction}" Content="↻  Refresh" Click="Refresh_Click" Margin="0,0,7,0" />
+                    <Button Style="{StaticResource HeaderAction}" Content="⚙  Settings" Click="Settings_Click" Margin="0,0,7,0" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="＋  Add PC" Click="AddMachine_Click"
+                            Padding="14,8" MinHeight="38" FontSize="11" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Machine toolbar -->
-        <Border Grid.Row="1" Margin="26,18,26,16" Background="{DynamicResource PanelBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="13" Padding="14">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <!-- Machine filters -->
+        <Grid Grid.Row="1" Margin="24,18,24,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-                <StackPanel VerticalAlignment="Center" Margin="1,0,20,0">
-                    <TextBlock Text="MACHINES" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold" />
-                    <TextBlock x:Name="FilterSummaryText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,2,0,0" />
-                </StackPanel>
+            <StackPanel VerticalAlignment="Center" Margin="0,0,22,0">
+                <TextBlock Text="MACHINES" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold" />
+                <TextBlock x:Name="FilterSummaryText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,2,0,0" />
+            </StackPanel>
 
-                <Grid Grid.Column="1" MaxWidth="520" HorizontalAlignment="Left">
-                    <TextBox x:Name="SearchBox" Width="460" HorizontalAlignment="Left" TextChanged="SearchBox_TextChanged"
-                             ToolTip="Search name, Grev Connect ID, IP, group or notes" Padding="34,9,10,9" />
-                    <TextBlock Text="⌕" FontSize="18" Foreground="{DynamicResource FaintTextBrush}" Margin="10,0,0,0"
-                               HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
+            <Border Grid.Column="1" MaxWidth="560" HorizontalAlignment="Left"
+                    Background="{DynamicResource PanelBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="11">
+                <Grid>
+                    <TextBox x:Name="SearchBox" Width="520" HorizontalAlignment="Left"
+                             TextChanged="SearchBox_TextChanged"
+                             ToolTip="Search name, Grev Connect ID, IP, group or notes"
+                             Padding="35,10,11,10" BorderThickness="0" Background="Transparent" />
+                    <TextBlock Text="⌕" FontSize="18" Foreground="{DynamicResource FaintTextBrush}"
+                               Margin="11,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                               IsHitTestVisible="False" />
                 </Grid>
+            </Border>
 
-                <Border Grid.Column="2" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="1" CornerRadius="9" Padding="11,8" VerticalAlignment="Center">
-                    <CheckBox x:Name="FavoritesOnlyCheck" Content="★  Favourites only"
-                              Checked="FavoritesOnlyCheck_Changed" Unchecked="FavoritesOnlyCheck_Changed" />
-                </Border>
-            </Grid>
-        </Border>
+            <Border Grid.Column="2"
+                    Background="{DynamicResource PanelBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="11"
+                    Padding="11,9" VerticalAlignment="Center">
+                <CheckBox x:Name="FavoritesOnlyCheck" Content="★  Favourites"
+                          Checked="FavoritesOnlyCheck_Changed"
+                          Unchecked="FavoritesOnlyCheck_Changed" />
+            </Border>
+        </Grid>
 
         <!-- Machine cards -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Background="{DynamicResource WindowBrush}" Margin="26,0,12,0">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Background="{DynamicResource WindowBrush}"
+                      Margin="24,0,10,0">
             <ItemsControl ItemsSource="{Binding MachinesView}" Background="{DynamicResource WindowBrush}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -97,7 +124,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Width="360" Height="258" Margin="0,0,14,14" Padding="0"
+                        <Border Width="360" Height="244" Margin="0,0,14,14"
                                 Style="{StaticResource MachineCardStyle}" Cursor="Hand"
                                 MouseLeftButtonDown="MachineCard_MouseLeftButtonDown"
                                 MouseRightButtonUp="MachineCard_MouseRightButtonUp">
@@ -109,7 +136,7 @@
 
                                 <Border Background="{StaticResource BrandGradientBrush}" CornerRadius="13,13,0,0" />
 
-                                <Grid Grid.Row="1" Margin="16,13,16,14">
+                                <Grid Grid.Row="1" Margin="15,12,15,13">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="*" />
@@ -120,49 +147,57 @@
                                         <StackPanel Orientation="Horizontal">
                                             <Button Style="{StaticResource IconButton}" Content="{Binding FavoriteGlyph}"
                                                     Click="FavoriteMachine_Click" ToolTip="Toggle favourite"
-                                                    Padding="8,5" MinWidth="34" Margin="0,0,8,0" />
+                                                    Padding="7,4" MinWidth="32" Margin="0,0,7,0" />
                                             <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="7" Padding="8,4" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Group}" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Group}" Foreground="{DynamicResource AccentBrush}" FontSize="9" FontWeight="SemiBold" />
                                             </Border>
                                         </StackPanel>
+
                                         <Border HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                Background="{DynamicResource SubtlePanelBrush}" CornerRadius="7" Padding="8,4">
+                                                Background="{DynamicResource SubtlePanelBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1" CornerRadius="7" Padding="8,4">
                                             <TextBlock Text="{Binding StatusText}"
                                                        Foreground="{Binding Status, Converter={StaticResource StatusBrushConverter}}"
                                                        FontWeight="SemiBold" FontSize="9" />
                                         </Border>
                                     </Grid>
 
-                                    <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="2,8,2,8">
-                                        <TextBlock Text="{Binding Name}" FontSize="22" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="2,6,2,6">
+                                        <TextBlock Text="{Binding Name}" FontSize="21" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Text="{Binding ConnectDisplayText}" Foreground="{DynamicResource AccentBrush}"
-                                                   FontSize="10" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                                                   FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
 
-                                        <Grid Margin="0,10,0,0">
+                                        <Grid Margin="0,8,0,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}"
-                                                       FontSize="11" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Grid.Column="1" Text="{Binding LastCheckedText}" Foreground="{DynamicResource FaintTextBrush}"
-                                                       FontSize="9" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                                       FontSize="10" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1" Text="{Binding LastCheckedText}"
+                                                       Foreground="{DynamicResource FaintTextBrush}"
+                                                       FontSize="9" Margin="10,0,0,0" />
                                         </Grid>
 
-                                        <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                                                BorderThickness="1" CornerRadius="9" Padding="10,8" Margin="0,10,0,0"
+                                        <Border Background="{DynamicResource SubtlePanelBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1" CornerRadius="9"
+                                                Padding="9,7" Margin="0,8,0,0"
                                                 ToolTip="{Binding AgentMessage}">
                                             <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
                                                 <TextBlock Text="{Binding AgentStatusText}"
                                                            Foreground="{Binding AgentState, Converter={StaticResource AgentStateBrushConverter}}"
-                                                           FontSize="9" FontWeight="SemiBold" />
-                                                <TextBlock Grid.Row="1" Text="{Binding AgentSummaryText}"
-                                                           Foreground="{DynamicResource MutedTextBrush}" FontSize="10"
-                                                           Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                                           FontSize="9" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center" Margin="0,0,9,0" />
+                                                <TextBlock Grid.Column="1" Text="{Binding AgentSummaryText}"
+                                                           Foreground="{DynamicResource MutedTextBrush}"
+                                                           FontSize="9" TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
                                             </Grid>
                                         </Border>
                                     </StackPanel>
@@ -175,7 +210,7 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Button Style="{StaticResource PrimaryButton}" Content="Connect" Click="ConnectMachine_Click"
-                                                Margin="0,0,6,0" Padding="13,7" />
+                                                Margin="0,0,6,0" Padding="12,7" FontSize="11" />
                                         <Button Grid.Column="1" Style="{StaticResource CardActionButton}" Content="Manage"
                                                 Click="ManageMachine_Click" Margin="0,0,6,0" />
                                         <Button Grid.Column="2" Style="{StaticResource CardActionButton}" Content="Edit"
@@ -192,11 +227,12 @@
         </ScrollViewer>
 
         <Border Grid.Row="3" Background="{DynamicResource SubtlePanelBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="26,10">
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                Padding="24,9">
             <Grid>
                 <TextBlock x:Name="FooterStatus" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" Text="Ready" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <TextBlock Text="Double-click to connect" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,0,18,0" />
+                    <TextBlock Text="Double-click a card to connect" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,0,18,0" />
                     <TextBlock Text="LAN  •  Grev Connect" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" />
                 </StackPanel>
             </Grid>
