@@ -103,7 +103,7 @@ public partial class MainWindow : Window
         if (Machines.Count == 0 && !_firstRunPromptShown)
         {
             _firstRunPromptShown = true;
-            Dispatcher.BeginInvoke(new Action(async () => await OpenQuickConnectAsync()), DispatcherPriority.ApplicationIdle);
+            await OpenQuickConnectAsync();
         }
     }
 
