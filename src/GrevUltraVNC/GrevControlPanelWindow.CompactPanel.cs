@@ -21,12 +21,10 @@ public partial class GrevControlPanelWindow
     /// </summary>
     private void CompactPanel_ContentRendered(object? sender, EventArgs e)
     {
-        // The original dock timer handles the brief pre-render startup position. Once the compact
-        // layout is rendered, this timer becomes the single owner of docking and Screen 2 leases.
-        _dockTimer.Stop();
         _adaptivePanelTimer.Tick -= CompactPanelTimer_Tick;
         _adaptivePanelTimer.Tick += CompactPanelTimer_Tick;
         _adaptivePanelTimer.Start();
+
         Dispatcher.BeginInvoke(DockCompactPanel, DispatcherPriority.Loaded);
     }
 
@@ -46,8 +44,6 @@ public partial class GrevControlPanelWindow
         if (viewerWindowAlive)
             _compactViewerWindowSeen = true;
 
-        // UltraVNC may need a moment to create its real viewer window. Once that window has
-        // existed, its disappearance is an immediate disconnect even if vncviewer.exe lingers.
         var startupGraceExpired = DateTimeOffset.UtcNow - _compactPanelOpenedUtc >= ViewerStartupGrace;
         if (!trackedSessionAlive ||
             (!viewerWindowAlive && (_compactViewerWindowSeen || startupGraceExpired)))
@@ -93,7 +89,6 @@ public partial class GrevControlPanelWindow
         var targetHeight = Math.Min(CompactPanelDesiredHeight, availableHeight);
         var needsScroll = targetHeight + 1d < CompactPanelDesiredHeight;
 
-        // Avoid needless WPF layout passes while the panel is already at its target size.
         var minimumHeight = Math.Min(CompactPanelMinimumHeight, targetHeight);
         if (Math.Abs(MinHeight - minimumHeight) > 0.5d)
             MinHeight = minimumHeight;
