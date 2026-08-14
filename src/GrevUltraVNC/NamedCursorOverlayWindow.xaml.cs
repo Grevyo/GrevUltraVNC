@@ -28,6 +28,7 @@ public partial class NamedCursorOverlayWindow : Window
     private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private IReadOnlyList<AgentPresenceInfo> _participants = Array.Empty<AgentPresenceInfo>();
     private string _localControllerId = string.Empty;
+    private FrameworkElement? _localCursorVisual;
 
     public NamedCursorOverlayWindow(Machine machine, UltraVncSessionService vnc, bool virtualDisplay)
     {
@@ -62,9 +63,16 @@ public partial class NamedCursorOverlayWindow : Window
     {
         DockToViewer();
         _dockTimer.Start();
+        CompositionTarget.Rendering += CompositionTarget_Rendering;
     }
 
-    private void NamedCursorOverlayWindow_Closed(object? sender, EventArgs e) => _dockTimer.Stop();
+    private void NamedCursorOverlayWindow_Closed(object? sender, EventArgs e)
+    {
+        _dockTimer.Stop();
+        CompositionTarget.Rendering -= CompositionTarget_Rendering;
+    }
+
+    private void CompositionTarget_Rendering(object? sender, EventArgs e) => MoveLocalCursor();
 
     private void DockToViewer()
     {
@@ -112,55 +120,118 @@ public partial class NamedCursorOverlayWindow : Window
             return;
 
         CursorCanvas.Children.Clear();
+        _localCursorVisual = null;
         var expectedSurface = _virtualDisplay ? "screen2" : "screen1";
+        AgentPresenceInfo? localParticipant = null;
 
         foreach (var participant in _participants)
         {
+            var isLocal = string.Equals(
+                participant.ControllerId,
+                _localControllerId,
+                StringComparison.OrdinalIgnoreCase);
+
+            // Our own cursor is intentionally not drawn from the collaboration heartbeat.
+            // It is rendered directly from the controller's current Windows pointer below so
+            // the local Grev cursor stays glued to the real mouse with no network round trip.
+            if (isLocal)
+            {
+                localParticipant = participant;
+                continue;
+            }
+
             if (!participant.CursorVisible || participant.CursorX is null || participant.CursorY is null ||
                 !string.Equals(participant.CursorSurface, expectedSurface, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var x = Math.Clamp(participant.CursorX.Value, 0, 1) * CursorCanvas.ActualWidth;
-            var y = Math.Clamp(participant.CursorY.Value, 0, 1) * CursorCanvas.ActualHeight;
-            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(GetCursorColor(participant.ControllerId))!);
-            brush.Freeze();
-
-            var isLocal = string.Equals(participant.ControllerId, _localControllerId, StringComparison.OrdinalIgnoreCase);
-            var label = participant.HasControl
-                ? $"{participant.DisplayName} · CONTROL"
-                : participant.DisplayName;
-
-            var panel = new StackPanel { Orientation = Orientation.Horizontal };
-            panel.Children.Add(new TextBlock
-            {
-                Text = "↖",
-                Foreground = brush,
-                FontSize = 24,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, -5, 2, 0)
-            });
-            panel.Children.Add(new Border
-            {
-                Background = new SolidColorBrush(Color.FromArgb(225, 7, 12, 22)),
-                BorderBrush = brush,
-                BorderThickness = new Thickness(isLocal ? 1.4 : 1),
-                CornerRadius = new CornerRadius(7),
-                Padding = new Thickness(7, 3, 7, 3),
-                Child = new TextBlock
-                {
-                    Text = label,
-                    Foreground = Brushes.White,
-                    FontSize = 11,
-                    FontWeight = participant.HasControl ? FontWeights.SemiBold : FontWeights.Normal
-                }
-            });
-
-            CursorCanvas.Children.Add(panel);
-            panel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            var desired = panel.DesiredSize;
-            Canvas.SetLeft(panel, Math.Clamp(x, 0, Math.Max(0, CursorCanvas.ActualWidth - desired.Width)));
-            Canvas.SetTop(panel, Math.Clamp(y, 0, Math.Max(0, CursorCanvas.ActualHeight - desired.Height)));
+            var visual = CreateCursorVisual(
+                participant.ControllerId,
+                participant.DisplayName,
+                participant.HasControl,
+                isLocal: false);
+            CursorCanvas.Children.Add(visual);
+            PositionCursor(visual, participant.CursorX.Value, participant.CursorY.Value);
         }
+
+        if (!string.IsNullOrWhiteSpace(_localControllerId))
+        {
+            _localCursorVisual = CreateCursorVisual(
+                _localControllerId,
+                localParticipant?.DisplayName ?? "YOU",
+                localParticipant?.HasControl == true,
+                isLocal: true);
+            CursorCanvas.Children.Add(_localCursorVisual);
+            MoveLocalCursor();
+        }
+    }
+
+    private FrameworkElement CreateCursorVisual(
+        string controllerId,
+        string displayName,
+        bool hasControl,
+        bool isLocal)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(GetCursorColor(controllerId))!);
+        brush.Freeze();
+
+        var label = hasControl
+            ? $"{displayName} · CONTROL"
+            : displayName;
+
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "↖",
+            Foreground = brush,
+            FontSize = 24,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, -5, 2, 0)
+        });
+        panel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(225, 7, 12, 22)),
+            BorderBrush = brush,
+            BorderThickness = new Thickness(isLocal ? 1.4 : 1),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(7, 3, 7, 3),
+            Child = new TextBlock
+            {
+                Text = label,
+                Foreground = Brushes.White,
+                FontSize = 11,
+                FontWeight = hasControl ? FontWeights.SemiBold : FontWeights.Normal
+            }
+        });
+
+        return panel;
+    }
+
+    private void MoveLocalCursor()
+    {
+        if (_localCursorVisual is null || CursorCanvas.ActualWidth <= 0 || CursorCanvas.ActualHeight <= 0)
+            return;
+
+        var expectedSurface = _virtualDisplay ? "screen2" : "screen1";
+        if (!_vnc.TryGetLocalPointer(_machine.Id, out var surface, out var x, out var y) ||
+            !string.Equals(surface, expectedSurface, StringComparison.OrdinalIgnoreCase))
+        {
+            _localCursorVisual.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _localCursorVisual.Visibility = Visibility.Visible;
+        PositionCursor(_localCursorVisual, x, y);
+    }
+
+    private void PositionCursor(FrameworkElement visual, double normalizedX, double normalizedY)
+    {
+        var x = Math.Clamp(normalizedX, 0, 1) * CursorCanvas.ActualWidth;
+        var y = Math.Clamp(normalizedY, 0, 1) * CursorCanvas.ActualHeight;
+
+        visual.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var desired = visual.DesiredSize;
+        Canvas.SetLeft(visual, Math.Clamp(x, 0, Math.Max(0, CursorCanvas.ActualWidth - desired.Width)));
+        Canvas.SetTop(visual, Math.Clamp(y, 0, Math.Max(0, CursorCanvas.ActualHeight - desired.Height)));
     }
 
     private static string GetCursorColor(string controllerId)
@@ -178,7 +249,7 @@ public partial class NamedCursorOverlayWindow : Window
         IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, nIndex) : new IntPtr(GetWindowLong32(hWnd, nIndex));
 
     private static IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong) =>
-        IntPtr.Size == 8 ? SetWindowLongPtr64(hWnd, nIndex, dwNewLong) : new IntPtr(SetWindowLong32(hWnd, nIndex, dwNewLong.ToInt32()));
+        IntPtr.Size == 8 ? SetWindowLongPtr64(hWnd, nIndex) : new IntPtr(SetWindowLong32(hWnd, nIndex, dwNewLong.ToInt32()));
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
     private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
