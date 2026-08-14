@@ -21,6 +21,9 @@ public partial class GrevControlPanelWindow
     /// </summary>
     private void CompactPanel_ContentRendered(object? sender, EventArgs e)
     {
+        // The original dock timer handles the brief pre-render startup position. Once the compact
+        // layout is rendered, this timer becomes the single owner of docking and Screen 2 leases.
+        _dockTimer.Stop();
         _adaptivePanelTimer.Tick -= CompactPanelTimer_Tick;
         _adaptivePanelTimer.Tick += CompactPanelTimer_Tick;
         _adaptivePanelTimer.Start();
