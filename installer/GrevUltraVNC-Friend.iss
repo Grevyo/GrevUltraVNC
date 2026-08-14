@@ -1,5 +1,5 @@
 #define MyAppName "GrevUltraVNC"
-#define MyAppVersion "1.1.3"
+#define MyAppVersion "1.1.4"
 #define MyAppPublisher "Grev"
 #define MyAppExeName "GrevUltraVNC.exe"
 
@@ -23,12 +23,12 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=GrevUltraVNC-1.1.3-Friend-Setup
+OutputBaseFilename=GrevUltraVNC-1.1.4-Friend-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
-UninstallDisplayName=GrevUltraVNC 1.1.3 Friend Test
+UninstallDisplayName=GrevUltraVNC 1.1.4 Friend Test
 UninstallDisplayIcon={app}\GrevUltraVNC.exe
 CloseApplications=yes
 RestartApplications=no
@@ -136,10 +136,10 @@ begin
     80: Result := 'Placing the files alphabetically. Windows will ruin this later.';
     81: Result := 'Training the eraser to distinguish whiteboard from actual monitor.';
     82: Result := 'Teaching Undo that consequences are sometimes optional.';
-    83: Result := 'Preparing six different ways to point at the same thing.';
-    84: Result := 'Adding a cursor with absolutely unnecessary personality.';
-    85: Result := 'Checking the cyan squiggle for structural integrity.';
-    86: Result := 'The cyan squiggle has passed. Nobody knows what it is.';
+    83: Result := 'Preparing thirteen different ways to point at the same thing.';
+    84: Result := 'Adding cursors with absolutely unnecessary personality.';
+    85: Result := 'Checking the Grev squiggle for structural integrity.';
+    86: Result := 'ChatGPT made its own squiggle. Nobody asked it to behave.';
     87: Result := 'Installing a crosshair for extremely serious spreadsheet work.';
     88: Result := 'Polishing the ring cursor until it becomes somebody else problem.';
     89: Result := 'Sharpening the diamond cursor. Safety goggles recommended.';
@@ -227,7 +227,7 @@ begin
     wpWelcome:
       begin
         WizardForm.WelcomeLabel2.Caption :=
-          'This installs GrevUltraVNC 1.1.3 and the UltraVNC viewer it needs.' + #13#10 + #13#10 +
+          'This installs GrevUltraVNC 1.1.4 and the UltraVNC viewer it needs.' + #13#10 + #13#10 +
           GrevQuote(1) + #13#10 + #13#10 + GrevQuote(83);
       end;
 
