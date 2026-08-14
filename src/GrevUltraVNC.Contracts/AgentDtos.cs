@@ -148,7 +148,7 @@ public sealed record AgentCollaborationRequest(
     bool CursorVisible = false,
     string CursorSurface = "screen1",
     string PreferredColor = CollaborationColors.Default,
-    string PreferredCursorStyle = "grev");
+    string PreferredCursorStyle = "arrow");
 
 public sealed record AgentCollaborationResponse(
     bool Success,
