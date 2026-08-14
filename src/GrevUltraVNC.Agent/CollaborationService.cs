@@ -82,21 +82,31 @@ public sealed class CollaborationService
     private void TouchParticipant(string controllerId, string displayName, AgentCollaborationRequest request)
     {
         var now = DateTimeOffset.UtcNow;
+        var preferredColor = CollaborationColors.Normalize(request.PreferredColor);
+
         if (!_participants.TryGetValue(controllerId, out var participant))
         {
-            var assignedColor = CollaborationColors.PickAvailable(
-                request.PreferredColor,
-                _participants.Values.Select(item => item.Color));
-
             participant = new PresenceState
             {
                 ControllerId = controllerId,
                 DisplayName = displayName,
-                Color = assignedColor,
+                PreferredColor = preferredColor,
+                Color = CollaborationColors.PickAvailable(
+                    preferredColor,
+                    _participants.Values.Select(item => item.Color)),
                 ConnectedAtUtc = now,
                 LastSeenUtc = now
             };
             _participants[controllerId] = participant;
+        }
+        else if (!string.Equals(participant.PreferredColor, preferredColor, StringComparison.OrdinalIgnoreCase))
+        {
+            participant.PreferredColor = preferredColor;
+            participant.Color = CollaborationColors.PickAvailable(
+                preferredColor,
+                _participants
+                    .Where(pair => !string.Equals(pair.Key, controllerId, StringComparison.OrdinalIgnoreCase))
+                    .Select(pair => pair.Value.Color));
         }
 
         participant.DisplayName = displayName;
@@ -239,7 +249,8 @@ public sealed class CollaborationService
     {
         public required string ControllerId { get; init; }
         public required string DisplayName { get; set; }
-        public required string Color { get; init; }
+        public required string PreferredColor { get; set; }
+        public required string Color { get; set; }
         public DateTimeOffset ConnectedAtUtc { get; init; }
         public DateTimeOffset LastSeenUtc { get; set; }
         public double? CursorX { get; set; }

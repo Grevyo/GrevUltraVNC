@@ -30,6 +30,14 @@ public partial class GrevControlPanelWindow
         Closed += GrevCollaboration_Closed;
     }
 
+    public void UpdateCollaborationSettings(AppSettings settings)
+    {
+        _collaborationSettings = settings;
+        var preferredColor = CollaborationColors.Normalize(settings.CollaborationColor);
+        _screen1CursorOverlay?.UpdatePreferredColor(preferredColor);
+        _screen2CursorOverlay?.UpdatePreferredColor(preferredColor);
+    }
+
     private async void GrevCollaboration_Loaded(object sender, RoutedEventArgs e)
     {
         // Connecting never grants remote input automatically. The named pointer is available

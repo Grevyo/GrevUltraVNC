@@ -31,6 +31,9 @@ public partial class MainWindow
         await _storage.SaveSettingsAsync(_settings);
         ConfigureStatusTimer();
 
+        foreach (var controlPanel in _controlPanels.Values.ToArray())
+            controlPanel.UpdateCollaborationSettings(_settings);
+
         try
         {
             StartupService.SetEnabled(_settings.StartWithWindows);
