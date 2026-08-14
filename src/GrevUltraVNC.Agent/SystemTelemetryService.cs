@@ -11,15 +11,52 @@ namespace GrevUltraVNC.Agent;
 
 public sealed class SystemTelemetryService : BackgroundService
 {
+    private static readonly TimeSpan SnapshotLifetime = TimeSpan.FromSeconds(3);
+
     private readonly AgentConfiguration _configuration;
+    private readonly SemaphoreSlim _snapshotGate = new(1, 1);
+    private readonly string _agentVersion;
+    private readonly string _osDescription;
+    private readonly string _cpuName;
     private double _cpuUsagePercent;
+    private AgentStatusResponse? _latestSnapshot;
+    private DateTimeOffset _latestSnapshotAtUtc = DateTimeOffset.MinValue;
 
     public SystemTelemetryService(AgentConfiguration configuration)
     {
         _configuration = configuration;
+        _agentVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "dev";
+        _osDescription = RuntimeInformation.OSDescription;
+        _cpuName = GetCpuName();
     }
 
     public async Task<AgentStatusResponse> CaptureAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var snapshot = _latestSnapshot;
+        if (snapshot is not null && now - _latestSnapshotAtUtc < SnapshotLifetime)
+            return snapshot;
+
+        await _snapshotGate.WaitAsync(cancellationToken);
+        try
+        {
+            now = DateTimeOffset.UtcNow;
+            snapshot = _latestSnapshot;
+            if (snapshot is not null && now - _latestSnapshotAtUtc < SnapshotLifetime)
+                return snapshot;
+
+            snapshot = await CaptureFreshAsync(cancellationToken);
+            _latestSnapshot = snapshot;
+            _latestSnapshotAtUtc = DateTimeOffset.UtcNow;
+            return snapshot;
+        }
+        finally
+        {
+            _snapshotGate.Release();
+        }
+    }
+
+    private async Task<AgentStatusResponse> CaptureFreshAsync(CancellationToken cancellationToken)
     {
         var memory = GetMemoryStatus();
         var vncListening = await IsPortListeningAsync(_configuration.UltraVncPort, cancellationToken);
@@ -44,9 +81,9 @@ public sealed class SystemTelemetryService : BackgroundService
 
         return new AgentStatusResponse(
             Environment.MachineName,
-            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "dev",
-            RuntimeInformation.OSDescription,
-            GetCpuName(),
+            _agentVersion,
+            _osDescription,
+            _cpuName,
             Math.Round(_cpuUsagePercent, 1),
             checked((long)memory.ullTotalPhys),
             checked((long)memory.ullAvailPhys),
@@ -83,6 +120,12 @@ public sealed class SystemTelemetryService : BackgroundService
 
             previous = current;
         }
+    }
+
+    public override void Dispose()
+    {
+        _snapshotGate.Dispose();
+        base.Dispose();
     }
 
     private static MemoryStatusEx GetMemoryStatus()
