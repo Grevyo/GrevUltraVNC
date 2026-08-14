@@ -38,7 +38,7 @@ jobs:
         shell: powershell
         run: choco install innosetup -y --no-progress
 
-      - name: Build GrevUltraVNC 1.1.1 friend installer
+      - name: Build GrevUltraVNC 1.1.2 friend installer
         shell: powershell
         run: .\scripts\build-friend-installer.ps1
 
@@ -68,23 +68,25 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
           }
 
-      - name: Publish GrevUltraVNC 1.1.1 friend release
+      - name: Publish GrevUltraVNC 1.1.2 friend release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.1.1-friend'
-          $asset = 'dist\GrevUltraVNC-1.1.1-Friend-Setup.exe'
+          $tag = 'v1.1.2-friend'
+          $asset = 'dist\GrevUltraVNC-1.1.2-Friend-Setup.exe'
           $notes = @(
-            'GrevUltraVNC 1.1.1 Friend Test'
+            'GrevUltraVNC 1.1.2 Friend Test'
             ''
-            '- Fixes the custom collaboration cursor so its hotspot can reach the actual viewer edges.'
-            '- Cursor name/control labels flip left near the right edge instead of pushing the pointer away from it.'
-            '- Installer now contains a ridiculous rotating pool of Grev status messages throughout installation.'
+            '- Keeps the custom collaboration cursor hotspot attached to the real pointer all the way to the viewer edges.'
+            '- Adds six selectable collaboration cursor shapes: Grev squiggle, classic arrow, crosshair, ring, diamond and pixel pointer.'
+            '- Cursor style can be selected in main Settings or changed live from the Grev Control panel.'
+            '- Cursor style is shared with other connected GrevUltraVNC users when the Agent is updated to protocol 15.'
+            '- Adds a shared whiteboard eraser plus undo for drawing, erase and clear actions.'
+            '- Expands the installer to 160 deeply unnecessary Grev status messages, including additional furniture-related reassurance.'
             '- Single Windows installer with the bundled UltraVNC viewer.'
             '- First run offers Connect by GrevConnect ID.'
-            '- Fresh installs use User as the default collaboration name.'
             '- Connect your Zima / private Grev Connect network before using an external GC- ID.'
             '- First-time pairing may require the VNC password and Grev Agent pairing key supplied by the PC owner.'
             '- This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
@@ -95,9 +97,9 @@ jobs:
 
           if ($releaseExists) {
             gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.1-friend release asset.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.2-friend release asset.' }
           }
           else {
-            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.1 Friend Test' --notes $notes --prerelease
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.1-friend release.' }
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.2 Friend Test' --notes $notes --prerelease
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.2-friend release.' }
           }
