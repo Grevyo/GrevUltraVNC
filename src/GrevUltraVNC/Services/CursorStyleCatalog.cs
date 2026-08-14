@@ -17,6 +17,11 @@ public static class CursorStyleCatalog
     public const string Square = "square";
     public const string Bolt = "bolt";
     public const string Hand = "hand";
+    public const string Banana = "banana";
+    public const string Fish = "fish";
+    public const string Ghost = "ghost";
+    public const string Crown = "crown";
+    public const string Mug = "mug";
 
     public static IReadOnlyList<CursorStyleOption> Options { get; } = new[]
     {
@@ -32,14 +37,19 @@ public static class CursorStyleCatalog
         new CursorStyleOption(Target, "Target"),
         new CursorStyleOption(Square, "Hollow square"),
         new CursorStyleOption(Bolt, "Bolt pointer"),
-        new CursorStyleOption(Hand, "Hand pointer")
+        new CursorStyleOption(Hand, "Hand pointer"),
+        new CursorStyleOption(Banana, "Banana"),
+        new CursorStyleOption(Fish, "Fish"),
+        new CursorStyleOption(Ghost, "Ghost"),
+        new CursorStyleOption(Crown, "Crown"),
+        new CursorStyleOption(Mug, "Coffee mug")
     };
 
     public static string Normalize(string? value)
     {
         var normalized = value?.Trim().ToLowerInvariant();
         return normalized is Arrow or Grev or ChatGpt or Crosshair or Ring or Diamond or Pixel or
-            SlimArrow or Chevron or Target or Square or Bolt or Hand
+            SlimArrow or Chevron or Target or Square or Bolt or Hand or Banana or Fish or Ghost or Crown or Mug
             ? normalized
             : Arrow;
     }
