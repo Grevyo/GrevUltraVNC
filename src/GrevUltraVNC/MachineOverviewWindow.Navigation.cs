@@ -44,8 +44,6 @@ public partial class MachineOverviewWindow
         }
     }
 
-    private async void RefreshActivity_Click(object sender, RoutedEventArgs e) => await LoadActivityAsync();
-
     private async void ClearActivity_Click(object sender, RoutedEventArgs e)
     {
         if (MessageBox.Show(this,
