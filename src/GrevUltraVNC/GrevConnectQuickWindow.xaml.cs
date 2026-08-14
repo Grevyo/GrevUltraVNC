@@ -72,6 +72,15 @@ public partial class GrevConnectQuickWindow : Window
             if (isNew && !string.IsNullOrWhiteSpace(resolution.MachineName))
                 machine.Name = resolution.MachineName!;
 
+            var hasSavedAgentKey = _agentCredentials.HasSavedKey(machine.Id);
+            if (!hasSavedAgentKey && string.IsNullOrWhiteSpace(agentKey))
+            {
+                throw new InvalidOperationException(
+                    $"Found {connectId} via {machine.ResolvedRoute}, but this controller is not paired yet. " +
+                    "Open First-time pairing and paste the Grev Agent pairing key supplied by the PC owner. " +
+                    "You only need to save it once on this PC.");
+            }
+
             if (!string.IsNullOrEmpty(VncPasswordBox.Password))
                 _vncCredentials.Save(machine.Id, VncPasswordBox.Password);
 
