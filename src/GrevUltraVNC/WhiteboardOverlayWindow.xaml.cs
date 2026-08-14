@@ -13,6 +13,10 @@ namespace GrevUltraVNC;
 
 public partial class WhiteboardOverlayWindow : Window
 {
+    private const double PenThickness = 3d;
+    private const double HighlighterThickness = 16d;
+    private const byte HighlighterAlpha = 0x66;
+
     private readonly Machine _machine;
     private readonly UltraVncSessionService _vnc;
     private readonly AppSettings _settings;
@@ -22,6 +26,7 @@ public partial class WhiteboardOverlayWindow : Window
     private Polyline? _activePolyline;
     private bool _drawing;
     private string _selectedColour = "#32CFF0";
+    private string _selectedTool = "pen";
 
     public event Action<AgentWhiteboardEvent>? WhiteboardEventCreated;
 
@@ -41,6 +46,7 @@ public partial class WhiteboardOverlayWindow : Window
     private void WhiteboardOverlayWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateColourSelection(DefaultColourButton);
+        UpdateToolSelection(PenButton);
         DockToViewer();
         _dockTimer.Start();
     }
@@ -103,6 +109,31 @@ public partial class WhiteboardOverlayWindow : Window
         if (changed) RenderAll();
     }
 
+    private void Tool_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string tool || string.IsNullOrWhiteSpace(tool))
+            return;
+
+        _selectedTool = tool;
+        UpdateToolSelection(button);
+        e.Handled = true;
+    }
+
+    private void UpdateToolSelection(Button selectedButton)
+    {
+        foreach (var button in new[] { PenButton, HighlighterButton })
+        {
+            button.ClearValue(Control.BorderBrushProperty);
+            button.ClearValue(Control.BorderThicknessProperty);
+        }
+
+        selectedButton.BorderBrush = (Brush)FindResource("AccentBrush");
+        selectedButton.BorderThickness = new Thickness(2);
+        SelectedToolText.Text = IsHighlighter
+            ? $"Highlighter · {HighlighterThickness:0} px · transparent"
+            : $"Pen · {PenThickness:0} px";
+    }
+
     private void Colour_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.Tag is not string colour || string.IsNullOrWhiteSpace(colour))
@@ -137,8 +168,8 @@ public partial class WhiteboardOverlayWindow : Window
 
         _activePolyline = new Polyline
         {
-            Stroke = GetStrokeBrush(_selectedColour),
-            StrokeThickness = 3,
+            Stroke = GetStrokeBrush(CurrentStrokeColour),
+            StrokeThickness = CurrentStrokeThickness,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round
@@ -184,8 +215,8 @@ public partial class WhiteboardOverlayWindow : Window
                 _settings.GrevName,
                 "stroke",
                 Guid.NewGuid().ToString("N"),
-                _selectedColour,
-                3,
+                CurrentStrokeColour,
+                CurrentStrokeThickness,
                 points,
                 DateTimeOffset.UtcNow);
 
@@ -210,8 +241,8 @@ public partial class WhiteboardOverlayWindow : Window
             _settings.GrevName,
             "clear",
             $"clear-{Guid.NewGuid():N}",
-            _selectedColour,
-            3,
+            CurrentStrokeColour,
+            CurrentStrokeThickness,
             Array.Empty<AgentWhiteboardPoint>(),
             DateTimeOffset.UtcNow));
     }
@@ -247,6 +278,20 @@ public partial class WhiteboardOverlayWindow : Window
 
             DrawingCanvas.Children.Add(line);
         }
+    }
+
+    private bool IsHighlighter => string.Equals(_selectedTool, "highlighter", StringComparison.OrdinalIgnoreCase);
+
+    private double CurrentStrokeThickness => IsHighlighter ? HighlighterThickness : PenThickness;
+
+    private string CurrentStrokeColour => IsHighlighter ? WithAlpha(_selectedColour, HighlighterAlpha) : _selectedColour;
+
+    private static string WithAlpha(string colour, byte alpha)
+    {
+        var rgb = colour.Trim();
+        if (rgb.StartsWith('#')) rgb = rgb[1..];
+        if (rgb.Length == 8) rgb = rgb[2..];
+        return rgb.Length == 6 ? $"#{alpha:X2}{rgb.ToUpperInvariant()}" : colour;
     }
 
     private Brush GetStrokeBrush(string colour)
