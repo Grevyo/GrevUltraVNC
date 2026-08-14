@@ -42,7 +42,7 @@ public partial class MachineOverviewWindow : Window
     private async void MachineOverviewWindow_Loaded(object sender, RoutedEventArgs e)
     {
         await LoadSavedCommandsAsync();
-        await RefreshAllAsync();
+        await RefreshVisibleDataAsync();
     }
 
     private void MachineOverviewWindow_Closed(object? sender, EventArgs e)
@@ -52,9 +52,9 @@ public partial class MachineOverviewWindow : Window
         _windowCancellation.Dispose();
     }
 
-    private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAllAsync();
+    private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshVisibleDataAsync();
 
-    private async Task RefreshAllAsync()
+    private async Task RefreshVisibleDataAsync()
     {
         if (_refreshing) return;
         _refreshing = true;
@@ -258,7 +258,7 @@ public partial class MachineOverviewWindow : Window
             _machine.AgentMessage = result.Message;
 
             _agentUpdateRunning = false;
-            await RefreshAllAsync();
+            await RefreshVisibleDataAsync();
             StatusText.Text = "Grev Agent updated successfully and is responding again.";
             await LogActivityAsync("Agent", "Update Agent", "Updated from agent-latest", true);
 

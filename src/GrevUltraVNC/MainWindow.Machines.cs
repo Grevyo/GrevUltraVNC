@@ -137,19 +137,6 @@ public partial class MainWindow
         overview.ShowDialog();
     }
 
-    private async void EditMachine_Click(object sender, RoutedEventArgs e)
-    {
-        e.Handled = true;
-        if ((sender as FrameworkElement)?.DataContext is not Machine machine) return;
-
-        var dialog = new MachineDialog(machine) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-
-        await _storage.SaveMachinesAsync(Machines);
-        RefreshMachineView();
-        await RefreshStatusesAsync();
-    }
-
     private async void FavoriteMachine_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;

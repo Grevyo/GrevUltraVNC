@@ -170,7 +170,7 @@ public partial class MachineOverviewWindow
             if (result.Success)
             {
                 if (refreshAfterSuccess)
-                    await RefreshAllAsync();
+                    await RefreshVisibleDataAsync();
 
                 StatusText.Text = result.Message;
                 await LogActivityAsync(category, activityAction, detail, true);
