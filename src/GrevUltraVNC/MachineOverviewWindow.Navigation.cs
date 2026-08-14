@@ -76,14 +76,14 @@ public partial class MachineOverviewWindow
     {
         ShowSection(ProcessesPanel, ProcessesButton);
         if (!_processesLoaded)
-            await RefreshAllAsync();
+            await RefreshVisibleDataAsync();
     }
 
     private async void ServicesTab_Click(object sender, RoutedEventArgs e)
     {
         ShowSection(ServicesPanel, ServicesButton);
         if (!_servicesLoaded)
-            await RefreshAllAsync();
+            await RefreshVisibleDataAsync();
     }
 
     private void SessionTab_Click(object sender, RoutedEventArgs e) => ShowSection(SessionPanel, SessionButton);
