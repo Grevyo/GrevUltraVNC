@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private AppSettings _settings = new();
     private bool _statusRefreshRunning;
     private bool _uiReady;
+    private bool _firstRunPromptShown;
     private string _searchText = string.Empty;
     private string _machineFilter = "all";
     private TrayIconService? _tray;
@@ -63,9 +64,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(_settings.GrevName))
         {
-            _settings.GrevName = string.IsNullOrWhiteSpace(Environment.UserName)
-                ? "Grev User"
-                : Environment.UserName;
+            _settings.GrevName = "User";
             identityChanged = true;
         }
 
@@ -92,6 +91,12 @@ public partial class MainWindow : Window
         UpdateMachineFilterStyles();
         RefreshMachineView();
         await RefreshStatusesAsync();
+
+        if (Machines.Count == 0 && !_firstRunPromptShown)
+        {
+            _firstRunPromptShown = true;
+            Dispatcher.BeginInvoke(new Action(async () => await OpenQuickConnectAsync()), DispatcherPriority.ApplicationIdle);
+        }
     }
 
     private void MainWindow_Closed(object? sender, EventArgs e)
