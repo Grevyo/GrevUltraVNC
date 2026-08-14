@@ -12,4 +12,5 @@ public sealed class AppSettings
     public string GrevName { get; set; } = "User";
     public string ControllerId { get; set; } = string.Empty;
     public string CollaborationColor { get; set; } = "#32CFF0";
+    public string CursorStyle { get; set; } = "grev";
 }
