@@ -49,19 +49,20 @@
                     </StackPanel>
                 </Border>
 
-                <Expander Header="First-time pairing  ·  only if Grev gave you these"
+                <Expander Header="First-time pairing  ·  open this the first time you connect"
                           Margin="0,14,0,0" Foreground="{DynamicResource TextBrush}">
                     <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock Text="VNC password" />
                             <PasswordBox x:Name="VncPasswordBox" Margin="0,6,0,0" />
-                            <TextBlock Text="Optional. If left blank, UltraVNC can ask for it when connecting."
-                                       Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,5,0,0" />
+                            <TextBlock Text="Optional here. If it is not already saved, UltraVNC can ask for it when the viewer opens."
+                                       Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,5,0,0"
+                                       TextWrapping="Wrap" />
 
                             <TextBlock Text="Grev Agent pairing key" Margin="0,16,0,0" />
                             <PasswordBox x:Name="AgentKeyBox" Margin="0,6,0,0" />
-                            <TextBlock Text="Needed for collaboration, Manage, Terminal, audio and Screen 2. It is stored securely in Windows Credential Manager."
+                            <TextBlock Text="Required the first time for remote control and Grev features such as collaboration, Manage, Terminal, audio and Screen 2. It is stored securely in Windows Credential Manager."
                                        Foreground="{DynamicResource FaintTextBrush}" FontSize="10"
                                        Margin="0,5,0,0" TextWrapping="Wrap" />
                         </StackPanel>
