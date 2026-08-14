@@ -94,13 +94,14 @@ public partial class MachineOverviewWindow
         ActivityPanel.Visibility = Visibility.Collapsed;
         section.Visibility = Visibility.Visible;
 
-        OverviewButton.Style = (Style)FindResource("SecondaryButton");
-        ProcessesButton.Style = (Style)FindResource("SecondaryButton");
-        ServicesButton.Style = (Style)FindResource("SecondaryButton");
-        SessionButton.Style = (Style)FindResource("SecondaryButton");
-        ToolsButton.Style = (Style)FindResource("SecondaryButton");
-        TerminalButton.Style = (Style)FindResource("SecondaryButton");
-        ActivityButton.Style = (Style)FindResource("SecondaryButton");
-        activeButton.Style = (Style)FindResource("PrimaryButton");
+        var normalStyle = (Style)FindResource("ManageNavButton");
+        OverviewButton.Style = normalStyle;
+        ProcessesButton.Style = normalStyle;
+        ServicesButton.Style = normalStyle;
+        SessionButton.Style = normalStyle;
+        ToolsButton.Style = normalStyle;
+        TerminalButton.Style = normalStyle;
+        ActivityButton.Style = normalStyle;
+        activeButton.Style = (Style)FindResource("ManageNavActiveButton");
     }
 }
