@@ -1,6 +1,9 @@
 using Microsoft.Win32;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using GrevUltraVNC.Contracts;
 using GrevUltraVNC.Models;
 using GrevUltraVNC.Services;
 
@@ -12,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly UltraVncSessionService _vnc;
     private readonly string _originalTheme;
     private bool _initializing = true;
+    private string _selectedCollaborationColor = CollaborationColors.Default;
 
     public SettingsWindow(AppSettings settings, UltraVncSessionService vnc)
     {
@@ -19,6 +23,7 @@ public partial class SettingsWindow : Window
         _settings = settings;
         _vnc = vnc;
         _originalTheme = ThemeService.Normalize(settings.Theme);
+        _selectedCollaborationColor = CollaborationColors.Normalize(settings.CollaborationColor);
 
         GrevNameBox.Text = settings.GrevName;
         ControllerIdText.Text = string.IsNullOrWhiteSpace(settings.ControllerId)
@@ -31,6 +36,15 @@ public partial class SettingsWindow : Window
         StartWithWindowsCheck.IsChecked = settings.StartWithWindows;
         MinimizeToTrayCheck.IsChecked = settings.MinimizeToTray;
 
+        var selectedColourButton = CollaborationColourPalette.Children
+            .OfType<Button>()
+            .FirstOrDefault(button => string.Equals(
+                button.Tag?.ToString(),
+                _selectedCollaborationColor,
+                StringComparison.OrdinalIgnoreCase))
+            ?? DefaultCollaborationColourButton;
+        UpdateCollaborationColourSelection(selectedColourButton);
+
         if (_originalTheme == ThemeService.Light)
             LightThemeRadio.IsChecked = true;
         else
@@ -38,6 +52,29 @@ public partial class SettingsWindow : Window
 
         _initializing = false;
         Closed += SettingsWindow_Closed;
+    }
+
+    private void CollaborationColour_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string colour)
+            return;
+
+        _selectedCollaborationColor = CollaborationColors.Normalize(colour);
+        UpdateCollaborationColourSelection(button);
+        e.Handled = true;
+    }
+
+    private void UpdateCollaborationColourSelection(Button selectedButton)
+    {
+        foreach (var swatch in CollaborationColourPalette.Children.OfType<Button>())
+        {
+            swatch.ClearValue(Control.BorderBrushProperty);
+            swatch.ClearValue(Control.BorderThicknessProperty);
+        }
+
+        selectedButton.BorderBrush = Brushes.White;
+        selectedButton.BorderThickness = new Thickness(3);
+        SelectedCollaborationColourText.Text = selectedButton.ToolTip?.ToString() ?? _selectedCollaborationColor;
     }
 
     private void ThemeChoice_Checked(object sender, RoutedEventArgs e)
@@ -102,6 +139,7 @@ public partial class SettingsWindow : Window
         _settings.GrevName = grevName;
         if (string.IsNullOrWhiteSpace(_settings.ControllerId))
             _settings.ControllerId = Guid.NewGuid().ToString("N");
+        _settings.CollaborationColor = CollaborationColors.Normalize(_selectedCollaborationColor);
         _settings.UltraVncViewerPath = path;
         _settings.AutoScaling = AutoScaleCheck.IsChecked == true;
         _settings.FullScreenByDefault = FullScreenCheck.IsChecked == true;
