@@ -18,7 +18,8 @@ public partial class MainWindow
             StartWithWindows = _settings.StartWithWindows,
             MinimizeToTray = _settings.MinimizeToTray,
             GrevName = _settings.GrevName,
-            ControllerId = _settings.ControllerId
+            ControllerId = _settings.ControllerId,
+            CollaborationColor = _settings.CollaborationColor
         };
 
         var dialog = new SettingsWindow(working, _vnc) { Owner = this };
