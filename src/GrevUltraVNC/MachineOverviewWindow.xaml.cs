@@ -13,9 +13,12 @@ public partial class MachineOverviewWindow : Window
     private readonly GrevAgentClient _agent = new();
     private readonly AgentUpdateService _agentUpdater;
     private readonly AdminWorkspaceStorage _workspace = new();
+    private readonly CancellationTokenSource _windowCancellation = new();
     private IReadOnlyList<AgentProcessInfo> _processes = [];
     private IReadOnlyList<AgentServiceInfo> _services = [];
     private List<SavedCommand> _savedCommands = [];
+    private bool _processesLoaded;
+    private bool _servicesLoaded;
     private bool _refreshing;
     private bool _actionRunning;
     private bool _commandRunning;
@@ -29,17 +32,24 @@ public partial class MachineOverviewWindow : Window
         _agentUpdater = new AgentUpdateService(_agent);
 
         MachineNameText.Text = machine.Name;
-        MachineAddressText.Text = $"{machine.IpAddress}  ·  Agent {machine.AgentPort}  ·  VNC {machine.VncPort}";
+        MachineAddressText.Text = $"{machine.ConnectDisplayText}  ·  Agent {machine.AgentPort}  ·  VNC {machine.VncPort}";
         RefreshScreenButton.IsEnabled = _vnc?.HasActiveSession(machine.Id) == true;
 
         Loaded += MachineOverviewWindow_Loaded;
-        Closed += (_, _) => _agent.Dispose();
+        Closed += MachineOverviewWindow_Closed;
     }
 
     private async void MachineOverviewWindow_Loaded(object sender, RoutedEventArgs e)
     {
         await LoadSavedCommandsAsync();
         await RefreshAllAsync();
+    }
+
+    private void MachineOverviewWindow_Closed(object? sender, EventArgs e)
+    {
+        _windowCancellation.Cancel();
+        _agent.Dispose();
+        _windowCancellation.Dispose();
     }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAllAsync();
@@ -56,11 +66,19 @@ public partial class MachineOverviewWindow : Window
         SessionFeatureStatusText.Text = "Checking Agent capability…";
         RefreshScreenButton.IsEnabled = _vnc?.HasActiveSession(_machine.Id) == true;
 
+        var token = _windowCancellation.Token;
+        var loadProcesses = ProcessesPanel.Visibility == Visibility.Visible;
+        var loadServices = ServicesPanel.Visibility == Visibility.Visible;
+
         try
         {
-            var probeTask = _agent.ProbeAsync(_machine);
-            var processesTask = _agent.GetProcessesAsync(_machine);
-            var servicesTask = _agent.GetServicesAsync(_machine);
+            var probeTask = _agent.ProbeAsync(_machine, token);
+            var processesTask = loadProcesses
+                ? _agent.GetProcessesAsync(_machine, token)
+                : Task.FromResult(_processes);
+            var servicesTask = loadServices
+                ? _agent.GetServicesAsync(_machine, token)
+                : Task.FromResult(_services);
 
             await Task.WhenAll(probeTask, processesTask, servicesTask);
 
@@ -69,16 +87,27 @@ public partial class MachineOverviewWindow : Window
                 throw new InvalidOperationException(probe.Message ?? "Grev Agent is not connected.");
 
             var status = probe.Status;
-            _processes = await processesTask;
-            _services = await servicesTask;
+            if (loadProcesses)
+            {
+                _processes = await processesTask;
+                _processesLoaded = true;
+            }
+
+            if (loadServices)
+            {
+                _services = await servicesTask;
+                _servicesLoaded = true;
+            }
 
             _machine.AgentState = probe.State;
             _machine.AgentStatus = probe.Status;
             _machine.AgentMessage = probe.Message;
 
             RenderOverview(status);
-            RenderProcesses();
-            RenderServices();
+            if (_processesLoaded)
+                RenderProcesses();
+            if (_servicesLoaded)
+                RenderServices();
 
             var needsUpdate = !string.IsNullOrWhiteSpace(probe.Message);
             AgentStateText.Text = needsUpdate
@@ -94,12 +123,15 @@ public partial class MachineOverviewWindow : Window
 
             SessionActionsPanel.IsEnabled = !needsUpdate;
             SessionFeatureStatusText.Text = needsUpdate
-                ? "Update Grev Agent to the current protocol before using the new Windows session and power controls."
+                ? "Update Grev Agent to the current protocol before using the Windows session and power controls."
                 : "Agent session controls ready · actions are authenticated with this machine's pairing key.";
 
             StatusText.Text = needsUpdate
                 ? probe.Message!
                 : $"Live data refreshed {DateTime.Now:HH:mm:ss}";
+        }
+        catch (OperationCanceledException) when (_windowCancellation.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -141,8 +173,12 @@ public partial class MachineOverviewWindow : Window
         OsText.Text = status.OsDescription;
         HostText.Text = $"Host: {status.MachineName}";
         AgentVersionText.Text = $"Grev Agent {status.AgentVersion}";
-        ProcessSummaryText.Text = $"Processes: {_processes.Count}";
-        ServiceSummaryText.Text = $"Services: {_services.Count}";
+        ProcessSummaryText.Text = _processesLoaded
+            ? $"Processes: {_processes.Count}"
+            : "Processes: open tab to load";
+        ServiceSummaryText.Text = _servicesLoaded
+            ? $"Services: {_services.Count}"
+            : "Services: open tab to load";
 
         DiskItems.ItemsSource = status.Disks.Select(disk => new DiskRow(
             disk.Name,
