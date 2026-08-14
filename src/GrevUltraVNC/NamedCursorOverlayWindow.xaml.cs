@@ -15,7 +15,7 @@ public partial class NamedCursorOverlayWindow : Window
     private readonly Machine _machine;
     private readonly UltraVncSessionService _vnc;
     private readonly bool _virtualDisplay;
-    private readonly string _preferredColor;
+    private string _preferredColor;
     private readonly DispatcherTimer _dockTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private IReadOnlyList<AgentPresenceInfo> _participants = Array.Empty<AgentPresenceInfo>();
     private string _localControllerId = string.Empty;
@@ -44,6 +44,12 @@ public partial class NamedCursorOverlayWindow : Window
     {
         _participants = participants;
         _localControllerId = localControllerId;
+        RenderCursors();
+    }
+
+    public void UpdatePreferredColor(string preferredColor)
+    {
+        _preferredColor = CollaborationColors.Normalize(preferredColor);
         RenderCursors();
     }
 
