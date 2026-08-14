@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using GrevUltraVNC.Contracts;
 using GrevUltraVNC.Models;
@@ -12,19 +13,25 @@ public partial class GrevControlPanelWindow
     private readonly GrevAgentClient _collaborationClient = new();
     private readonly DispatcherTimer _collaborationTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly List<AgentWhiteboardEvent> _whiteboardHistory = [];
+    private readonly SemaphoreSlim _whiteboardPublishGate = new(1, 1);
     private bool _collaborationRefreshRunning;
     private bool _virtualDisplayStarting;
+    private bool _updatingCursorStylePicker;
     private long _lastWhiteboardEventId;
     private string? _controlOwnerId;
     private RemoteAudioPlaybackService? _remoteAudio;
     private WhiteboardOverlayWindow? _whiteboardOverlay;
     private NamedCursorOverlayWindow? _screen1CursorOverlay;
     private NamedCursorOverlayWindow? _screen2CursorOverlay;
+    private ComboBox? _cursorStyleQuickCombo;
+
+    public event EventHandler? CollaborationSettingsChanged;
 
     public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc, AppSettings settings)
         : this(machine, vnc)
     {
         _collaborationSettings = settings;
+        AddCursorStyleQuickPicker();
         _collaborationTimer.Tick += CollaborationTimer_Tick;
         Loaded += GrevCollaboration_Loaded;
         Closed += GrevCollaboration_Closed;
@@ -34,8 +41,80 @@ public partial class GrevControlPanelWindow
     {
         _collaborationSettings = settings;
         var preferredColor = CollaborationColors.Normalize(settings.CollaborationColor);
+        var preferredCursorStyle = CursorStyleCatalog.Normalize(settings.CursorStyle);
         _screen1CursorOverlay?.UpdatePreferredColor(preferredColor);
         _screen2CursorOverlay?.UpdatePreferredColor(preferredColor);
+        _screen1CursorOverlay?.UpdatePreferredCursorStyle(preferredCursorStyle);
+        _screen2CursorOverlay?.UpdatePreferredCursorStyle(preferredCursorStyle);
+        UpdateCursorStyleQuickPickerSelection();
+    }
+
+    private void AddCursorStyleQuickPicker()
+    {
+        if (ParticipantsItems.Parent is not StackPanel host)
+            return;
+
+        var row = new Grid { Margin = new Thickness(1, 5, 1, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = "YOUR CURSOR",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 8,
+            FontWeight = FontWeights.SemiBold
+        };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "FaintTextBrush");
+        row.Children.Add(label);
+
+        _cursorStyleQuickCombo = new ComboBox
+        {
+            Width = 132,
+            MinHeight = 24,
+            Padding = new Thickness(6, 2, 6, 2),
+            ItemsSource = CursorStyleCatalog.Options,
+            DisplayMemberPath = nameof(CursorStyleOption.Name),
+            SelectedValuePath = nameof(CursorStyleOption.Id),
+            ToolTip = "Change your collaboration cursor without leaving this session"
+        };
+        _cursorStyleQuickCombo.SelectionChanged += CursorStyleQuickCombo_SelectionChanged;
+        Grid.SetColumn(_cursorStyleQuickCombo, 1);
+        row.Children.Add(_cursorStyleQuickCombo);
+
+        host.Children.Add(row);
+        UpdateCursorStyleQuickPickerSelection();
+    }
+
+    private void UpdateCursorStyleQuickPickerSelection()
+    {
+        if (_cursorStyleQuickCombo is null) return;
+
+        _updatingCursorStylePicker = true;
+        try
+        {
+            _cursorStyleQuickCombo.SelectedValue = CursorStyleCatalog.Normalize(_collaborationSettings.CursorStyle);
+        }
+        finally
+        {
+            _updatingCursorStylePicker = false;
+        }
+    }
+
+    private void CursorStyleQuickCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingCursorStylePicker || _cursorStyleQuickCombo?.SelectedValue is not string selected)
+            return;
+
+        var normalized = CursorStyleCatalog.Normalize(selected);
+        if (string.Equals(_collaborationSettings.CursorStyle, normalized, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _collaborationSettings.CursorStyle = normalized;
+        _screen1CursorOverlay?.UpdatePreferredCursorStyle(normalized);
+        _screen2CursorOverlay?.UpdatePreferredCursorStyle(normalized);
+        CollaborationStatusText.Text = $"Cursor · {CursorStyleCatalog.DisplayName(normalized)}";
+        CollaborationSettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private async void GrevCollaboration_Loaded(object sender, RoutedEventArgs e)
@@ -72,6 +151,7 @@ public partial class GrevControlPanelWindow
         finally
         {
             _collaborationClient.Dispose();
+            _whiteboardPublishGate.Dispose();
         }
     }
 
@@ -146,7 +226,8 @@ public partial class GrevControlPanelWindow
             cursorVisible ? cursorY : null,
             cursorVisible,
             cursorVisible ? surface : "screen1",
-            CollaborationColors.Normalize(_collaborationSettings.CollaborationColor));
+            CollaborationColors.Normalize(_collaborationSettings.CollaborationColor),
+            CursorStyleCatalog.Normalize(_collaborationSettings.CursorStyle));
     }
 
     private void ApplyCollaborationResponse(AgentCollaborationResponse response)
@@ -231,7 +312,8 @@ public partial class GrevControlPanelWindow
                 _machine,
                 _vnc,
                 virtualDisplay: false,
-                _collaborationSettings.CollaborationColor);
+                _collaborationSettings.CollaborationColor,
+                _collaborationSettings.CursorStyle);
             _screen1CursorOverlay = overlay;
             overlay.Closed += (_, _) =>
             {
@@ -248,7 +330,8 @@ public partial class GrevControlPanelWindow
                 _machine,
                 _vnc,
                 virtualDisplay: true,
-                _collaborationSettings.CollaborationColor);
+                _collaborationSettings.CollaborationColor,
+                _collaborationSettings.CursorStyle);
             _screen2CursorOverlay = overlay;
             overlay.Closed += (_, _) =>
             {
@@ -282,6 +365,14 @@ public partial class GrevControlPanelWindow
             {
                 _whiteboardHistory.Clear();
                 _whiteboardHistory.Add(item);
+                continue;
+            }
+
+            if (string.Equals(item.Kind, "delete", StringComparison.OrdinalIgnoreCase))
+            {
+                _whiteboardHistory.RemoveAll(existing =>
+                    string.Equals(existing.Kind, "stroke", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.StrokeId, item.StrokeId, StringComparison.OrdinalIgnoreCase));
                 continue;
             }
 
@@ -361,7 +452,7 @@ public partial class GrevControlPanelWindow
             _vnc,
             _collaborationSettings);
         _whiteboardOverlay = overlay;
-        overlay.WhiteboardEventCreated += WhiteboardEventCreated;
+        overlay.WhiteboardEventsCreated += WhiteboardEventsCreated;
         overlay.Closed += (_, _) =>
         {
             if (ReferenceEquals(_whiteboardOverlay, overlay))
@@ -371,23 +462,31 @@ public partial class GrevControlPanelWindow
         overlay.ApplyEvents(_whiteboardHistory);
     }
 
-    private async void WhiteboardEventCreated(AgentWhiteboardEvent item)
+    private async void WhiteboardEventsCreated(IReadOnlyList<AgentWhiteboardEvent> items)
     {
+        await _whiteboardPublishGate.WaitAsync();
         try
         {
-            var response = await _collaborationClient.RunCollaborationAsync(
-                _machine,
-                BuildCollaborationRequest("publish", item));
+            foreach (var item in items)
+            {
+                var response = await _collaborationClient.RunCollaborationAsync(
+                    _machine,
+                    BuildCollaborationRequest("publish", item));
 
-            if (!response.Success)
-                throw new InvalidOperationException(response.Message);
+                if (!response.Success)
+                    throw new InvalidOperationException(response.Message);
 
-            ApplyCollaborationResponse(response);
+                ApplyCollaborationResponse(response);
+            }
         }
         catch (Exception ex)
         {
             CollaborationStatusText.Text = "Whiteboard sync failed";
             MessageBox.Show(this, ex.Message, "Grev Whiteboard", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _whiteboardPublishGate.Release();
         }
     }
 
