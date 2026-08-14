@@ -65,7 +65,15 @@ public sealed class CollaborationService
                         return Snapshot(false, "Whiteboard event was invalid.", request.LastEventId);
 
                     if (string.Equals(published.Kind, "clear", StringComparison.OrdinalIgnoreCase))
+                    {
                         _whiteboardEvents.Clear();
+                    }
+                    else if (string.Equals(published.Kind, "delete", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _whiteboardEvents.RemoveAll(item =>
+                            string.Equals(item.Kind, "stroke", StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(item.StrokeId, published.StrokeId, StringComparison.OrdinalIgnoreCase));
+                    }
 
                     _whiteboardEvents.Add(published);
                     if (_whiteboardEvents.Count > MaxWhiteboardEvents)
@@ -83,6 +91,7 @@ public sealed class CollaborationService
     {
         var now = DateTimeOffset.UtcNow;
         var preferredColor = CollaborationColors.Normalize(request.PreferredColor);
+        var cursorStyle = NormalizeCursorStyle(request.PreferredCursorStyle);
 
         if (!_participants.TryGetValue(controllerId, out var participant))
         {
@@ -94,6 +103,7 @@ public sealed class CollaborationService
                 Color = CollaborationColors.PickAvailable(
                     preferredColor,
                     _participants.Values.Select(item => item.Color)),
+                CursorStyle = cursorStyle,
                 ConnectedAtUtc = now,
                 LastSeenUtc = now
             };
@@ -111,6 +121,7 @@ public sealed class CollaborationService
 
         participant.DisplayName = displayName;
         participant.LastSeenUtc = now;
+        participant.CursorStyle = cursorStyle;
         participant.CursorVisible = request.CursorVisible;
         participant.CursorSurface = NormalizeCursorSurface(request.CursorSurface);
         participant.CursorX = request.CursorX is null ? null : Math.Clamp(request.CursorX.Value, 0, 1);
@@ -155,7 +166,8 @@ public sealed class CollaborationService
                 item.CursorVisible,
                 item.CursorSurface,
                 string.Equals(_controlOwnerId, item.ControllerId, StringComparison.OrdinalIgnoreCase),
-                item.Color))
+                item.Color,
+                item.CursorStyle))
             .ToArray();
 
         var events = _whiteboardEvents
@@ -187,16 +199,19 @@ public sealed class CollaborationService
         string displayName)
     {
         var kind = input.Kind?.Trim().ToLowerInvariant();
-        if (kind is not ("stroke" or "clear")) return null;
+        if (kind is not ("stroke" or "clear" or "delete")) return null;
 
-        var points = kind == "clear"
-            ? Array.Empty<AgentWhiteboardPoint>()
-            : (input.Points ?? [])
+        if (kind == "delete" && string.IsNullOrWhiteSpace(input.StrokeId))
+            return null;
+
+        var points = kind == "stroke"
+            ? (input.Points ?? [])
                 .Take(MaxStrokePoints)
                 .Select(point => new AgentWhiteboardPoint(
                     Math.Clamp(point.X, 0, 1),
                     Math.Clamp(point.Y, 0, 1)))
-                .ToArray();
+                .ToArray()
+            : Array.Empty<AgentWhiteboardPoint>();
 
         if (kind == "stroke" && points.Length < 2) return null;
 
@@ -222,6 +237,14 @@ public sealed class CollaborationService
         string.Equals(value?.Trim(), "screen2", StringComparison.OrdinalIgnoreCase)
             ? "screen2"
             : "screen1";
+
+    private static string NormalizeCursorStyle(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant();
+        return normalized is "grev" or "arrow" or "crosshair" or "ring" or "diamond" or "pixel"
+            ? normalized
+            : "grev";
+    }
 
     private static string? NormalizeControllerId(string? value)
     {
@@ -251,6 +274,7 @@ public sealed class CollaborationService
         public required string DisplayName { get; set; }
         public required string PreferredColor { get; set; }
         public required string Color { get; set; }
+        public required string CursorStyle { get; set; }
         public DateTimeOffset ConnectedAtUtc { get; init; }
         public DateTimeOffset LastSeenUtc { get; set; }
         public double? CursorX { get; set; }

@@ -35,6 +35,17 @@ public partial class MainWindow
             var controlPanel = new GrevControlPanelWindow(machine, _vnc, _settings);
             _controlPanels[machine.Id] = controlPanel;
             controlPanel.Closed += (_, _) => _controlPanels.Remove(machine.Id);
+            controlPanel.CollaborationSettingsChanged += async (_, _) =>
+            {
+                try
+                {
+                    await _storage.SaveSettingsAsync(_settings);
+                }
+                catch
+                {
+                    // A live cursor choice should never interrupt the remote-control session.
+                }
+            };
             controlPanel.Show();
         }
         catch (Exception ex)
