@@ -67,6 +67,7 @@ if ($viewerProcess.HasExited) {
     throw "Bundled UltraVNC viewer exited during startup smoke test with exit code $($viewerProcess.ExitCode)."
 }
 Stop-Process -Id $viewerProcess.Id -Force
+Remove-Item (Join-Path $uvncTarget 'options.vnc') -Force -ErrorAction SilentlyContinue
 
 $uvncLicenseUrl = 'https://raw.githubusercontent.com/ultravnc/UltraVNC/b1f54118e74124407705b342f4cc2269c74e8ca0/LICENSE'
 Invoke-WebRequest -Uri $uvncLicenseUrl -OutFile (Join-Path $licenses 'UltraVNC-LICENSE.txt') -UseBasicParsing
