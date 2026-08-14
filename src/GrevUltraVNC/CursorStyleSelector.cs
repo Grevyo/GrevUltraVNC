@@ -10,6 +10,7 @@ public sealed class CursorStyleSelector : UserControl
 {
     private readonly Dictionary<string, Button> _buttons = new(StringComparer.OrdinalIgnoreCase);
     private readonly WrapPanel _panel;
+    private readonly bool _compact;
     private string _selectedStyle;
     private string _color;
 
@@ -19,16 +20,20 @@ public sealed class CursorStyleSelector : UserControl
     {
         _selectedStyle = CursorStyleCatalog.Normalize(selectedStyle);
         _color = CollaborationColors.Normalize(color);
+        _compact = compact;
 
         _panel = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(-3, -3, -3, -3)
+            Margin = new Thickness(-2, -2, -2, -2)
         };
 
         Content = _panel;
-        BuildButtons(compact);
+        BuildButtons();
         RefreshSelection();
+
+        if (_compact)
+            Loaded += (_, _) => HideCompactCurrentName();
     }
 
     public string SelectedStyle => _selectedStyle;
@@ -55,7 +60,7 @@ public sealed class CursorStyleSelector : UserControl
         RefreshSelection();
     }
 
-    private void BuildButtons(bool compact)
+    private void BuildButtons()
     {
         _buttons.Clear();
         _panel.Children.Clear();
@@ -65,39 +70,41 @@ public sealed class CursorStyleSelector : UserControl
             var button = new Button
             {
                 Tag = option.Id,
-                Width = compact ? 112 : 132,
-                Height = compact ? 58 : 68,
-                Margin = new Thickness(3),
-                Padding = new Thickness(compact ? 6 : 8, 5, compact ? 6 : 8, 5),
-                ToolTip = $"Use {option.Name} for your collaboration cursor"
+                Width = _compact ? 34 : 104,
+                Height = _compact ? 34 : 48,
+                Margin = new Thickness(_compact ? 2 : 3),
+                Padding = new Thickness(_compact ? 3 : 6),
+                ToolTip = option.Name
             };
             button.SetResourceReference(StyleProperty, "SecondaryButton");
             button.Click += CursorButton_Click;
-            button.Content = BuildButtonContent(option, compact);
+            button.Content = BuildButtonContent(option);
             _buttons[option.Id] = button;
             _panel.Children.Add(button);
         }
     }
 
-    private FrameworkElement BuildButtonContent(CursorStyleOption option, bool compact)
+    private FrameworkElement BuildButtonContent(CursorStyleOption option)
     {
         var brush = CreateCursorBrush();
+        if (_compact)
+            return CursorVisualFactory.CreatePreview(option.Id, brush, 18);
+
         var stack = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center
         };
-
-        stack.Children.Add(CursorVisualFactory.CreatePreview(option.Id, brush, compact ? 27 : 34));
+        stack.Children.Add(CursorVisualFactory.CreatePreview(option.Id, brush, 23));
 
         var name = new TextBlock
         {
             Text = option.Name,
-            Margin = new Thickness(7, 0, 0, 0),
+            Margin = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = compact ? 8.5 : 10,
+            FontSize = 9,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = compact ? 68 : 82
+            MaxWidth = 62
         };
         name.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
         stack.Children.Add(name);
@@ -109,8 +116,27 @@ public sealed class CursorStyleSelector : UserControl
         foreach (var option in CursorStyleCatalog.Options)
         {
             if (!_buttons.TryGetValue(option.Id, out var button)) continue;
-            var compact = button.Width <= 115;
-            button.Content = BuildButtonContent(option, compact);
+            button.Content = BuildButtonContent(option);
+        }
+    }
+
+    private void HideCompactCurrentName()
+    {
+        // Grev Control is intentionally picture-only: the cursor names remain available as
+        // tooltips, but the visible selector contains nothing except the small pointer icons.
+        if (Parent is not StackPanel host) return;
+
+        foreach (var grid in host.Children.OfType<Grid>())
+        {
+            var currentName = grid.Children
+                .OfType<TextBlock>()
+                .FirstOrDefault(item => string.Equals(
+                    item.Tag?.ToString(),
+                    "cursor-current-label",
+                    StringComparison.Ordinal));
+            if (currentName is null) continue;
+            currentName.Visibility = Visibility.Collapsed;
+            break;
         }
     }
 
