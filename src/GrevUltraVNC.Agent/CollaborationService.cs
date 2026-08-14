@@ -83,6 +83,7 @@ public sealed class CollaborationService
     {
         var now = DateTimeOffset.UtcNow;
         var preferredColor = CollaborationColors.Normalize(request.PreferredColor);
+        var cursorStyle = NormalizeCursorStyle(request.PreferredCursorStyle);
 
         if (!_participants.TryGetValue(controllerId, out var participant))
         {
@@ -94,6 +95,7 @@ public sealed class CollaborationService
                 Color = CollaborationColors.PickAvailable(
                     preferredColor,
                     _participants.Values.Select(item => item.Color)),
+                CursorStyle = cursorStyle,
                 ConnectedAtUtc = now,
                 LastSeenUtc = now
             };
@@ -111,6 +113,7 @@ public sealed class CollaborationService
 
         participant.DisplayName = displayName;
         participant.LastSeenUtc = now;
+        participant.CursorStyle = cursorStyle;
         participant.CursorVisible = request.CursorVisible;
         participant.CursorSurface = NormalizeCursorSurface(request.CursorSurface);
         participant.CursorX = request.CursorX is null ? null : Math.Clamp(request.CursorX.Value, 0, 1);
@@ -155,7 +158,8 @@ public sealed class CollaborationService
                 item.CursorVisible,
                 item.CursorSurface,
                 string.Equals(_controlOwnerId, item.ControllerId, StringComparison.OrdinalIgnoreCase),
-                item.Color))
+                item.Color,
+                item.CursorStyle))
             .ToArray();
 
         var events = _whiteboardEvents
@@ -223,6 +227,14 @@ public sealed class CollaborationService
             ? "screen2"
             : "screen1";
 
+    private static string NormalizeCursorStyle(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant();
+        return normalized is "grev" or "arrow" or "crosshair" or "ring" or "diamond" or "pixel"
+            ? normalized
+            : "grev";
+    }
+
     private static string? NormalizeControllerId(string? value)
     {
         var text = value?.Trim();
@@ -251,6 +263,7 @@ public sealed class CollaborationService
         public required string DisplayName { get; set; }
         public required string PreferredColor { get; set; }
         public required string Color { get; set; }
+        public required string CursorStyle { get; set; }
         public DateTimeOffset ConnectedAtUtc { get; init; }
         public DateTimeOffset LastSeenUtc { get; set; }
         public double? CursorX { get; set; }
