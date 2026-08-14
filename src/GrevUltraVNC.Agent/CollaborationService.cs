@@ -84,10 +84,15 @@ public sealed class CollaborationService
         var now = DateTimeOffset.UtcNow;
         if (!_participants.TryGetValue(controllerId, out var participant))
         {
+            var assignedColor = CollaborationColors.PickAvailable(
+                request.PreferredColor,
+                _participants.Values.Select(item => item.Color));
+
             participant = new PresenceState
             {
                 ControllerId = controllerId,
                 DisplayName = displayName,
+                Color = assignedColor,
                 ConnectedAtUtc = now,
                 LastSeenUtc = now
             };
@@ -139,7 +144,8 @@ public sealed class CollaborationService
                 item.CursorY,
                 item.CursorVisible,
                 item.CursorSurface,
-                string.Equals(_controlOwnerId, item.ControllerId, StringComparison.OrdinalIgnoreCase)))
+                string.Equals(_controlOwnerId, item.ControllerId, StringComparison.OrdinalIgnoreCase),
+                item.Color))
             .ToArray();
 
         var events = _whiteboardEvents
@@ -233,6 +239,7 @@ public sealed class CollaborationService
     {
         public required string ControllerId { get; init; }
         public required string DisplayName { get; set; }
+        public required string Color { get; init; }
         public DateTimeOffset ConnectedAtUtc { get; init; }
         public DateTimeOffset LastSeenUtc { get; set; }
         public double? CursorX { get; set; }
