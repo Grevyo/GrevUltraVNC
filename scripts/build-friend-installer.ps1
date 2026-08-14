@@ -54,10 +54,19 @@ if (-not $viewer) {
 }
 
 New-Item -ItemType Directory -Path $uvncTarget -Force | Out-Null
-Copy-Item -Path (Join-Path $viewer.Directory.FullName '*') -Destination $uvncTarget -Recurse -Force
-if (-not (Test-Path (Join-Path $uvncTarget 'vncviewer.exe'))) {
+$bundledViewer = Join-Path $uvncTarget 'vncviewer.exe'
+Copy-Item -Path $viewer.FullName -Destination $bundledViewer -Force
+if (-not (Test-Path $bundledViewer)) {
     throw 'Bundled UltraVNC viewer was not copied to the expected location.'
 }
+
+Write-Host 'Smoke testing the bundled UltraVNC viewer...'
+$viewerProcess = Start-Process -FilePath $bundledViewer -PassThru
+Start-Sleep -Seconds 3
+if ($viewerProcess.HasExited) {
+    throw "Bundled UltraVNC viewer exited during startup smoke test with exit code $($viewerProcess.ExitCode)."
+}
+Stop-Process -Id $viewerProcess.Id -Force
 
 $uvncLicenseUrl = 'https://raw.githubusercontent.com/ultravnc/UltraVNC/b1f54118e74124407705b342f4cc2269c74e8ca0/LICENSE'
 Invoke-WebRequest -Uri $uvncLicenseUrl -OutFile (Join-Path $licenses 'UltraVNC-LICENSE.txt') -UseBasicParsing
