@@ -20,12 +20,13 @@ public partial class MainWindow : Window
     private readonly VncCredentialService _credentials = new();
     private readonly AgentCredentialService _agentCredentials = new();
     private readonly DispatcherTimer _statusTimer = new();
+    private readonly DispatcherTimer _searchDebounceTimer = new() { Interval = TimeSpan.FromMilliseconds(220) };
     private readonly Dictionary<Guid, GrevControlPanelWindow> _controlPanels = [];
     private AppSettings _settings = new();
     private bool _statusRefreshRunning;
     private bool _uiReady;
     private string _searchText = string.Empty;
-    private bool _favoritesOnly;
+    private string _machineFilter = "all";
     private TrayIconService? _tray;
 
     public ObservableCollection<Machine> Machines { get; } = [];
@@ -46,6 +47,7 @@ public partial class MainWindow : Window
         Closed += MainWindow_Closed;
         StateChanged += MainWindow_StateChanged;
         _statusTimer.Tick += StatusTimer_Tick;
+        _searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -87,6 +89,7 @@ public partial class MainWindow : Window
 
         _tray = new TrayIconService(this, () => Machines.Where(x => x.IsFavorite), ConnectMachine);
         ConfigureStatusTimer();
+        UpdateMachineFilterStyles();
         RefreshMachineView();
         await RefreshStatusesAsync();
     }
@@ -94,6 +97,7 @@ public partial class MainWindow : Window
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
         _statusTimer.Stop();
+        _searchDebounceTimer.Stop();
         _tray?.Dispose();
         _agent.Dispose();
         _connectResolver.Dispose();

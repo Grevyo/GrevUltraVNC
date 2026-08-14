@@ -10,7 +10,16 @@ public partial class MainWindow
     private bool FilterMachine(object item)
     {
         if (item is not Machine machine) return false;
-        if (_favoritesOnly && !machine.IsFavorite) return false;
+
+        var matchesFilter = _machineFilter switch
+        {
+            "online" => machine.Status is MachineStatus.Online or MachineStatus.VncUnavailable,
+            "offline" => machine.Status == MachineStatus.Offline,
+            "favorites" => machine.IsFavorite,
+            _ => true
+        };
+        if (!matchesFilter) return false;
+
         if (string.IsNullOrWhiteSpace(_searchText)) return true;
 
         return machine.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
@@ -29,6 +38,15 @@ public partial class MainWindow
         FilterSummaryText.Text = shown == Machines.Count
             ? $"{Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}"
             : $"Showing {shown} of {Machines.Count}";
+
+        EmptyStatePanel.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (shown == 0)
+        {
+            EmptyStateTitle.Text = Machines.Count == 0 ? "No machines yet" : "No matching machines";
+            EmptyStateDetail.Text = Machines.Count == 0
+                ? "Add your first PC to start a LAN or Grev Connect session."
+                : "Try another search or switch back to All machines.";
+        }
     }
 
     private async void AddMachine_Click(object sender, RoutedEventArgs e)
@@ -46,13 +64,47 @@ public partial class MainWindow
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         _searchText = (sender as TextBox)?.Text.Trim() ?? string.Empty;
-        if (_uiReady) RefreshMachineView();
+        if (!_uiReady) return;
+
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Start();
     }
 
-    private void FavoritesOnlyCheck_Changed(object sender, RoutedEventArgs e)
+    private void SearchDebounceTimer_Tick(object? sender, EventArgs e)
     {
-        _favoritesOnly = (sender as CheckBox)?.IsChecked == true;
-        if (_uiReady) RefreshMachineView();
+        _searchDebounceTimer.Stop();
+        RefreshMachineView();
+    }
+
+    private void MachineFilter_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string filter)
+            return;
+
+        _machineFilter = filter;
+        UpdateMachineFilterStyles();
+        RefreshMachineView();
+    }
+
+    private void UpdateMachineFilterStyles()
+    {
+        if (!_uiReady) return;
+
+        var normal = (Style)FindResource("MainFilterButton");
+        var active = (Style)FindResource("MainFilterActiveButton");
+        AllFilterButton.Style = normal;
+        OnlineFilterButton.Style = normal;
+        OfflineFilterButton.Style = normal;
+        FavoritesFilterButton.Style = normal;
+
+        var selected = _machineFilter switch
+        {
+            "online" => OnlineFilterButton,
+            "offline" => OfflineFilterButton,
+            "favorites" => FavoritesFilterButton,
+            _ => AllFilterButton
+        };
+        selected.Style = active;
     }
 
     private void MachineCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

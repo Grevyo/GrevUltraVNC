@@ -46,7 +46,7 @@ public partial class MachineDialog : Window
             : "No Grev Agent pairing key is saved. Paste the key for this Agent when you want this controller authorised to manage it.";
 
         ConnectIdStateText.Text = string.IsNullOrWhiteSpace(_working.ConnectId)
-            ? "Enter an existing ID such as GC-GrevoServer and choose Find Agent, or update a local Agent to protocol 6 to create its ID automatically."
+            ? "Enter an existing ID such as GC-GrevoServer and choose Find Agent. A current Grev Agent creates its own ID automatically."
             : $"Current identity: {_working.ConnectId}. Find Agent locates its current route; Set on Agent deliberately renames the real Agent identity.";
 
         Closed += (_, _) =>

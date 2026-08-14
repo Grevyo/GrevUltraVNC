@@ -75,6 +75,7 @@
                         <ColumnDefinition Width="38" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <Border Width="32" Height="32" CornerRadius="9" Background="#030509"
@@ -89,7 +90,11 @@
                                    Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
 
-                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="—"
+                    <TextBlock Grid.Column="2" Text="⋮⋮  DRAG" VerticalAlignment="Center"
+                               Foreground="{DynamicResource FaintTextBrush}" FontSize="8" FontWeight="SemiBold"
+                               Margin="0,0,9,0" ToolTip="Drag this header to move the control panel" />
+
+                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="—"
                             Click="HidePanel_Click" ToolTip="Hide control panel" Padding="7,4"
                             MinWidth="30" VerticalAlignment="Center" />
                 </Grid>
@@ -191,16 +196,11 @@
                                            Foreground="{DynamicResource AccentBrush}" FontSize="8" FontWeight="SemiBold" />
                             </Grid>
                             <UniformGrid Columns="5" Margin="-2,0,-2,2">
-                                <Button Style="{StaticResource ScaleButton}" Content="10%" Tag="10" Click="ViewerScale_Click" />
-                                <Button Style="{StaticResource ScaleButton}" Content="25%" Tag="25" Click="ViewerScale_Click" />
+                                <Button Style="{StaticResource ScaleButton}" Content="Fit" Tag="fit" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="50%" Tag="50" Click="ViewerScale_Click" />
-                                <Button Style="{StaticResource ScaleButton}" Content="75%" Tag="75" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="100%" Tag="100" Click="ViewerScale_Click" />
-                                <Button Style="{StaticResource ScaleButton}" Content="125%" Tag="125" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="150%" Tag="150" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="200%" Tag="200" Click="ViewerScale_Click" />
-                                <Button Style="{StaticResource ScaleButton}" Content="300%" Tag="300" Click="ViewerScale_Click" />
-                                <Button Style="{StaticResource ScaleButton}" Content="Fit" Tag="fit" Click="ViewerScale_Click" />
                             </UniformGrid>
                             <Grid Margin="4,0,4,6">
                                 <Grid.ColumnDefinitions>
@@ -213,7 +213,7 @@
                                         PreviewMouseLeftButtonDown="ViewerScaleSlider_PreviewMouseLeftButtonDown"
                                         PreviewMouseLeftButtonUp="ViewerScaleSlider_PreviewMouseLeftButtonUp"
                                         LostMouseCapture="ViewerScaleSlider_LostMouseCapture"
-                                        VerticalAlignment="Center" ToolTip="Viewer scale 10%–300%" />
+                                        VerticalAlignment="Center" ToolTip="Fine viewer scale 10%–300%" />
                                 <TextBlock Grid.Column="1" Text="300%" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
                             </Grid>
@@ -221,10 +221,10 @@
                             <Grid Margin="2,0,2,3">
                                 <TextBlock Text="TOOLS" Foreground="{DynamicResource FaintTextBrush}"
                                            FontSize="8" FontWeight="SemiBold" />
-                                <TextBlock Text="hover for action" HorizontalAlignment="Right"
+                                <TextBlock Text="VIEWER" HorizontalAlignment="Right"
                                            Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
                             </Grid>
-                            <UniformGrid Columns="7" Margin="-2,0,-2,0">
+                            <UniformGrid Columns="4" Margin="-2,0,-2,2">
                                 <Button Style="{StaticResource ToolIconButton}" Content="↥"
                                         Click="BringToFront_Click" ToolTip="Bring Screen 1 to front" />
                                 <Button Style="{StaticResource ToolIconButton}" Content="⛶"
@@ -233,6 +233,14 @@
                                         Click="RefreshScreen_Click" ToolTip="Refresh remote screen" />
                                 <Button Style="{StaticResource ToolIconButton}" Content="⇄"
                                         Click="FileTransfer_Click" ToolTip="UltraVNC file transfer" />
+                            </UniformGrid>
+                            <Grid Margin="2,2,2,3">
+                                <TextBlock Text="SESSION TOOLS" Foreground="{DynamicResource FaintTextBrush}"
+                                           FontSize="8" FontWeight="SemiBold" />
+                                <TextBlock Text="GREV" HorizontalAlignment="Right"
+                                           Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
+                            </Grid>
+                            <UniformGrid Columns="3" Margin="-2,0,-2,0">
                                 <Button Style="{StaticResource ToolIconButton}" Content=">_"
                                         Click="TerminalTool_Click" ToolTip="Open Manage Terminal" FontSize="12" />
                                 <Button x:Name="AudioButton" Style="{StaticResource ToolIconButton}"
