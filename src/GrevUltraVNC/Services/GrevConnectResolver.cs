@@ -12,11 +12,16 @@ public sealed record GrevConnectResolution(
     string Address,
     string Route,
     string? ConnectId,
-    string? MachineName);
+    string? MachineName,
+    AgentPingResponse? Ping = null);
 
 public sealed class GrevConnectResolver : IDisposable
 {
+    private static readonly TimeSpan DiscoveryCacheLifetime = TimeSpan.FromSeconds(20);
+
     private readonly HttpClient _httpClient;
+    private readonly SemaphoreSlim _discoveryGate = new(1, 1);
+    private readonly Dictionary<int, DiscoverySnapshot> _discoveryCache = [];
 
     public GrevConnectResolver()
     {
@@ -53,7 +58,8 @@ public sealed class GrevConnectResolver : IDisposable
             return null;
         }
 
-        var discovered = await DiscoverAsync(expectedId, machine.AgentPort, cancellationToken);
+        var snapshot = await GetDiscoverySnapshotAsync(machine.AgentPort, cancellationToken);
+        var discovered = snapshot.Results.FirstOrDefault(result => GrevConnectId.Equals(result.ConnectId, expectedId));
         if (discovered is null)
         {
             machine.ResolvedAddress = null;
@@ -61,51 +67,62 @@ public sealed class GrevConnectResolver : IDisposable
             return null;
         }
 
-        return Apply(machine, discovered.Address, discovered.Route, discovered.Ping);
+        machine.ResolvedAddress = discovered.Address;
+        machine.ResolvedRoute = discovered.Route;
+        return discovered;
     }
 
-    public async Task<IReadOnlyList<GrevConnectResolution>> DiscoverAllAsync(int agentPort = AgentProtocol.DefaultPort, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<GrevConnectResolution>> DiscoverAllAsync(
+        int agentPort = AgentProtocol.DefaultPort,
+        CancellationToken cancellationToken = default)
     {
-        var results = new Dictionary<string, GrevConnectResolution>(StringComparer.OrdinalIgnoreCase);
-        foreach (var subnet in GetCandidateSubnets())
+        var snapshot = await GetDiscoverySnapshotAsync(agentPort, cancellationToken);
+        return snapshot.Results;
+    }
+
+    private async Task<DiscoverySnapshot> GetDiscoverySnapshotAsync(int port, CancellationToken cancellationToken)
+    {
+        if (_discoveryCache.TryGetValue(port, out var cached) && cached.ExpiresAtUtc > DateTimeOffset.UtcNow)
+            return cached;
+
+        await _discoveryGate.WaitAsync(cancellationToken);
+        try
         {
-            foreach (var result in await ScanSubnetAsync(subnet, agentPort, expectedConnectId: null, cancellationToken))
+            if (_discoveryCache.TryGetValue(port, out cached) && cached.ExpiresAtUtc > DateTimeOffset.UtcNow)
+                return cached;
+
+            var results = new Dictionary<string, GrevConnectResolution>(StringComparer.OrdinalIgnoreCase);
+            foreach (var subnet in GetCandidateSubnets())
             {
-                var key = string.IsNullOrWhiteSpace(result.ConnectId) ? result.Address : result.ConnectId!;
-                results.TryAdd(key, result);
+                foreach (var result in await ScanSubnetAsync(subnet, port, cancellationToken))
+                {
+                    var key = string.IsNullOrWhiteSpace(result.ConnectId) ? result.Address : result.ConnectId!;
+                    results.TryAdd(key, result);
+                }
             }
-        }
-        return results.Values.OrderBy(item => item.ConnectId ?? item.Address, StringComparer.OrdinalIgnoreCase).ToArray();
-    }
 
-    private async Task<DiscoveredAgent?> DiscoverAsync(string expectedConnectId, int port, CancellationToken cancellationToken)
-    {
-        foreach (var subnet in GetCandidateSubnets())
-        {
-            var matches = await ScanSubnetAsync(subnet, port, expectedConnectId, cancellationToken);
-            var match = matches.FirstOrDefault();
-            if (match is not null)
-                return new DiscoveredAgent(match.Address, match.Route, new AgentPingResponse(
-                    "GrevUltraVNC Agent",
-                    string.Empty,
-                    match.MachineName ?? string.Empty,
-                    true,
-                    AgentProtocol.ProtocolVersion,
-                    match.ConnectId));
+            var snapshot = new DiscoverySnapshot(
+                DateTimeOffset.UtcNow.Add(DiscoveryCacheLifetime),
+                results.Values
+                    .OrderBy(item => item.ConnectId ?? item.Address, StringComparer.OrdinalIgnoreCase)
+                    .ToArray());
+            _discoveryCache[port] = snapshot;
+            return snapshot;
         }
-        return null;
+        finally
+        {
+            _discoveryGate.Release();
+        }
     }
 
     private async Task<IReadOnlyList<GrevConnectResolution>> ScanSubnetAsync(
         CandidateSubnet subnet,
         int port,
-        string? expectedConnectId,
         CancellationToken cancellationToken)
     {
-        using var foundCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var found = new List<GrevConnectResolution>();
-        var gate = new SemaphoreSlim(64, 64);
-        var tasks = new List<Task>();
+        using var gate = new SemaphoreSlim(64, 64);
+        var tasks = new List<Task>(253);
 
         for (var host = 1; host <= 254; host++)
         {
@@ -115,22 +132,24 @@ public sealed class GrevConnectResolver : IDisposable
 
             tasks.Add(Task.Run(async () =>
             {
-                await gate.WaitAsync(foundCancellation.Token);
+                await gate.WaitAsync(cancellationToken);
                 try
                 {
-                    var ping = await ProbeAsync(address, port, foundCancellation.Token, 350);
-                    if (ping is null || string.IsNullOrWhiteSpace(ping.ConnectId)) return;
-                    if (!string.IsNullOrWhiteSpace(expectedConnectId) && !GrevConnectId.Equals(ping.ConnectId, expectedConnectId)) return;
+                    var ping = await ProbeAsync(address, port, cancellationToken, 350);
+                    if (ping is null || string.IsNullOrWhiteSpace(ping.ConnectId))
+                        return;
 
                     lock (found)
                     {
-                        found.Add(new GrevConnectResolution(address, subnet.Route, ping.ConnectId, ping.MachineName));
+                        found.Add(new GrevConnectResolution(
+                            address,
+                            subnet.Route,
+                            ping.ConnectId,
+                            ping.MachineName,
+                            ping));
                     }
-
-                    if (!string.IsNullOrWhiteSpace(expectedConnectId))
-                        foundCancellation.CancelAfter(25);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                 }
                 finally
@@ -140,14 +159,22 @@ public sealed class GrevConnectResolver : IDisposable
             }, CancellationToken.None));
         }
 
-        try { await Task.WhenAll(tasks); }
-        catch (OperationCanceledException) { }
-        finally { gate.Dispose(); }
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
 
         return found.ToArray();
     }
 
-    private async Task<AgentPingResponse?> ProbeAsync(string address, int port, CancellationToken cancellationToken, int timeoutMilliseconds)
+    private async Task<AgentPingResponse?> ProbeAsync(
+        string address,
+        int port,
+        CancellationToken cancellationToken,
+        int timeoutMilliseconds)
     {
         if (!IPAddress.TryParse(address, out var parsed) || parsed.AddressFamily != AddressFamily.InterNetwork)
             return null;
@@ -182,7 +209,7 @@ public sealed class GrevConnectResolver : IDisposable
         machine.ResolvedRoute = string.IsNullOrWhiteSpace(route) ? "Grev Connect" : route;
         if (string.IsNullOrWhiteSpace(machine.ConnectId) && !string.IsNullOrWhiteSpace(ping.ConnectId))
             machine.ConnectId = ping.ConnectId;
-        return new GrevConnectResolution(address, machine.ResolvedRoute, ping.ConnectId, ping.MachineName);
+        return new GrevConnectResolution(address, machine.ResolvedRoute, ping.ConnectId, ping.MachineName, ping);
     }
 
     private static IReadOnlyList<CandidateSubnet> GetCandidateSubnets()
@@ -232,8 +259,12 @@ public sealed class GrevConnectResolver : IDisposable
                (bytes[0] == 100 && bytes[1] is >= 64 and <= 127);
     }
 
-    public void Dispose() => _httpClient.Dispose();
+    public void Dispose()
+    {
+        _discoveryGate.Dispose();
+        _httpClient.Dispose();
+    }
 
     private sealed record CandidateSubnet(byte A, byte B, byte C, string LocalAddress, string Route);
-    private sealed record DiscoveredAgent(string Address, string Route, AgentPingResponse Ping);
+    private sealed record DiscoverySnapshot(DateTimeOffset ExpiresAtUtc, IReadOnlyList<GrevConnectResolution> Results);
 }
