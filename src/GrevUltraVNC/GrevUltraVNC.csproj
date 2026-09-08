@@ -10,10 +10,10 @@
     <AssemblyName>GrevConnect</AssemblyName>
     <!-- Keep the established namespace so settings, contracts and inter-project references remain stable. -->
     <RootNamespace>GrevUltraVNC</RootNamespace>
-    <Version>1.2.2</Version>
-    <AssemblyVersion>1.2.2.0</AssemblyVersion>
-    <FileVersion>1.2.2.0</FileVersion>
-    <InformationalVersion>1.2.2-grevconnect</InformationalVersion>
+    <Version>1.2.3</Version>
+    <AssemblyVersion>1.2.3.0</AssemblyVersion>
+    <FileVersion>1.2.3.0</FileVersion>
+    <InformationalVersion>1.2.3-grevconnect</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
