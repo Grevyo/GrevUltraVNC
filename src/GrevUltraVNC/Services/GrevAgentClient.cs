@@ -113,9 +113,6 @@ public sealed class GrevAgentClient : IDisposable
         }
     }
 
-    public Task<AgentStatusResponse> GetStatusAsync(Machine machine, CancellationToken cancellationToken = default) =>
-        GetRequiredAuthenticatedAsync<AgentStatusResponse>(machine, AgentProtocol.StatusPath, cancellationToken);
-
     public async Task<IReadOnlyList<AgentProcessInfo>> GetProcessesAsync(Machine machine, CancellationToken cancellationToken = default) =>
         await GetRequiredAuthenticatedAsync<AgentProcessInfo[]>(machine, AgentProtocol.ProcessesPath, cancellationToken);
 

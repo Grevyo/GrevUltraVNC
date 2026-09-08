@@ -17,7 +17,11 @@ public partial class GrevControlPanelWindow : Window
     private bool _agentActionRunning;
     private MachineOverviewWindow? _machineOverview;
 
-    public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
+    /// <summary>
+    /// Base construction only. Every caller must use the <see cref="AppSettings"/> overload so the
+    /// panel always comes up with collaboration, cursors, audio and the whiteboard wired in.
+    /// </summary>
+    private GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
     {
         InitializeComponent();
         _machine = machine;
@@ -71,7 +75,7 @@ public partial class GrevControlPanelWindow : Window
                 AgentConnectionText.Foreground = sessionActionsReady
                     ? new SolidColorBrush(Color.FromRgb(80, 220, 145))
                     : (Brush)FindResource("Accent2Brush");
-                AgentCpuRamText.Text = $"CPU {status.CpuUsagePercent:0.#}%   ·   RAM {FormatGiB(usedMemory)} / {FormatGiB(status.TotalMemoryBytes)}";
+                AgentCpuRamText.Text = $"CPU {GrevFormat.Percent(status.CpuUsagePercent)}   ·   RAM {GrevFormat.Gigabytes(usedMemory)} / {GrevFormat.Gigabytes(status.TotalMemoryBytes)}";
                 return;
             }
 
@@ -246,6 +250,4 @@ public partial class GrevControlPanelWindow : Window
     }
 
     private void HidePanel_Click(object sender, RoutedEventArgs e) => Hide();
-
-    private static string FormatGiB(long bytes) => $"{Math.Max(0, bytes) / 1024d / 1024d / 1024d:0.#} GB";
 }

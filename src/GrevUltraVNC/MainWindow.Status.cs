@@ -1,5 +1,7 @@
 using System.Threading;
 using System.Windows;
+using GrevUltraVNC.Models;
+using GrevUltraVNC.Services;
 
 namespace GrevUltraVNC;
 
@@ -17,13 +19,15 @@ public partial class MainWindow
 
         try
         {
-            FooterStatus.Text = $"Resolving and checking {Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}…";
+            SetFooterState(
+                $"Resolving routes and checking {Machines.Count} machine{(Machines.Count == 1 ? string.Empty : "s")}…",
+                "AccentBrush");
             var checkedAt = DateTime.Now;
 
             var probes = Machines.Select(async machine =>
             {
-                machine.Status = Models.MachineStatus.Checking;
-                machine.AgentState = Models.GrevAgentState.Unknown;
+                machine.Status = MachineStatus.Checking;
+                machine.AgentState = GrevAgentState.Unknown;
                 machine.AgentStatus = null;
                 machine.AgentMessage = null;
                 var originalConnectId = machine.ConnectId;
@@ -53,12 +57,30 @@ public partial class MainWindow
             if (identityChanged != 0)
                 await _storage.SaveMachinesAsync(Machines);
 
-            FooterStatus.Text = $"Last checked {DateTime.Now:HH:mm:ss}";
             RefreshMachineView();
+            UpdateViewerStatusText();
+
+            // The footer light mirrors the worst thing on the dashboard, so a problem is
+            // visible even when the offending card has scrolled out of sight.
+            var unreachable = Machines.Count(machine => machine.Status == MachineStatus.Offline);
+            if (Machines.Count == 0)
+                SetFooterState("No machines configured yet", "IdleBrush");
+            else if (unreachable == 0)
+                SetFooterState($"All {Machines.Count} reachable · checked {DateTime.Now:HH:mm:ss}", "OkBrush");
+            else
+                SetFooterState(
+                    $"{unreachable} of {Machines.Count} unreachable · checked {DateTime.Now:HH:mm:ss}",
+                    "WarnBrush");
         }
         finally
         {
             _statusRefreshRunning = false;
         }
+    }
+
+    private void SetFooterState(string message, string brushKey)
+    {
+        FooterStatus.Text = message;
+        FooterPulse.Fill = ThemeService.ThemeBrush(brushKey);
     }
 }

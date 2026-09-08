@@ -38,8 +38,6 @@ public partial class MainWindow : Window
     {
         MachinesView = CollectionViewSource.GetDefaultView(Machines);
         MachinesView.Filter = FilterMachine;
-        MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.IsFavorite), ListSortDirection.Descending));
-        MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.Name), ListSortDirection.Ascending));
 
         InitializeComponent();
         DataContext = this;
@@ -97,7 +95,8 @@ public partial class MainWindow : Window
         _tray = new TrayIconService(this, () => Machines.Where(x => x.IsFavorite), ConnectMachine);
         ConfigureStatusTimer();
         UpdateMachineFilterStyles();
-        RefreshMachineView();
+        ApplyViewArrangement();
+        UpdateViewerStatusText();
         await RefreshStatusesAsync();
 
         if (Machines.Count == 0 && !_firstRunPromptShown)
@@ -127,6 +126,26 @@ public partial class MainWindow : Window
         _statusTimer.Stop();
         _statusTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.StatusCheckSeconds, 3, 300));
         _statusTimer.Start();
+    }
+
+    /// <summary>
+    /// Footer note about the UltraVNC Viewer, which is the one dependency a fresh install
+    /// is most likely to be missing.
+    /// </summary>
+    private void UpdateViewerStatusText()
+    {
+        if (!_uiReady) return;
+
+        var viewer = _vnc.FindViewer(_settings.UltraVncViewerPath);
+        if (string.IsNullOrWhiteSpace(viewer))
+        {
+            FooterViewerStatus.Text = "UltraVNC Viewer not found · set its path in Settings";
+            FooterViewerStatus.Foreground = ThemeService.ThemeBrush("WarnBrush");
+            return;
+        }
+
+        FooterViewerStatus.Text = $"Viewer ready · auto-check every {Math.Clamp(_settings.StatusCheckSeconds, 3, 300)}s";
+        FooterViewerStatus.Foreground = ThemeService.ThemeBrush("FaintTextBrush");
     }
 
     private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject

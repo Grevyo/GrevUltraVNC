@@ -4,6 +4,8 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  # Lets a branch be compiled and smoke-tested on windows-latest without opening a PR.
+  workflow_dispatch:
 
 permissions:
   contents: write

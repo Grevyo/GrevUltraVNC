@@ -68,7 +68,7 @@ public partial class RemoteFileManagerWindow : Window
                     entry,
                     _currentPath is null ? "Drive" : entry.IsDirectory ? "Folder" : "File",
                     entry.Name,
-                    entry.IsDirectory ? string.Empty : FormatBytes(entry.SizeBytes),
+                    entry.IsDirectory ? string.Empty : GrevFormat.Bytes(entry.SizeBytes),
                     entry.LastWriteTimeUtc?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? string.Empty,
                     entry.Detail))
                 .ToArray();
@@ -244,7 +244,7 @@ public partial class RemoteFileManagerWindow : Window
                 entry,
                 _currentPath is null ? "Drive" : entry.IsDirectory ? "Folder" : "File",
                 entry.Name,
-                entry.IsDirectory ? string.Empty : FormatBytes(entry.SizeBytes),
+                entry.IsDirectory ? string.Empty : GrevFormat.Bytes(entry.SizeBytes),
                 entry.LastWriteTimeUtc?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? string.Empty,
                 entry.Detail))
             .ToArray();
@@ -307,7 +307,7 @@ public partial class RemoteFileManagerWindow : Window
             while (offset < local.Length);
 
             StatusText.Text = $"Uploaded {local.Name}.";
-            await LogActivityAsync("Upload", $"{local.Name} · {FormatBytes(local.Length)}", true);
+            await LogActivityAsync("Upload", $"{local.Name} · {GrevFormat.Bytes(local.Length)}", true);
             await BrowseCoreAsync(_currentPath);
         }
         catch (Exception ex)
@@ -372,7 +372,7 @@ public partial class RemoteFileManagerWindow : Window
 
             await output.FlushAsync();
             StatusText.Text = $"Downloaded {selected.Source.Name}.";
-            await LogActivityAsync("Download", $"{selected.Source.Name} · {FormatBytes(selected.Source.SizeBytes)}", true);
+            await LogActivityAsync("Download", $"{selected.Source.Name} · {GrevFormat.Bytes(selected.Source.SizeBytes)}", true);
         }
         catch (Exception ex)
         {
@@ -420,20 +420,6 @@ public partial class RemoteFileManagerWindow : Window
         {
             // File actions must not fail just because local activity logging failed.
         }
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "0 B";
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        var value = (double)bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        return $"{value:0.#} {units[unit]}";
     }
 
     private sealed record FileRow(AgentFileEntry Source, string Type, string Name, string Size, string Modified, string Detail);

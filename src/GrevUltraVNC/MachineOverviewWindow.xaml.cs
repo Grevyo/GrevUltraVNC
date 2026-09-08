@@ -158,9 +158,9 @@ public partial class MachineOverviewWindow : Window
             ? usedMemory * 100.0 / status.TotalMemoryBytes
             : 0;
         MemoryUsageText.Text = $"{memoryPercent:0.#}%";
-        MemoryDetailText.Text = $"{FormatBytes(usedMemory)} / {FormatBytes(status.TotalMemoryBytes)}";
+        MemoryDetailText.Text = $"{GrevFormat.Bytes(usedMemory)} / {GrevFormat.Bytes(status.TotalMemoryBytes)}";
 
-        UptimeText.Text = FormatUptime(status.UptimeSeconds);
+        UptimeText.Text = GrevFormat.Uptime(status.UptimeSeconds);
         UserText.Text = string.IsNullOrWhiteSpace(status.InteractiveUser)
             ? "No interactive user"
             : status.InteractiveUser;
@@ -183,7 +183,7 @@ public partial class MachineOverviewWindow : Window
         DiskItems.ItemsSource = status.Disks.Select(disk => new DiskRow(
             disk.Name,
             string.IsNullOrWhiteSpace(disk.Label) ? "Local disk" : disk.Label,
-            $"{FormatBytes(disk.FreeBytes)} free / {FormatBytes(disk.TotalBytes)}")).ToArray();
+            $"{GrevFormat.Bytes(disk.FreeBytes)} free / {GrevFormat.Bytes(disk.TotalBytes)}")).ToArray();
     }
 
     private void RenderProcesses()
@@ -197,8 +197,8 @@ public partial class MachineOverviewWindow : Window
                 process.Id,
                 process.Name,
                 process.Id.ToString(),
-                FormatBytes(process.WorkingSetBytes),
-                FormatCpuTime(process.CpuTimeMilliseconds),
+                GrevFormat.Bytes(process.WorkingSetBytes),
+                GrevFormat.CpuTime(process.CpuTimeMilliseconds),
                 process.SessionId < 0 ? "—" : process.SessionId.ToString(),
                 process.StartedAtUtc?.ToLocalTime().ToString("dd MMM HH:mm:ss") ?? "—"))
             .ToArray();
@@ -280,40 +280,6 @@ public partial class MachineOverviewWindow : Window
             if (_machine.AgentState == GrevAgentState.Connected)
                 UpdateAgentButton.IsEnabled = true;
         }
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "0 B";
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        var value = (double)bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        return $"{value:0.#} {units[unit]}";
-    }
-
-    private static string FormatCpuTime(long milliseconds)
-    {
-        var time = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
-        return time.TotalHours >= 1
-            ? $"{(int)time.TotalHours}h {time.Minutes}m"
-            : time.TotalMinutes >= 1
-                ? $"{time.Minutes}m {time.Seconds}s"
-                : $"{time.Seconds}s";
-    }
-
-    private static string FormatUptime(long seconds)
-    {
-        var time = TimeSpan.FromSeconds(Math.Max(0, seconds));
-        return time.TotalDays >= 1
-            ? $"{(int)time.TotalDays}d {time.Hours}h"
-            : time.TotalHours >= 1
-                ? $"{(int)time.TotalHours}h {time.Minutes}m"
-                : $"{time.Minutes}m";
     }
 
     private sealed record DiskRow(string Name, string Label, string Space);

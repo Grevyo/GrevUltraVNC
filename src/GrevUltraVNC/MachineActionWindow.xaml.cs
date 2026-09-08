@@ -8,7 +8,6 @@ namespace GrevUltraVNC;
 public partial class MachineActionWindow : Window
 {
     private readonly Machine _machine;
-    private readonly AppSettings _settings;
     private readonly UltraVncSessionService _vnc;
     private readonly WakeOnLanService _wake = new();
     private readonly PowerService _power = new();
@@ -24,11 +23,13 @@ public partial class MachineActionWindow : Window
     public bool MachineChanged { get; private set; }
     public bool MachineDeleted { get; private set; }
 
-    public MachineActionWindow(Machine machine, AppSettings settings, UltraVncSessionService vnc)
+    /// <summary>Set when the user asked for a VNC session; the dashboard owns the connection.</summary>
+    public bool ConnectRequested { get; private set; }
+
+    public MachineActionWindow(Machine machine, UltraVncSessionService vnc)
     {
         InitializeComponent();
         _machine = machine;
-        _settings = settings;
         _vnc = vnc;
         _agentUpdater = new AgentUpdateService(_agent);
         Closed += (_, _) =>
@@ -53,20 +54,10 @@ public partial class MachineActionWindow : Window
             throw new InvalidOperationException($"{_machine.ConnectId} could not be found on the current LAN or Grev Connect networks.");
     }
 
-    private async void Vnc_Click(object sender, RoutedEventArgs e)
+    private void Vnc_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            await EnsureRouteAsync();
-            _vnc.Launch(_machine, _settings);
-            var controlPanel = new GrevControlPanelWindow(_machine, _vnc);
-            controlPanel.Show();
-            Close();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Could not open VNC", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        ConnectRequested = true;
+        Close();
     }
 
     private void Cad_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendCtrlAltDelete(_machine.Id));
