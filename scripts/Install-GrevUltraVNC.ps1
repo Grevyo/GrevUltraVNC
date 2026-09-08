@@ -480,7 +480,7 @@ function Install-Files {
     }
 
     if (Test-Path (Join-Path $resolved '.git')) {
-        throw "Refusing to install into $resolved: it looks like a git checkout, and installing there would delete it."
+        throw "Refusing to install into ${resolved}: it looks like a git checkout, and installing there would delete it."
     }
 
     Stop-RunningApp
