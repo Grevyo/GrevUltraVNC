@@ -17,7 +17,7 @@ Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $downloadDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $publish, $downloadDir, $licenses -Force | Out-Null
 
-Write-Host 'Publishing GrevConnect 1.2.2 self-contained win-x64...'
+Write-Host 'Publishing GrevConnect 1.2.3 self-contained win-x64...'
 dotnet publish (Join-Path $root 'src\GrevUltraVNC\GrevUltraVNC.csproj') `
     --configuration $Configuration `
     --runtime win-x64 `
@@ -94,7 +94,7 @@ Write-Host 'Building GrevConnect single EXE installer...'
 & $iscc "/DSourceDir=$publish" "/DOutputDir=$dist" $iss
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
 
-$installer = Join-Path $dist 'GrevConnect-1.2.2-Setup.exe'
+$installer = Join-Path $dist 'GrevConnect-1.2.3-Setup.exe'
 if (-not (Test-Path $installer)) {
     throw 'Expected GrevConnect installer EXE was not created.'
 }
