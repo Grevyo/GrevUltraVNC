@@ -11,6 +11,7 @@ public sealed class TrayIconService : IDisposable
     private readonly Func<IEnumerable<Machine>> _getAll;
     private readonly Action<Machine> _connect;
     private readonly Func<Task> _refresh;
+    private readonly Action _openAbout;
     private readonly WinForms.NotifyIcon _notifyIcon;
     private readonly WinForms.ContextMenuStrip _menu = new();
     private readonly System.Drawing.Icon? _brandIcon;
@@ -20,18 +21,20 @@ public sealed class TrayIconService : IDisposable
         Func<IEnumerable<Machine>> getFavorites,
         Func<IEnumerable<Machine>> getAll,
         Action<Machine> connect,
-        Func<Task> refresh)
+        Func<Task> refresh,
+        Action openAbout)
     {
         _window = window;
         _getFavorites = getFavorites;
         _getAll = getAll;
         _connect = connect;
         _refresh = refresh;
+        _openAbout = openAbout;
         _brandIcon = BrandAssets.CreateDrawingIcon();
 
         _notifyIcon = new WinForms.NotifyIcon
         {
-            Text = "GrevUltraVNC",
+            Text = ProductBranding.ProductName,
             Icon = _brandIcon ?? System.Drawing.SystemIcons.Application,
             Visible = true,
             ContextMenuStrip = _menu
@@ -56,13 +59,11 @@ public sealed class TrayIconService : IDisposable
         var all = _getAll().ToList();
         UpdateTooltip(all);
 
-        // A one-line fleet summary at the top means the tray answers the common question
-        // without having to open the dashboard at all.
         var summary = new WinForms.ToolStripMenuItem(DescribeFleet(all)) { Enabled = false };
         _menu.Items.Add(summary);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
 
-        var open = new WinForms.ToolStripMenuItem("Open GrevUltraVNC");
+        var open = new WinForms.ToolStripMenuItem("Open GrevConnect");
         open.Click += (_, _) => ShowDashboard();
         _menu.Items.Add(open);
 
@@ -78,8 +79,6 @@ public sealed class TrayIconService : IDisposable
 
             foreach (var machine in favorites)
             {
-                // Offline machines stay clickable: connecting is still the right way to
-                // reach one that has just been woken.
                 var item = new WinForms.ToolStripMenuItem($"{StatusGlyph(machine)}  {machine.Name}")
                 {
                     ToolTipText = $"{machine.RouteBadge} · {machine.RouteDetail}"
@@ -94,6 +93,14 @@ public sealed class TrayIconService : IDisposable
         }
 
         _menu.Items.Add(new WinForms.ToolStripSeparator());
+        var about = new WinForms.ToolStripMenuItem("About GrevConnect");
+        about.Click += (_, _) =>
+        {
+            ShowDashboard();
+            _openAbout();
+        };
+        _menu.Items.Add(about);
+
         var exit = new WinForms.ToolStripMenuItem("Exit");
         exit.Click += (_, _) => Application.Current.Shutdown();
         _menu.Items.Add(exit);
@@ -101,8 +108,9 @@ public sealed class TrayIconService : IDisposable
 
     private void UpdateTooltip(IReadOnlyCollection<Machine> machines)
     {
-        // NotifyIcon truncates past 63 characters, so keep this short.
-        var text = machines.Count == 0 ? "GrevUltraVNC" : $"GrevUltraVNC · {DescribeFleet(machines)}";
+        var text = machines.Count == 0
+            ? ProductBranding.ProductName
+            : $"{ProductBranding.ProductName} · {DescribeFleet(machines)}";
         _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
     }
 
