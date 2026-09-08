@@ -366,7 +366,9 @@
                                 <TextBlock Text="SAVED COMMANDS" Style="{StaticResource SectionLabel}" FontSize="9" VerticalAlignment="Center" />
                                 <Button Style="{StaticResource CardActionButton}" Content="+ New" Click="NewSavedCommand_Click" HorizontalAlignment="Right" Padding="9,5" />
                             </Grid>
-                            <ListView x:Name="SavedCommandsList" Grid.Row="1" Margin="0,8,0,0" Background="Transparent" BorderThickness="0" SelectionChanged="SavedCommandsList_SelectionChanged">
+                            <ListView x:Name="SavedCommandsList" Grid.Row="1" Margin="0,8,0,0" Background="Transparent" BorderThickness="0"
+                                      ItemContainerStyle="{StaticResource ManageListItem}"
+                                      SelectionChanged="SavedCommandsList_SelectionChanged">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Margin="4">
