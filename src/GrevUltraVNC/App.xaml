@@ -814,6 +814,8 @@
                             </Grid.RowDefinitions>
 
                             <ToggleButton x:Name="HeaderButton"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
                                           IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
                                           Cursor="Hand" Focusable="False">
                                 <ToggleButton.Template>
@@ -844,7 +846,6 @@
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </ToggleButton.Template>
-                                <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
                             </ToggleButton>
 
                             <ContentPresenter x:Name="Body" Grid.Row="1" Margin="0,8,0,0" />
