@@ -32,19 +32,19 @@ public partial class GrevConnectQuickWindow : Window
     {
         if (!GrevConnectId.TryNormalize(ConnectIdBox.Text, out var connectId, out var validationError))
         {
-            StatusText.Text = validationError;
+            SetStatus(validationError, "DangerBrush");
             return;
         }
 
         var agentKey = AgentKeyBox.Password.Trim();
         if (!string.IsNullOrWhiteSpace(agentKey) && !AgentProtocol.IsValidSharedKey(agentKey))
         {
-            StatusText.Text = "That Agent pairing key does not look valid. Check that the whole key was copied.";
+            SetStatus("That Agent pairing key does not look valid. Check that the whole key was copied.", "DangerBrush");
             return;
         }
 
         ConnectButton.IsEnabled = false;
-        StatusText.Text = $"Looking for {connectId} on your LAN / Zima / Grev Connect routes…";
+        SetStatus($"Looking for {connectId} on your LAN / Zima / Grev Connect routes…", "AccentBrush");
 
         try
         {
@@ -88,17 +88,25 @@ public partial class GrevConnectQuickWindow : Window
                 _agentCredentials.Save(machine.Id, agentKey);
 
             ResultMachine = machine;
-            StatusText.Text = $"Found {connectId} via {machine.ResolvedRoute} · {machine.ActiveAddress}. Opening it now…";
+            SetStatus($"Found {connectId} via {machine.ResolvedRoute} · {machine.ActiveAddress}. Opening it now…", "OkBrush");
             DialogResult = true;
         }
         catch (Exception ex)
         {
-            StatusText.Text = ex.Message;
-            MessageBox.Show(this, ex.Message, "GrevConnect", MessageBoxButton.OK, MessageBoxImage.Information);
+            // The panel already carries the full explanation, so a second modal on top of it
+            // would just be one more thing to dismiss.
+            SetStatus(ex.Message, "WarnBrush");
         }
         finally
         {
             ConnectButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>Status line plus a colour-coded dot, so progress reads at a glance.</summary>
+    private void SetStatus(string message, string brushKey)
+    {
+        StatusText.Text = message;
+        StatusDot.Fill = ThemeService.ThemeBrush(brushKey);
     }
 }

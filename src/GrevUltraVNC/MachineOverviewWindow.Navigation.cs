@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using GrevUltraVNC.Models;
 
 namespace GrevUltraVNC;
@@ -103,7 +104,11 @@ public partial class MachineOverviewWindow
         await LoadActivityAsync();
     }
 
-    private void ShowSection(FrameworkElement section, Button activeButton)
+    /// <summary>
+    /// Shows one section and marks its tab, keeping the segmented nav behaving as a
+    /// single-choice control however the user clicked into it.
+    /// </summary>
+    private void ShowSection(FrameworkElement section, ToggleButton activeButton)
     {
         OverviewPanel.Visibility = Visibility.Collapsed;
         ProcessesPanel.Visibility = Visibility.Collapsed;
@@ -114,14 +119,13 @@ public partial class MachineOverviewWindow
         ActivityPanel.Visibility = Visibility.Collapsed;
         section.Visibility = Visibility.Visible;
 
-        var normalStyle = (Style)FindResource("ManageNavButton");
-        OverviewButton.Style = normalStyle;
-        ProcessesButton.Style = normalStyle;
-        ServicesButton.Style = normalStyle;
-        SessionButton.Style = normalStyle;
-        ToolsButton.Style = normalStyle;
-        TerminalButton.Style = normalStyle;
-        ActivityButton.Style = normalStyle;
-        activeButton.Style = (Style)FindResource("ManageNavActiveButton");
+        foreach (var tab in new[]
+                 {
+                     OverviewButton, ProcessesButton, ServicesButton,
+                     SessionButton, ToolsButton, TerminalButton, ActivityButton
+                 })
+        {
+            tab.IsChecked = ReferenceEquals(tab, activeButton);
+        }
     }
 }

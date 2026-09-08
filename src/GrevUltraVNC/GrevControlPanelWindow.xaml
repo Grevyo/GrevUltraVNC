@@ -83,7 +83,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Width="32" Height="32" CornerRadius="9" Background="#030509"
+                    <Border Width="32" Height="32" CornerRadius="9" Background="{DynamicResource LogoPlateBrush}"
                             BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
                         <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="2" Stretch="Uniform" />
                     </Border>
@@ -124,7 +124,8 @@
                                    Foreground="{DynamicResource AccentBrush}" FontSize="8" FontWeight="SemiBold"
                                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                            <TextBlock x:Name="SessionStatusText" Text="● SCREEN 1 ACTIVE" Foreground="#50DC91"
+                            <TextBlock x:Name="SessionStatusText" Text="● SCREEN 1 ACTIVE"
+                                       Foreground="{DynamicResource OkBrush}"
                                        FontSize="8" FontWeight="SemiBold" Margin="0,0,8,0" />
                             <TextBlock x:Name="AgentCpuRamText" Text="CPU / RAM waiting"
                                        Foreground="{DynamicResource FaintTextBrush}" FontSize="8"
@@ -279,19 +280,23 @@
                             Background="{DynamicResource SubtlePanelBrush}"
                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                             CornerRadius="12" Padding="6">
-                        <UniformGrid Columns="6" Margin="-2">
-                            <Button Style="{StaticResource KeyButton}" Content="CAD"
-                                    Click="Cad_Click" ToolTip="Ctrl + Alt + Delete" />
-                            <Button Style="{StaticResource KeyButton}" Content="⊞"
-                                    Click="WindowsKey_Click" ToolTip="Windows key" FontSize="14" />
-                            <Button Style="{StaticResource KeyButton}" Content="TASK"
-                                    Click="TaskManager_Click" ToolTip="Task Manager" />
-                            <Button Style="{StaticResource KeyButton}" Content="ALT↹"
-                                    Click="AltTab_Click" ToolTip="Alt + Tab" />
+                        <UniformGrid Columns="4" Rows="2" Margin="-2">
+                            <Button Style="{StaticResource KeyButton}" Content="CTRL ALT DEL"
+                                    Click="Cad_Click" ToolTip="Ctrl + Alt + Delete on the remote machine" />
+                            <Button Style="{StaticResource KeyButton}" Content="⊞ WIN"
+                                    Click="WindowsKey_Click" ToolTip="Open the remote Start menu" />
+                            <Button Style="{StaticResource KeyButton}" Content="TASK MGR"
+                                    Click="TaskManager_Click" ToolTip="Ctrl + Shift + Esc on the remote machine" />
+                            <Button Style="{StaticResource KeyButton}" Content="ALT ↹"
+                                    Click="AltTab_Click" ToolTip="Alt + Tab on the remote machine" />
                             <Button Style="{StaticResource KeyButton}" Content="ALT F4"
-                                    Click="AltF4_Click" ToolTip="Alt + F4" />
-                            <Button Style="{StaticResource KeyButton}" Content="WIN R"
-                                    Click="WinR_Click" ToolTip="Run dialog" />
+                                    Click="AltF4_Click" ToolTip="Close the remote foreground window" />
+                            <Button Style="{StaticResource KeyButton}" Content="⊞ R"
+                                    Click="WinR_Click" ToolTip="Remote Run dialog" />
+                            <Button Style="{StaticResource KeyButton}" Content="⊞ E"
+                                    Click="WinE_Click" ToolTip="Open File Explorer on the remote machine" />
+                            <Button Style="{StaticResource KeyButton}" Content="⊞ L"
+                                    Click="WinL_Click" ToolTip="Lock the remote workstation" />
                         </UniformGrid>
                     </Border>
 

@@ -1,5 +1,7 @@
 using Microsoft.Win32;
+using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -51,6 +53,9 @@ public partial class SettingsWindow : Window
             LightThemeRadio.IsChecked = true;
         else
             DarkThemeRadio.IsChecked = true;
+
+        UpdateViewerStatusText();
+        RenderAboutSection();
 
         _initializing = false;
         Closed += SettingsWindow_Closed;
@@ -150,6 +155,78 @@ public partial class SettingsWindow : Window
             return;
         }
         ViewerPathBox.Text = path;
+        UpdateViewerStatusText();
+    }
+
+    /// <summary>Says plainly whether the configured viewer actually exists on this PC.</summary>
+    private void UpdateViewerStatusText()
+    {
+        var resolved = _vnc.FindViewer(ViewerPathBox.Text.Trim());
+        if (string.IsNullOrWhiteSpace(resolved))
+        {
+            ViewerStatusText.Text = "No UltraVNC Viewer found. Connecting will fail until one is installed or its path is set here.";
+            ViewerStatusText.Foreground = ThemeService.ThemeBrush("WarnBrush");
+            return;
+        }
+
+        var bundled = resolved.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase);
+        ViewerStatusText.Text = bundled
+            ? $"Using the viewer bundled with GrevUltraVNC · {resolved}"
+            : $"Viewer found · {resolved}";
+        ViewerStatusText.Foreground = ThemeService.ThemeBrush("OkBrush");
+    }
+
+    private void RenderAboutSection()
+    {
+        var version = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+            ?? "unknown";
+
+        VersionText.Text = $"GrevUltraVNC {version}  ·  Agent protocol v{AgentProtocol.ProtocolVersion}";
+        DataFolderText.Text = DataFolder;
+    }
+
+    private static string DataFolder => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "GrevUltraVNC");
+
+    private void OpenDataFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(DataFolder);
+            Process.Start(new ProcessStartInfo { FileName = DataFolder, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Open data folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void OpenViewerFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var resolved = _vnc.FindViewer(ViewerPathBox.Text.Trim());
+        if (string.IsNullOrWhiteSpace(resolved))
+        {
+            MessageBox.Show(this, "No UltraVNC Viewer is configured or detected yet.", "Open viewer folder",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{resolved}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Open viewer folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)

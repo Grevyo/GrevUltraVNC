@@ -72,9 +72,7 @@ public partial class GrevControlPanelWindow : Window
                 var status = result.Status;
                 var usedMemory = Math.Max(0, status.TotalMemoryBytes - status.AvailableMemoryBytes);
                 AgentConnectionText.Text = sessionActionsReady ? "● AGENT CONNECTED" : "● AGENT UPDATE RECOMMENDED";
-                AgentConnectionText.Foreground = sessionActionsReady
-                    ? new SolidColorBrush(Color.FromRgb(80, 220, 145))
-                    : (Brush)FindResource("Accent2Brush");
+                AgentConnectionText.Foreground = ThemeService.ThemeBrush(sessionActionsReady ? "OkBrush" : "WarnBrush");
                 AgentCpuRamText.Text = $"CPU {GrevFormat.Percent(status.CpuUsagePercent)}   ·   RAM {GrevFormat.Gigabytes(usedMemory)} / {GrevFormat.Gigabytes(status.TotalMemoryBytes)}";
                 return;
             }
@@ -88,9 +86,10 @@ public partial class GrevControlPanelWindow : Window
                 _ => "AGENT NOT DETECTED"
             };
 
-            AgentConnectionText.Foreground = result.State is GrevAgentState.AuthenticationFailed or GrevAgentState.Error
-                ? new SolidColorBrush(Color.FromRgb(255, 107, 119))
-                : new SolidColorBrush(Color.FromRgb(98, 111, 130));
+            AgentConnectionText.Foreground = ThemeService.ThemeBrush(
+                result.State is GrevAgentState.AuthenticationFailed or GrevAgentState.Error
+                    ? "DangerBrush"
+                    : "IdleBrush");
             AgentCpuRamText.Text = result.Message ?? "Install or pair Grev Agent to enable system telemetry.";
         }
         finally
@@ -134,6 +133,8 @@ public partial class GrevControlPanelWindow : Window
     private void AltTab_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltTab(_machine.Id));
     private void AltF4_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltF4(_machine.Id));
     private void WinR_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinR(_machine.Id));
+    private void WinE_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinE(_machine.Id));
+    private void WinL_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinL(_machine.Id));
     private void FullScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.ToggleFullScreen(_machine.Id));
     private void RefreshScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.RequestScreenRefresh(_machine.Id));
     private void FileTransfer_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.OpenFileTransfer(_machine.Id));
