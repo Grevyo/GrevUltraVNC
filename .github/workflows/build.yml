@@ -23,6 +23,24 @@ jobs:
       - name: Build solution
         run: dotnet build GrevUltraVNC.slnx --configuration Release --no-restore
 
+      - name: Check PowerShell scripts parse
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem -Path 'scripts' -Filter '*.ps1' -File -Recurse | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors -and $errors.Count -gt 0) {
+              $failed = $true
+              Write-Host "FAIL $($_.Name)" -ForegroundColor Red
+              $errors | ForEach-Object { Write-Host "  $($_.Extent.StartLineNumber): $($_.Message)" }
+            }
+            else {
+              Write-Host "ok   $($_.Name)"
+            }
+          }
+          if ($failed) { throw 'One or more PowerShell scripts failed to parse.' }
+
       - name: Smoke test GrevUltraVNC startup
         shell: powershell
         run: |
