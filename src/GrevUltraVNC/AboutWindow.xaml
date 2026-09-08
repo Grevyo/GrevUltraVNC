@@ -1,0 +1,48 @@
+<Window x:Class="GrevUltraVNC.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:svc="clr-namespace:GrevUltraVNC.Services"
+        Title="About GrevConnect" Width="560" Height="420" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Style="{StaticResource AppWindowStyle}"
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal">
+            <Border Width="72" Height="72" CornerRadius="18"
+                    Background="{DynamicResource LogoPlateBrush}"
+                    BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
+                <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="5" Stretch="Uniform" />
+            </Border>
+            <StackPanel Margin="18,5,0,0">
+                <TextBlock Text="GrevConnect" Style="{StaticResource DisplayText}" FontSize="30" />
+                <TextBlock Text="Remote access and household device control"
+                           Style="{StaticResource SubtitleText}" Margin="1,6,0,0" />
+            </StackPanel>
+        </StackPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource CardSurface}" Margin="0,24,0,20" Padding="22">
+            <StackPanel>
+                <TextBlock Text="About" Style="{StaticResource TitleText}" />
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap"
+                           Text="GrevConnect brings Grev's remote-control, machine-management and collaboration tools into one Windows app. UltraVNC provides the underlying VNC technology used for remote desktop connections." />
+
+                <Separator Margin="0,20" Background="{DynamicResource BorderBrush}" />
+
+                <TextBlock Text="Powered by UltraVNC" FontWeight="SemiBold" />
+                <TextBlock Text="Thought up by Grev" Margin="0,7,0,0" />
+                <TextBlock Text="Created by ChatGPT" Margin="0,7,0,0" />
+                <TextBlock Text="Assisted by Claude" Margin="0,7,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Button Grid.Row="2" HorizontalAlignment="Right" Style="{StaticResource PrimaryButton}"
+                Content="Close" Width="100" Click="Close_Click" />
+    </Grid>
+</Window>
