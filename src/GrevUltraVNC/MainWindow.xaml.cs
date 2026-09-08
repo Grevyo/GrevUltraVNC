@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Models;
@@ -40,14 +41,22 @@ public partial class MainWindow : Window
         MachinesView.Filter = FilterMachine;
 
         InitializeComponent();
+        Title = ProductBranding.ProductName;
         DataContext = this;
         _uiReady = true;
 
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         StateChanged += MainWindow_StateChanged;
+        PreviewKeyDown += MainWindow_AboutKeyDown;
         _statusTimer.Tick += StatusTimer_Tick;
         _searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
+
+        // Keep the requested credits permanently visible at the very bottom of the dashboard.
+        FooterViewerStatus.Text = ProductBranding.Credits;
+        FooterViewerStatus.Cursor = Cursors.Hand;
+        FooterViewerStatus.ToolTip = "About GrevConnect";
+        FooterViewerStatus.MouseLeftButtonUp += (_, _) => OpenAbout();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -97,7 +106,8 @@ public partial class MainWindow : Window
             () => Machines.Where(machine => machine.IsFavorite),
             () => Machines,
             ConnectMachine,
-            RefreshStatusesAsync);
+            RefreshStatusesAsync,
+            OpenAbout);
         ConfigureStatusTimer();
         UpdateMachineFilterStyles();
         ApplyViewArrangement();
@@ -126,6 +136,19 @@ public partial class MainWindow : Window
             Hide();
     }
 
+    private void MainWindow_AboutKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F1) return;
+        e.Handled = true;
+        OpenAbout();
+    }
+
+    private void OpenAbout()
+    {
+        var about = new AboutWindow { Owner = this };
+        about.ShowDialog();
+    }
+
     private void ConfigureStatusTimer()
     {
         _statusTimer.Stop();
@@ -134,22 +157,23 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Footer note about the UltraVNC Viewer, which is the one dependency a fresh install
-    /// is most likely to be missing.
+    /// Preserve viewer health information without replacing the requested permanent credits footer.
     /// </summary>
     private void UpdateViewerStatusText()
     {
         if (!_uiReady) return;
 
         var viewer = _vnc.FindViewer(_settings.UltraVncViewerPath);
+        FooterViewerStatus.Text = ProductBranding.Credits;
+
         if (string.IsNullOrWhiteSpace(viewer))
         {
-            FooterViewerStatus.Text = "UltraVNC Viewer not found · set its path in Settings";
+            FooterViewerStatus.ToolTip = "UltraVNC Viewer not found · set its path in Settings · click for About";
             FooterViewerStatus.Foreground = ThemeService.ThemeBrush("WarnBrush");
             return;
         }
 
-        FooterViewerStatus.Text = $"Viewer ready · auto-check every {Math.Clamp(_settings.StatusCheckSeconds, 3, 300)}s";
+        FooterViewerStatus.ToolTip = $"UltraVNC Viewer ready · auto-check every {Math.Clamp(_settings.StatusCheckSeconds, 3, 300)}s · click for About";
         FooterViewerStatus.Foreground = ThemeService.ThemeBrush("FaintTextBrush");
     }
 
