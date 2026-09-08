@@ -89,22 +89,21 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
           }
 
-      - name: Publish GrevConnect 1.2.2 release
+      - name: Publish GrevConnect 1.2.3 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.2.2-grevconnect'
-          $asset = 'dist\GrevConnect-1.2.2-Setup.exe'
+          $tag = 'v1.2.3-grevconnect'
+          $asset = 'dist\GrevConnect-1.2.3-Setup.exe'
           $notes = @(
-            'GrevConnect 1.2.2'
+            'GrevConnect 1.2.3'
             ''
             '- Keeps the default install location at C:\GrevCo\GrevConnect.'
-            '- Reworks the final joke page into an official-looking but explicitly unofficial GrevConnect compliance notice.'
-            '- Shortens the joke-page Next button so its caption fits properly.'
-            '- Adds several more British/computer jokes and pointless compliance status messages.'
-            '- Adds Connected by Zima to the installer finish screen, About page and permanent dashboard credits.'
+            '- Makes the final joke page look like a normal GrevConnect/Inno Setup installer page instead of a fake government compliance notice.'
+            '- Keeps the standard installer heading, subheading, spacing and Next button while hiding the silly content in an otherwise normal setup step.'
+            '- Keeps Connected by Zima on the installer finish screen, About page and permanent dashboard credits.'
             '- Keeps the verified official UltraVNC 1.8.2.4 bundle and self-contained Windows x64 app.'
             '- This build is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
           ) -join [Environment]::NewLine
@@ -117,6 +116,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not update the GrevConnect release asset.' }
           }
           else {
-            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevConnect 1.2.2' --notes $notes
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevConnect 1.2.3' --notes $notes
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the GrevConnect release.' }
           }
