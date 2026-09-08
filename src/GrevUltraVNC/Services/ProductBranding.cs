@@ -12,7 +12,9 @@ namespace GrevUltraVNC.Services;
 public static class ProductBranding
 {
     public const string ProductName = "GrevConnect";
-    public const string Credits = "Powered by UltraVNC · Thought up by Grev · Created by ChatGPT · Assisted by Claude";
+    public const string Credits = "Powered by UltraVNC · Connected by Zima · Thought up by Grev · Created by ChatGPT · Assisted by Claude";
+
+    private const string LegacyFooterHint = "Double-click a card to connect  ·  right-click for actions  ·  F5 to refresh";
 
     public static void Apply(Window window)
     {
@@ -31,6 +33,13 @@ public static class ProductBranding
             {
                 if (textBlock.Text == "UltraVNC")
                     textBlock.Text = "Connect";
+                else if (textBlock.Text == LegacyFooterHint)
+                {
+                    // Keep the product credits permanently visible at the bottom of the
+                    // main dashboard without tying the public brand to legacy XAML text.
+                    textBlock.Text = Credits;
+                    textBlock.ToolTip = LegacyFooterHint;
+                }
                 else
                     textBlock.Text = ReplaceLegacyBrand(textBlock.Text);
             }
