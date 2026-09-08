@@ -72,14 +72,6 @@ public sealed class GrevConnectResolver : IDisposable
         return discovered;
     }
 
-    public async Task<IReadOnlyList<GrevConnectResolution>> DiscoverAllAsync(
-        int agentPort = AgentProtocol.DefaultPort,
-        CancellationToken cancellationToken = default)
-    {
-        var snapshot = await GetDiscoverySnapshotAsync(agentPort, cancellationToken);
-        return snapshot.Results;
-    }
-
     private async Task<DiscoverySnapshot> GetDiscoverySnapshotAsync(int port, CancellationToken cancellationToken)
     {
         if (_discoveryCache.TryGetValue(port, out var cached) && cached.ExpiresAtUtc > DateTimeOffset.UtcNow)

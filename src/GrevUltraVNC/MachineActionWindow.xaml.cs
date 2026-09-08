@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Media;
 using GrevUltraVNC.Models;
 using GrevUltraVNC.Services;
 
@@ -8,7 +9,6 @@ namespace GrevUltraVNC;
 public partial class MachineActionWindow : Window
 {
     private readonly Machine _machine;
-    private readonly AppSettings _settings;
     private readonly UltraVncSessionService _vnc;
     private readonly WakeOnLanService _wake = new();
     private readonly PowerService _power = new();
@@ -20,15 +20,18 @@ public partial class MachineActionWindow : Window
     private readonly GrevConnectResolver _connectResolver = new();
     private readonly AgentUpdateService _agentUpdater;
     private bool _agentUpdateRunning;
+    private bool _diagnosticsRunning;
 
     public bool MachineChanged { get; private set; }
     public bool MachineDeleted { get; private set; }
 
-    public MachineActionWindow(Machine machine, AppSettings settings, UltraVncSessionService vnc)
+    /// <summary>Set when the user asked for a VNC session; the dashboard owns the connection.</summary>
+    public bool ConnectRequested { get; private set; }
+
+    public MachineActionWindow(Machine machine, UltraVncSessionService vnc)
     {
         InitializeComponent();
         _machine = machine;
-        _settings = settings;
         _vnc = vnc;
         _agentUpdater = new AgentUpdateService(_agent);
         Closed += (_, _) =>
@@ -53,20 +56,10 @@ public partial class MachineActionWindow : Window
             throw new InvalidOperationException($"{_machine.ConnectId} could not be found on the current LAN or Grev Connect networks.");
     }
 
-    private async void Vnc_Click(object sender, RoutedEventArgs e)
+    private void Vnc_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            await EnsureRouteAsync();
-            _vnc.Launch(_machine, _settings);
-            var controlPanel = new GrevControlPanelWindow(_machine, _vnc);
-            controlPanel.Show();
-            Close();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Could not open VNC", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        ConnectRequested = true;
+        Close();
     }
 
     private void Cad_Click(object sender, RoutedEventArgs e) => SendRemoteKey(() => _vnc.SendCtrlAltDelete(_machine.Id));
@@ -242,34 +235,85 @@ public partial class MachineActionWindow : Window
         }
     }
 
+    /// <summary>
+    /// Runs every reachability check and renders the answers in the window. This used to be a
+    /// single message box, which meant the results vanished the moment you tried to act on them.
+    /// </summary>
     private async void Diagnostics_Click(object sender, RoutedEventArgs e)
     {
+        if (_diagnosticsRunning) return;
+        _diagnosticsRunning = true;
+        DiagnosticsButton.IsEnabled = false;
+        DiagnosticsPanel.Visibility = Visibility.Visible;
+        DiagnosticsTimeText.Text = "running…";
+        DiagnosticsItems.ItemsSource = new[]
+        {
+            new DiagnosticDisplayRow("Status", "Probing every route…", ThemeService.ThemeBrush("IdleBrush"))
+        };
+
         try
         {
             await _connectResolver.ResolveAsync(_machine);
-            var networkResult = await _network.ProbeAsync(_machine);
-            var serviceResult = string.IsNullOrWhiteSpace(_machine.ActiveAddress)
-                ? new RemoteServiceResult(false, "No current route")
-                : await _remoteVnc.QueryAsync(_machine.ActiveAddress);
-            var agentResult = string.IsNullOrWhiteSpace(_machine.ActiveAddress)
-                ? new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: "No current route")
-                : await _agent.ProbeAsync(_machine);
-            var latency = networkResult.LatencyMs is null ? "No ping response" : $"{networkResult.LatencyMs} ms";
-            var vnc = networkResult.VncAvailable ? $"Reachable on TCP {_machine.VncPort}" : $"Not reachable on TCP {_machine.VncPort}";
-            var service = serviceResult.Success ? serviceResult.Message : $"Could not query: {serviceResult.Message}";
-            var agent = agentResult.Status is null
-                ? $"{agentResult.State}: {agentResult.Message}"
-                : $"Connected · Agent {agentResult.Status.AgentVersion} · CPU {agentResult.Status.CpuUsagePercent:0.#}%";
+            RefreshHeader();
 
-            MessageBox.Show(this,
-                $"Machine: {_machine.Name}\nGrev Connect ID: {(_machine.ConnectId.Length == 0 ? "Not assigned" : _machine.ConnectId)}\nRoute: {(_machine.ActiveAddress.Length == 0 ? "Unavailable" : $"{_machine.ResolvedRoute} · {_machine.ActiveAddress}")}\nLAN IP: {_machine.IpAddress}\nPing: {latency}\nVNC port: {vnc}\nService: {service}\nGrev Agent: {agent}\nProbe result: {networkResult.Status}",
-                "Connection diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
+            var hasRoute = !string.IsNullOrWhiteSpace(_machine.ActiveAddress);
+            var networkResult = await _network.ProbeAsync(_machine);
+            var serviceResult = hasRoute
+                ? await _remoteVnc.QueryAsync(_machine.ActiveAddress)
+                : new RemoteServiceResult(false, "No current route");
+            var agentResult = hasRoute
+                ? await _agent.ProbeAsync(_machine)
+                : new GrevAgentProbeResult(GrevAgentState.NotDetected, Message: "No current route");
+
+            var rows = new List<DiagnosticRow>
+            {
+                new("Grev Connect ID",
+                    _machine.ConnectId.Length == 0 ? "Not assigned" : _machine.ConnectId,
+                    _machine.ConnectId.Length == 0 ? "IdleBrush" : "OkBrush"),
+                new("Route",
+                    hasRoute ? $"{_machine.ResolvedRoute} · {_machine.ActiveAddress}" : "No reachable route right now",
+                    hasRoute ? "OkBrush" : "DangerBrush"),
+                new("Saved LAN IP",
+                    string.IsNullOrWhiteSpace(_machine.IpAddress) ? "Not set" : _machine.IpAddress,
+                    "IdleBrush"),
+                new("Ping",
+                    networkResult.LatencyMs is null ? "No ICMP reply" : $"{networkResult.LatencyMs} ms",
+                    networkResult.LatencyMs is null ? "WarnBrush" : "OkBrush"),
+                new($"VNC port {_machine.VncPort}",
+                    networkResult.VncAvailable ? "Accepting connections" : "Not reachable",
+                    networkResult.VncAvailable ? "OkBrush" : "DangerBrush"),
+                new("UltraVNC service",
+                    serviceResult.Success ? serviceResult.Message : $"Could not query · {serviceResult.Message}",
+                    serviceResult.Success ? "OkBrush" : "WarnBrush"),
+                new($"Grev Agent {_machine.AgentPort}",
+                    agentResult.Status is null
+                        ? $"{agentResult.State} · {agentResult.Message}"
+                        : $"Connected · Agent {agentResult.Status.AgentVersion} · CPU {agentResult.Status.CpuUsagePercent:0.#}%",
+                    agentResult.Status is null ? "WarnBrush" : "OkBrush")
+            };
+
+            DiagnosticsItems.ItemsSource = rows
+                .Select(row => new DiagnosticDisplayRow(row.Label, row.Value, ThemeService.ThemeBrush(row.BrushKey)))
+                .ToArray();
+            DiagnosticsTimeText.Text = $"checked {DateTime.Now:HH:mm:ss}";
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Connection diagnostics", MessageBoxButton.OK, MessageBoxImage.Error);
+            DiagnosticsItems.ItemsSource = new[]
+            {
+                new DiagnosticDisplayRow("Diagnostics failed", ex.Message, ThemeService.ThemeBrush("DangerBrush"))
+            };
+            DiagnosticsTimeText.Text = $"failed {DateTime.Now:HH:mm:ss}";
+        }
+        finally
+        {
+            _diagnosticsRunning = false;
+            DiagnosticsButton.IsEnabled = true;
         }
     }
+
+    private sealed record DiagnosticRow(string Label, string Value, string BrushKey);
+    private sealed record DiagnosticDisplayRow(string Label, string Value, Brush Colour);
 
     private void Edit_Click(object sender, RoutedEventArgs e)
     {

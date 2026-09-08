@@ -29,7 +29,21 @@ public static class ThemeService
         ["SecondaryButtonTextBrush"] = "#F0F5FF",
         ["DangerButtonBrush"] = "#321722",
         ["DangerButtonTextBrush"] = "#FFA0AE",
-        ["TextBoxBrush"] = "#080E19"
+        ["TextBoxBrush"] = "#080E19",
+        ["StrongBorderBrush"] = "#33456A",
+        ["ElevatedPanelBrush"] = "#111A2C",
+        ["OkBrush"] = "#4ADE93",
+        ["OkSoftBrush"] = "#0E2A1F",
+        ["WarnBrush"] = "#FFBE5C",
+        ["WarnSoftBrush"] = "#2C2110",
+        ["DangerSoftBrush"] = "#2C1119",
+        ["InfoBrush"] = "#7C8CF0",
+        ["IdleBrush"] = "#62707F",
+        ["TrackBrush"] = "#131C2E",
+        ["ScrollThumbBrush"] = "#2A3A57",
+        ["ScrollThumbHoverBrush"] = "#3D5480",
+        ["ConsoleBrush"] = "#04060B",
+        ["LogoPlateBrush"] = "#030509"
     };
 
     private static readonly IReadOnlyDictionary<string, string> LightPalette = new Dictionary<string, string>
@@ -51,7 +65,21 @@ public static class ThemeService
         ["SecondaryButtonTextBrush"] = "#172033",
         ["DangerButtonBrush"] = "#FDE8ED",
         ["DangerButtonTextBrush"] = "#B4233A",
-        ["TextBoxBrush"] = "#FFFFFF"
+        ["TextBoxBrush"] = "#FFFFFF",
+        ["StrongBorderBrush"] = "#A9BDD4",
+        ["ElevatedPanelBrush"] = "#FFFFFF",
+        ["OkBrush"] = "#12874F",
+        ["OkSoftBrush"] = "#DFF5E9",
+        ["WarnBrush"] = "#A96A05",
+        ["WarnSoftBrush"] = "#FCEFD8",
+        ["DangerSoftBrush"] = "#FCE3E8",
+        ["InfoBrush"] = "#4A54C4",
+        ["IdleBrush"] = "#7F8DA0",
+        ["TrackBrush"] = "#DCE6F1",
+        ["ScrollThumbBrush"] = "#B7C7D9",
+        ["ScrollThumbHoverBrush"] = "#8FA6C2",
+        ["ConsoleBrush"] = "#0B111C",
+        ["LogoPlateBrush"] = "#0B111C"
     };
 
     public static string Normalize(string? theme) =>
@@ -72,5 +100,17 @@ public static class ThemeService
         // WPF may freeze StaticResource Freezables; mutating that shared gradient during
         // startup can be fragile. The logo-matched dark gradient remains the stable
         // primary-button treatment while the solid theme resources switch dynamically.
+    }
+
+    /// <summary>
+    /// Resolves a themed brush by resource key, falling back to a neutral grey if the
+    /// application resources are not available (design time, or during shutdown).
+    /// </summary>
+    public static Brush ThemeBrush(string resourceKey)
+    {
+        if (Application.Current?.TryFindResource(resourceKey) is Brush brush)
+            return brush;
+
+        return Brushes.Gray;
     }
 }

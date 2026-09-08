@@ -63,15 +63,7 @@ public partial class RemoteFileManagerWindow : Window
                 throw new IOException(response.Message);
 
             _currentPath = response.CurrentPath;
-            _rows = (response.Entries ?? [])
-                .Select(entry => new FileRow(
-                    entry,
-                    _currentPath is null ? "Drive" : entry.IsDirectory ? "Folder" : "File",
-                    entry.Name,
-                    entry.IsDirectory ? string.Empty : FormatBytes(entry.SizeBytes),
-                    entry.LastWriteTimeUtc?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? string.Empty,
-                    entry.Detail))
-                .ToArray();
+            _rows = BuildRows(response.Entries ?? [], _currentPath);
 
             FilesList.ItemsSource = _rows;
             PathBox.Text = _currentPath ?? "This PC";
@@ -239,15 +231,7 @@ public partial class RemoteFileManagerWindow : Window
         if (!response.Success) throw new IOException(response.Message);
 
         _currentPath = response.CurrentPath;
-        _rows = (response.Entries ?? [])
-            .Select(entry => new FileRow(
-                entry,
-                _currentPath is null ? "Drive" : entry.IsDirectory ? "Folder" : "File",
-                entry.Name,
-                entry.IsDirectory ? string.Empty : FormatBytes(entry.SizeBytes),
-                entry.LastWriteTimeUtc?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? string.Empty,
-                entry.Detail))
-            .ToArray();
+        _rows = BuildRows(response.Entries ?? [], _currentPath);
         FilesList.ItemsSource = _rows;
         PathBox.Text = _currentPath ?? "This PC";
         UpButton.IsEnabled = _currentPath is not null;
@@ -301,13 +285,14 @@ public partial class RemoteFileManagerWindow : Window
                 offset = response.NextOffset;
                 first = false;
                 var percent = local.Length == 0 ? 100 : Math.Min(100, offset * 100.0 / local.Length);
-                StatusText.Text = $"Uploading {local.Name} · {percent:0}%";
+                SetTransferProgress(percent);
+                StatusText.Text = $"Uploading {local.Name} · {GrevFormat.Bytes(offset)} of {GrevFormat.Bytes(local.Length)} · {percent:0}%";
                 if (read == 0) break;
             }
             while (offset < local.Length);
 
             StatusText.Text = $"Uploaded {local.Name}.";
-            await LogActivityAsync("Upload", $"{local.Name} · {FormatBytes(local.Length)}", true);
+            await LogActivityAsync("Upload", $"{local.Name} · {GrevFormat.Bytes(local.Length)}", true);
             await BrowseCoreAsync(_currentPath);
         }
         catch (Exception ex)
@@ -366,13 +351,14 @@ public partial class RemoteFileManagerWindow : Window
 
                 offset = response.NextOffset;
                 var percent = selected.Source.SizeBytes == 0 ? 100 : Math.Min(100, offset * 100.0 / selected.Source.SizeBytes);
-                StatusText.Text = $"Downloading {selected.Source.Name} · {percent:0}%";
+                SetTransferProgress(percent);
+                StatusText.Text = $"Downloading {selected.Source.Name} · {GrevFormat.Bytes(offset)} of {GrevFormat.Bytes(selected.Source.SizeBytes)} · {percent:0}%";
                 if (response.Complete) break;
             }
 
             await output.FlushAsync();
             StatusText.Text = $"Downloaded {selected.Source.Name}.";
-            await LogActivityAsync("Download", $"{selected.Source.Name} · {FormatBytes(selected.Source.SizeBytes)}", true);
+            await LogActivityAsync("Download", $"{selected.Source.Name} · {GrevFormat.Bytes(selected.Source.SizeBytes)}", true);
         }
         catch (Exception ex)
         {
@@ -398,6 +384,7 @@ public partial class RemoteFileManagerWindow : Window
     {
         _busy = busy;
         Mouse.OverrideCursor = busy ? Cursors.Wait : null;
+        if (!busy) SetTransferProgress(null);
         if (!string.IsNullOrWhiteSpace(message)) StatusText.Text = message;
     }
 
@@ -422,19 +409,43 @@ public partial class RemoteFileManagerWindow : Window
         }
     }
 
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "0 B";
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        var value = (double)bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        return $"{value:0.#} {units[unit]}";
-    }
+    private sealed record FileRow(AgentFileEntry Source, string Type, string Name, string Size, string Modified, string Detail, string Glyph);
 
-    private sealed record FileRow(AgentFileEntry Source, string Type, string Name, string Size, string Modified, string Detail);
+    /// <summary>
+    /// Projects an Agent directory listing into display rows: folders first, then files,
+    /// each alphabetical, which is how every file browser people already use behaves.
+    /// </summary>
+    private static IReadOnlyList<FileRow> BuildRows(IEnumerable<AgentFileEntry> entries, string? currentPath) =>
+        entries
+            .Select(entry =>
+            {
+                var isDrive = currentPath is null;
+                var type = isDrive ? "Drive" : entry.IsDirectory ? "Folder" : "File";
+                var glyph = isDrive ? "💽" : entry.IsDirectory ? "📁" : "📄";
+                return new FileRow(
+                    entry,
+                    type,
+                    entry.Name,
+                    entry.IsDirectory ? string.Empty : GrevFormat.Bytes(entry.SizeBytes),
+                    entry.LastWriteTimeUtc?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? string.Empty,
+                    entry.Detail,
+                    glyph);
+            })
+            .OrderByDescending(row => row.Source.IsDirectory)
+            .ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    /// <summary>Shows the transfer bar while a copy is in flight and hides it afterwards.</summary>
+    private void SetTransferProgress(double? percent)
+    {
+        if (percent is null)
+        {
+            TransferProgress.Visibility = Visibility.Collapsed;
+            TransferProgress.Value = 0;
+            return;
+        }
+
+        TransferProgress.Visibility = Visibility.Visible;
+        TransferProgress.Value = Math.Clamp(percent.Value, 0, 100);
+    }
 }

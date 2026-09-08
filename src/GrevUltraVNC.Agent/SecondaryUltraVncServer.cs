@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
-using System.Text;
 using Microsoft.Win32;
 
 namespace GrevUltraVNC.Agent;
@@ -11,9 +10,6 @@ namespace GrevUltraVNC.Agent;
 public sealed class SecondaryUltraVncServer : IDisposable
 {
     private const string UltraVncServiceName = "uvnc_service";
-    private const uint MaximumAllowed = 0x02000000;
-    private const uint CreateUnicodeEnvironment = 0x00000400;
-    private const uint DetachedProcess = 0x00000008;
 
     private readonly AgentConfiguration _configuration;
     private Process? _process;
@@ -244,63 +240,18 @@ public sealed class SecondaryUltraVncServer : IDisposable
 
     private static Process LaunchInActiveSession(string executablePath, string arguments)
     {
-        var sessionId = WTSGetActiveConsoleSessionId();
-        if (sessionId == uint.MaxValue)
+        var sessionId = InteractiveSessionLauncher.GetActiveConsoleSessionId();
+        if (sessionId == InteractiveSessionLauncher.NoActiveSession)
             throw new InvalidOperationException("No interactive Windows console session is active on the target PC.");
 
-        IntPtr userToken = IntPtr.Zero;
-        IntPtr primaryToken = IntPtr.Zero;
-        IntPtr environment = IntPtr.Zero;
-        ProcessInformation processInfo = default;
+        var processId = InteractiveSessionLauncher.Launch(
+            sessionId,
+            executablePath,
+            arguments,
+            detached: true,
+            what: "the Screen 2 UltraVNC server");
 
-        try
-        {
-            if (!WTSQueryUserToken(sessionId, out userToken))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Grev Agent could not obtain the active Windows user's session token for Screen 2.");
-
-            if (!DuplicateTokenEx(
-                    userToken,
-                    MaximumAllowed,
-                    IntPtr.Zero,
-                    SecurityImpersonationLevel.SecurityImpersonation,
-                    TokenType.TokenPrimary,
-                    out primaryToken))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Grev Agent could not create a primary token for the Screen 2 UltraVNC server.");
-
-            if (!CreateEnvironmentBlock(out environment, primaryToken, false))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Grev Agent could not create the active user's environment for Screen 2.");
-
-            var startupInfo = new StartupInfo
-            {
-                cb = Marshal.SizeOf<StartupInfo>(),
-                lpDesktop = @"winsta0\default"
-            };
-            var commandLine = new StringBuilder($"\"{executablePath}\" {arguments}");
-
-            if (!CreateProcessAsUser(
-                    primaryToken,
-                    executablePath,
-                    commandLine,
-                    IntPtr.Zero,
-                    IntPtr.Zero,
-                    false,
-                    CreateUnicodeEnvironment | DetachedProcess,
-                    environment,
-                    Path.GetDirectoryName(executablePath),
-                    ref startupInfo,
-                    out processInfo))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows refused to launch the Screen 2 UltraVNC server in the active user session.");
-
-            return Process.GetProcessById(checked((int)processInfo.dwProcessId));
-        }
-        finally
-        {
-            if (processInfo.hThread != IntPtr.Zero) CloseHandle(processInfo.hThread);
-            if (processInfo.hProcess != IntPtr.Zero) CloseHandle(processInfo.hProcess);
-            if (environment != IntPtr.Zero) DestroyEnvironmentBlock(environment);
-            if (primaryToken != IntPtr.Zero) CloseHandle(primaryToken);
-            if (userToken != IntPtr.Zero) CloseHandle(userToken);
-        }
+        return Process.GetProcessById(processId);
     }
 
     private static void SetIniValue(string path, string section, string key, string value)
@@ -325,52 +276,6 @@ public sealed class SecondaryUltraVncServer : IDisposable
 
     public void Dispose() => Stop();
 
-    private enum SecurityImpersonationLevel
-    {
-        SecurityAnonymous,
-        SecurityIdentification,
-        SecurityImpersonation,
-        SecurityDelegation
-    }
-
-    private enum TokenType
-    {
-        TokenPrimary = 1,
-        TokenImpersonation
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct StartupInfo
-    {
-        public int cb;
-        public string? lpReserved;
-        public string? lpDesktop;
-        public string? lpTitle;
-        public int dwX;
-        public int dwY;
-        public int dwXSize;
-        public int dwYSize;
-        public int dwXCountChars;
-        public int dwYCountChars;
-        public int dwFillAttribute;
-        public int dwFlags;
-        public short wShowWindow;
-        public short cbReserved2;
-        public IntPtr lpReserved2;
-        public IntPtr hStdInput;
-        public IntPtr hStdOutput;
-        public IntPtr hStdError;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ProcessInformation
-    {
-        public IntPtr hProcess;
-        public IntPtr hThread;
-        public uint dwProcessId;
-        public uint dwThreadId;
-    }
-
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WritePrivateProfileString(
@@ -378,48 +283,4 @@ public sealed class SecondaryUltraVncServer : IDisposable
         string key,
         string value,
         string filePath);
-
-    [DllImport("kernel32.dll")]
-    private static extern uint WTSGetActiveConsoleSessionId();
-
-    [DllImport("Wtsapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool WTSQueryUserToken(uint sessionId, out IntPtr token);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DuplicateTokenEx(
-        IntPtr existingToken,
-        uint desiredAccess,
-        IntPtr tokenAttributes,
-        SecurityImpersonationLevel impersonationLevel,
-        TokenType tokenType,
-        out IntPtr newToken);
-
-    [DllImport("userenv.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CreateEnvironmentBlock(out IntPtr environment, IntPtr token, bool inherit);
-
-    [DllImport("userenv.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DestroyEnvironmentBlock(IntPtr environment);
-
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CreateProcessAsUser(
-        IntPtr token,
-        string? applicationName,
-        StringBuilder commandLine,
-        IntPtr processAttributes,
-        IntPtr threadAttributes,
-        bool inheritHandles,
-        uint creationFlags,
-        IntPtr environment,
-        string? currentDirectory,
-        ref StartupInfo startupInfo,
-        out ProcessInformation processInformation);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(IntPtr handle);
 }

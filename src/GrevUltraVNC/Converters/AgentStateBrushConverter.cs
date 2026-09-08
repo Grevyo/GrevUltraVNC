@@ -1,20 +1,22 @@
 using System.Globalization;
 using System.Windows.Data;
-using System.Windows.Media;
 using GrevUltraVNC.Models;
+using GrevUltraVNC.Services;
 
 namespace GrevUltraVNC.Converters;
 
+/// <summary>Grev Agent pairing state to a themed status colour.</summary>
 public sealed class AgentStateBrushConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        GrevAgentState.Connected => new SolidColorBrush(Color.FromRgb(80, 220, 145)),
-        GrevAgentState.ReadyToPair => new SolidColorBrush(Color.FromRgb(85, 118, 216)),
-        GrevAgentState.AuthenticationFailed => new SolidColorBrush(Color.FromRgb(255, 107, 119)),
-        GrevAgentState.Error => new SolidColorBrush(Color.FromRgb(255, 170, 92)),
-        _ => new SolidColorBrush(Color.FromRgb(98, 111, 130))
-    };
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        ThemeService.ThemeBrush(value switch
+        {
+            GrevAgentState.Connected => "OkBrush",
+            GrevAgentState.ReadyToPair => "InfoBrush",
+            GrevAgentState.AuthenticationFailed => "DangerBrush",
+            GrevAgentState.Error => "WarnBrush",
+            _ => "IdleBrush"
+        });
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();

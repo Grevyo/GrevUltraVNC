@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,20 +17,40 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
       - name: Restore solution
         run: dotnet restore GrevUltraVNC.slnx
+
       - name: Build solution
         run: dotnet build GrevUltraVNC.slnx --configuration Release --no-restore
 
-      - name: Smoke test GrevUltraVNC startup
+      - name: Check PowerShell scripts parse
         shell: powershell
         run: |
-          $exe = Resolve-Path 'src\GrevUltraVNC\bin\Release\net10.0-windows\GrevUltraVNC.exe'
+          $failed = $false
+          Get-ChildItem -Path 'scripts' -Filter '*.ps1' -File -Recurse | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors -and $errors.Count -gt 0) {
+              $failed = $true
+              Write-Host "FAIL $($_.Name)" -ForegroundColor Red
+              $errors | ForEach-Object { Write-Host "  $($_.Extent.StartLineNumber): $($_.Message)" }
+            }
+            else {
+              Write-Host "ok   $($_.Name)"
+            }
+          }
+          if ($failed) { throw 'One or more PowerShell scripts failed to parse.' }
+
+      - name: Smoke test GrevConnect startup
+        shell: powershell
+        run: |
+          $exe = Resolve-Path 'src\GrevUltraVNC\bin\Release\net10.0-windows\GrevConnect.exe'
           $process = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 5
 
           if ($process.HasExited) {
-            throw "GrevUltraVNC exited during startup smoke test with exit code $($process.ExitCode)."
+            throw "GrevConnect exited during startup smoke test with exit code $($process.ExitCode)."
           }
 
           Stop-Process -Id $process.Id -Force
@@ -38,9 +59,9 @@ jobs:
         shell: powershell
         run: choco install innosetup -y --no-progress
 
-      - name: Build GrevUltraVNC 1.1.7 friend installer
+      - name: Build GrevConnect installer
         shell: powershell
-        run: .\scripts\build-friend-installer.ps1
+        run: .\scripts\build-grevconnect-installer.ps1
 
       - name: Build Grev Agent package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -64,31 +85,29 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not update the agent-latest release asset.' }
           }
           else {
-            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC Agent - Latest' --notes 'Automatically built from the latest main branch.' --prerelease
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'Grev Agent - Latest' --notes 'Automatically built from the latest GrevConnect main branch.' --prerelease
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the agent-latest release.' }
           }
 
-      - name: Publish GrevUltraVNC 1.1.7 friend release
+      - name: Publish GrevConnect 1.2.0 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.1.7-friend'
-          $asset = 'dist\GrevUltraVNC-1.1.7-Friend-Setup.exe'
+          $tag = 'v1.2.0-grevconnect'
+          $asset = 'dist\GrevConnect-1.2.0-Setup.exe'
           $notes = @(
-            'GrevUltraVNC 1.1.7 Friend Test'
+            'GrevConnect 1.2.0'
             ''
-            '- Keeps the full stupid/rude/childish installer from 1.1.6.'
-            '- Shortens every joke navigation button so the captions actually fit inside the buttons.'
-            '- Adds a completely pointless Mandatory Englishness Checkpoint with a proper St George cross built directly into the installer UI.'
-            '- Adds a second completely pointless Critical Biscuit Compatibility Test whose answer is deliberately ignored.'
-            '- The British page asks for weather complaining, orderly queueing, tutting and apologising to furniture before continuing.'
-            '- The biscuit page offers Custard Cream, Digestive, Hobnob, Rich Tea or suspicious no-biscuit behaviour.'
-            '- The actual per-user install path, bundled UltraVNC viewer, shortcuts, file copy, launch action and uninstall behaviour remain unchanged.'
-            '- No remote-control, cursor, whiteboard, Screen 2 or Agent protocol behaviour changes are included in 1.1.7.'
-            '- Classic Arrow remains the default cursor and the 18-cursor pack is unchanged.'
-            '- This test installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
+            '- Rebrands the controller application from GrevUltraVNC to GrevConnect.'
+            '- Includes the Claude home-device application overhaul reviewed and polished for release.'
+            '- Ships as a self-contained Windows x64 application; users do not need to install .NET separately.'
+            '- Bundles the verified official UltraVNC 1.8.2.4 portable files required for VNC connections.'
+            '- Verifies the UltraVNC archive SHA-256 before it is packaged.'
+            '- Adds a dedicated About page and permanent GrevConnect credits in the dashboard footer.'
+            '- Finishes installation with two deliberately stupid British jokes, followed by the GrevConnect thank-you/credits screen.'
+            '- This build is currently unsigned, so Windows SmartScreen may show an unknown-publisher/reputation warning.'
           ) -join [Environment]::NewLine
 
           cmd /c "gh release view $tag --repo $env:GITHUB_REPOSITORY >nul 2>nul"
@@ -96,9 +115,9 @@ jobs:
 
           if ($releaseExists) {
             gh release upload $tag $asset --repo $env:GITHUB_REPOSITORY --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update the v1.1.7-friend release asset.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the GrevConnect release asset.' }
           }
           else {
-            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevUltraVNC 1.1.7 Friend Test' --notes $notes --prerelease
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create the v1.1.7-friend release.' }
+            gh release create $tag $asset --repo $env:GITHUB_REPOSITORY --title 'GrevConnect 1.2.0' --notes $notes
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the GrevConnect release.' }
           }

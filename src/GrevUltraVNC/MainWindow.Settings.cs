@@ -32,6 +32,7 @@ public partial class MainWindow
         ThemeService.Apply(_settings.Theme);
         await _storage.SaveSettingsAsync(_settings);
         ConfigureStatusTimer();
+        UpdateViewerStatusText();
 
         foreach (var controlPanel in _controlPanels.Values.ToArray())
             controlPanel.UpdateCollaborationSettings(_settings);

@@ -4,6 +4,60 @@ A LAN-first Windows remote-management app built around UltraVNC plus the optiona
 
 UltraVNC remains the remote-desktop engine. GrevUltraVNC adds machine organisation, saved credentials, status monitoring, power/service actions, machine management, an authenticated terminal, self-updating Agents and a docked Grev Control Panel.
 
+## Install on a fresh PC
+
+One command takes a bare Windows machine to a running GrevUltraVNC:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Install-GrevUltraVNC.ps1
+```
+
+It checks the PC can run the app, fetches the source (no git needed), installs
+the .NET SDK only if one is missing, publishes GrevUltraVNC self-contained,
+downloads the pinned UltraVNC Viewer and verifies its SHA-256 before bundling
+it, installs to `%LOCALAPPDATA%\Programs\GrevUltraVNC` without needing
+administrator rights, creates shortcuts, and starts the app.
+
+Useful switches:
+
+| Switch | Effect |
+| --- | --- |
+| `-IncludeAgent` | Also install the Grev Agent service on this PC so it can be connected *to*. Needs an elevated PowerShell. |
+| `-StartWithWindows` | Launch GrevUltraVNC when this user signs in. |
+| `-Source Release` | Download and silently run the newest published installer instead of building. |
+| `-SkipViewer` | Do not bundle UltraVNC (use an already-installed copy). |
+| `-InstallDir <path>` | Install somewhere else. |
+| `-Branch <name>` | Build a specific branch. Defaults to the branch of the checkout the script came from, or `main` when the script is run on its own. |
+| `-NoLaunch` | Install without starting the app. |
+
+The installer prints the branch and commit it built, and **Settings → About & data**
+shows the same stamp on the installed app, so "did my changes actually install?"
+is answerable without reading an install log.
+
+Re-running it upgrades in place. Machines, settings, saved commands and
+activity history in `%APPDATA%\GrevUltraVNC` are untouched, and VNC passwords
+and Agent pairing keys stay in Windows Credential Manager.
+
+## The dashboard
+
+The main window is a fleet view of every device in the household.
+
+- Header counters for online, offline, agents paired and needs-attention, so the
+  window answers "is everything up?" before you read a single card
+- Machine cards showing the live route (LAN / Zima / Grev Connect) with the
+  address actually being dialled, round-trip latency, and live CPU, memory and
+  fullest-disk meters that turn amber past 75% and red past 90%
+- Signed-in user and uptime on every paired machine
+- When a machine has no Agent telemetry, the card explains what to do about it
+  instead of showing empty gauges
+- Grouping by group name, sorting by name or by reachability, and filters for
+  All / Online / Offline / Agent / Favourites
+- Search across name, GrevConnect ID, IP, group and notes
+- Keyboard: `F5` refresh, `Ctrl+F` search, `Ctrl+N` connect by ID, `Esc` clear search
+- Double-click a card to connect, right-click for machine actions
+- Footer light that mirrors the worst state on the dashboard, plus a warning when
+  no UltraVNC Viewer can be found
+
 ## Current app features
 
 - Saved machines: name, static IP, MAC address, VNC port, Grev Agent port, group, notes and favourite state
@@ -14,15 +68,16 @@ UltraVNC remains the remote-desktop engine. GrevUltraVNC adds machine organisati
 - Automatic Grev Agent detection and authenticated telemetry polling
 - Search, favourites and favourite quick-connect entries from the system tray
 - Double-click a machine to connect immediately
-- Visible Connect / Manage / Edit / More controls on machine cards
-- UltraVNC Viewer auto-detection
+- Visible Connect / Manage / More controls on machine cards
+- UltraVNC Viewer auto-detection, with the resolved path shown in Settings
 - Auto-scaling/fullscreen preferences
 - Wake-on-LAN
 - Restart and shut down through Windows remote shutdown
 - Start / stop / restart `uvnc_service`
 - Set UltraVNC Server to start automatically with Windows
 - Open `\\machine\` network shares
-- Ping/VNC/service/Agent diagnostics
+- In-window connection diagnostics: route, ping, VNC port, service and Agent, one
+  colour-coded row each
 - Light and Dark themes, with Dark as default
 - Start GrevUltraVNC with Windows
 - Minimise GrevUltraVNC to the system tray
@@ -34,14 +89,12 @@ Click **Manage** on a paired machine to open the native management window.
 
 ### Overview
 
-- live CPU usage and CPU model
-- live RAM usage
-- uptime
-- active Windows user
+- live CPU usage with a pressure meter, plus the CPU model
+- live RAM usage with a pressure meter, and used / free / total
+- uptime and the signed-in Windows user
 - Windows/OS description
-- fixed-disk free space
-- UltraVNC service state
-- local VNC listening state
+- every fixed disk with a used-space bar, ordered fullest first
+- UltraVNC service state with a listening/not-listening indicator
 - process/service inventory counts
 
 ### Processes
@@ -84,24 +137,33 @@ The **Terminal** tab runs PowerShell or CMD commands on the target without openi
 
 The Grev Control Panel follows the UltraVNC Viewer window and provides:
 
+**Remote keys** (need remote control, not just view-only)
+
 - Ctrl+Alt+Delete
 - Windows / Start
 - Ctrl+Shift+Escape / Task Manager
 - Alt+Tab
 - Alt+F4
-- Win+R
-- Win+E
-- Win+L
-- Fullscreen toggle
-- Screen refresh
-- UltraVNC file transfer
-- Bring Viewer to front / disconnect
-- UltraVNC service start / restart / stop / start-at-boot
-- Wake / restart / shut down machine
-- Network shares and diagnostics
-- live Grev Agent system-health telemetry when paired
-- direct **Update Grev Agent** action from GitHub
-- direct **Manage machine** access
+- Win+R, Win+E, Win+L
+
+**Viewer**
+
+- Screen 1 focus and Grev virtual Screen 2
+- Take control / view-only, with the current owner shown
+- Scale presets and a 10%–300% slider
+- Fullscreen toggle, screen refresh, UltraVNC file transfer
+- Remote terminal, computer sound and the shared whiteboard
+
+**PC**
+
+- Lock workstation and restart Explorer through the Agent
+- Restart / shut down machine
+- Live Grev Agent CPU and RAM telemetry when paired
+- Direct **Manage machine** access and disconnect
+
+Wake-on-LAN, UltraVNC service control, network shares, connection diagnostics
+and **Update Grev Agent** live on the machine-actions window (right-click a card
+or use **⋯**).
 
 ## In-app Agent updates
 
@@ -152,7 +214,9 @@ The Agent is a separate self-contained Windows service. It currently provides:
 
 The current transport still uses HTTP on the trusted LAN for ordinary telemetry and management metadata. Terminal contents are application-layer encrypted, but a future hardening phase should move the entire Agent API to HTTPS/mTLS or an equivalent fully encrypted transport.
 
-## Build and run GrevUltraVNC
+## Build and run GrevUltraVNC from source
+
+For development, once the .NET 10 SDK is installed:
 
 ```powershell
 dotnet run --project .\src\GrevUltraVNC\GrevUltraVNC.csproj
@@ -240,15 +304,14 @@ GitHub Actions builds the full solution on `windows-latest` so the WPF controlle
 VNC is one machine capability, not the whole GrevUltraVNC architecture. Logical next additions include:
 
 - HTTPS/mTLS for the complete Agent API
-- richer CPU/RAM/network/disk telemetry and history
-- command history / reusable quick scripts
-- event and connection history
-- notifications and health alerts
-- native file browser and file operations
+- network telemetry, and history/graphs for CPU, RAM and disk over time
+- notifications and health alerts (a disk crossing 90% should tell you, not wait
+  to be noticed on the dashboard)
 - first-time Agent deployment from the controller
 - per-machine custom icons and richer group management
 - bulk actions across machine groups
 - multi-monitor controls
 - import/export and backup
 - optional application PIN / Windows Hello protection for dangerous controls
-- proper packaged GrevUltraVNC Windows releases and installer
+- a signed GrevUltraVNC installer (the current one is unsigned, so SmartScreen
+  warns about an unknown publisher)

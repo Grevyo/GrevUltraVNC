@@ -60,7 +60,7 @@ public partial class MachineOverviewWindow : Window
         _refreshing = true;
         StatusText.Text = "Refreshing live Agent data…";
         AgentStateText.Text = "● CHECKING AGENT";
-        AgentStateText.Foreground = (Brush)FindResource("MutedTextBrush");
+        AgentStateText.Foreground = ThemeService.ThemeBrush("MutedTextBrush");
         UpdateAgentButton.IsEnabled = false;
         SessionActionsPanel.IsEnabled = false;
         SessionFeatureStatusText.Text = "Checking Agent capability…";
@@ -113,9 +113,7 @@ public partial class MachineOverviewWindow : Window
             AgentStateText.Text = needsUpdate
                 ? "● AGENT UPDATE RECOMMENDED"
                 : "● AGENT CONNECTED";
-            AgentStateText.Foreground = needsUpdate
-                ? (Brush)FindResource("Accent2Brush")
-                : new SolidColorBrush(Color.FromRgb(80, 220, 145));
+            AgentStateText.Foreground = ThemeService.ThemeBrush(needsUpdate ? "WarnBrush" : "OkBrush");
             UpdateAgentButton.Content = needsUpdate
                 ? "⇩ Update Agent · recommended"
                 : "⇩ Update Agent";
@@ -136,7 +134,7 @@ public partial class MachineOverviewWindow : Window
         catch (Exception ex)
         {
             AgentStateText.Text = "● AGENT UNAVAILABLE";
-            AgentStateText.Foreground = (Brush)FindResource("DangerBrush");
+            AgentStateText.Foreground = ThemeService.ThemeBrush("DangerBrush");
             UpdateAgentButton.IsEnabled = false;
             SessionActionsPanel.IsEnabled = false;
             SessionFeatureStatusText.Text = "Grev Agent must be connected before session controls can be used.";
@@ -150,25 +148,33 @@ public partial class MachineOverviewWindow : Window
 
     private void RenderOverview(AgentStatusResponse status)
     {
-        CpuUsageText.Text = $"{status.CpuUsagePercent:0.#}%";
+        var cpuPercent = Math.Clamp(status.CpuUsagePercent, 0, 100);
+        CpuUsageText.Text = GrevFormat.Percent(cpuPercent);
+        CpuMeter.Value = cpuPercent;
+        CpuMeter.Foreground = UsageBrush(cpuPercent);
         CpuNameText.Text = status.CpuName;
 
         var usedMemory = Math.Max(0, status.TotalMemoryBytes - status.AvailableMemoryBytes);
-        var memoryPercent = status.TotalMemoryBytes > 0
-            ? usedMemory * 100.0 / status.TotalMemoryBytes
-            : 0;
-        MemoryUsageText.Text = $"{memoryPercent:0.#}%";
-        MemoryDetailText.Text = $"{FormatBytes(usedMemory)} / {FormatBytes(status.TotalMemoryBytes)}";
+        var memoryPercent = GrevFormat.UsedPercent(usedMemory, status.TotalMemoryBytes);
+        MemoryUsageText.Text = GrevFormat.Percent(memoryPercent);
+        MemoryMeter.Value = memoryPercent;
+        MemoryMeter.Foreground = UsageBrush(memoryPercent);
+        MemoryDetailText.Text = $"{GrevFormat.Bytes(usedMemory)} used · {GrevFormat.Bytes(status.AvailableMemoryBytes)} free of {GrevFormat.Bytes(status.TotalMemoryBytes)}";
 
-        UptimeText.Text = FormatUptime(status.UptimeSeconds);
+        UptimeText.Text = GrevFormat.Uptime(status.UptimeSeconds);
         UserText.Text = string.IsNullOrWhiteSpace(status.InteractiveUser)
-            ? "No interactive user"
+            ? "Nobody signed in"
             : status.InteractiveUser;
 
         VncServiceText.Text = status.UltraVncServiceStatus;
+        VncStateDot.Fill = ThemeService.ThemeBrush(status.UltraVncPortListening
+            ? "OkBrush"
+            : status.UltraVncServiceStatus.Contains("Running", StringComparison.OrdinalIgnoreCase)
+                ? "WarnBrush"
+                : "DangerBrush");
         VncPortText.Text = status.UltraVncPortListening
-            ? $"TCP {status.UltraVncPort} listening"
-            : $"TCP {status.UltraVncPort} not listening";
+            ? $"Accepting viewers on TCP {status.UltraVncPort}"
+            : $"Not listening on TCP {status.UltraVncPort} — viewers cannot connect";
 
         OsText.Text = status.OsDescription;
         HostText.Text = $"Host: {status.MachineName}";
@@ -180,10 +186,21 @@ public partial class MachineOverviewWindow : Window
             ? $"Services: {_services.Count}"
             : "Services: open tab to load";
 
-        DiskItems.ItemsSource = status.Disks.Select(disk => new DiskRow(
-            disk.Name,
-            string.IsNullOrWhiteSpace(disk.Label) ? "Local disk" : disk.Label,
-            $"{FormatBytes(disk.FreeBytes)} free / {FormatBytes(disk.TotalBytes)}")).ToArray();
+        DiskItems.ItemsSource = status.Disks
+            .Select(disk =>
+            {
+                var used = Math.Max(0, disk.TotalBytes - disk.FreeBytes);
+                var percent = GrevFormat.UsedPercent(used, disk.TotalBytes);
+                return new DiskRow(
+                    disk.Name,
+                    string.IsNullOrWhiteSpace(disk.Label) ? "Local disk" : disk.Label,
+                    $"{GrevFormat.Bytes(disk.FreeBytes)} free of {GrevFormat.Bytes(disk.TotalBytes)}",
+                    percent,
+                    GrevFormat.Percent(percent));
+            })
+            // Show the disk closest to full first: that is the one that needs a decision.
+            .OrderByDescending(disk => disk.Percent)
+            .ToArray();
     }
 
     private void RenderProcesses()
@@ -197,8 +214,8 @@ public partial class MachineOverviewWindow : Window
                 process.Id,
                 process.Name,
                 process.Id.ToString(),
-                FormatBytes(process.WorkingSetBytes),
-                FormatCpuTime(process.CpuTimeMilliseconds),
+                GrevFormat.Bytes(process.WorkingSetBytes),
+                GrevFormat.CpuTime(process.CpuTimeMilliseconds),
                 process.SessionId < 0 ? "—" : process.SessionId.ToString(),
                 process.StartedAtUtc?.ToLocalTime().ToString("dd MMM HH:mm:ss") ?? "—"))
             .ToArray();
@@ -282,41 +299,15 @@ public partial class MachineOverviewWindow : Window
         }
     }
 
-    private static string FormatBytes(long bytes)
+    /// <summary>Themed pressure colour shared by every meter in this window.</summary>
+    private static Brush UsageBrush(double percent) => ThemeService.ThemeBrush(percent switch
     {
-        if (bytes <= 0) return "0 B";
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        var value = (double)bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        return $"{value:0.#} {units[unit]}";
-    }
+        >= 90 => "DangerBrush",
+        >= 75 => "WarnBrush",
+        _ => "AccentBrush"
+    });
 
-    private static string FormatCpuTime(long milliseconds)
-    {
-        var time = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
-        return time.TotalHours >= 1
-            ? $"{(int)time.TotalHours}h {time.Minutes}m"
-            : time.TotalMinutes >= 1
-                ? $"{time.Minutes}m {time.Seconds}s"
-                : $"{time.Seconds}s";
-    }
-
-    private static string FormatUptime(long seconds)
-    {
-        var time = TimeSpan.FromSeconds(Math.Max(0, seconds));
-        return time.TotalDays >= 1
-            ? $"{(int)time.TotalDays}d {time.Hours}h"
-            : time.TotalHours >= 1
-                ? $"{(int)time.TotalHours}h {time.Minutes}m"
-                : $"{time.Minutes}m";
-    }
-
-    private sealed record DiskRow(string Name, string Label, string Space);
+    private sealed record DiskRow(string Name, string Label, string Space, double Percent, string PercentText);
     private sealed record ProcessRow(int ProcessId, string Name, string Pid, string Memory, string CpuTime, string Session, string Started);
     private sealed record ServiceRow(string DisplayName, string ServiceName, string Status, string StartMode, string Control);
     private sealed record ActivityRow(string Time, string Category, string Action, string Detail, string Result);

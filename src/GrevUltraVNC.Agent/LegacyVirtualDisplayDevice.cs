@@ -99,24 +99,6 @@ internal static class LegacyVirtualDisplayDevice
         }
     }
 
-    public static string DescribeStatus(string instanceId)
-    {
-        if (string.IsNullOrWhiteSpace(instanceId))
-            return "No device instance ID is available.";
-
-        var locate = CM_Locate_DevNode(out var devInst, instanceId, 0);
-        if (locate != 0)
-            return $"Windows PnP could not locate the new display device (CONFIGRET 0x{locate:X8}).";
-
-        var statusResult = CM_Get_DevNode_Status(out var status, out var problemNumber, devInst, 0);
-        if (statusResult != 0)
-            return $"Windows PnP could not read the display-device status (CONFIGRET 0x{statusResult:X8}).";
-
-        return problemNumber == 0
-            ? $"PnP status 0x{status:X8}; Windows reports no device problem code."
-            : $"PnP status 0x{status:X8}; device problem code {problemNumber}.";
-    }
-
     public static void TryRemove(string instanceId)
     {
         if (string.IsNullOrWhiteSpace(instanceId)) return;
@@ -256,14 +238,4 @@ internal static class LegacyVirtualDisplayDevice
         string fullInfPath,
         uint installFlags,
         [MarshalAs(UnmanagedType.Bool)] out bool rebootRequired);
-
-    [DllImport("cfgmgr32.dll", EntryPoint = "CM_Locate_DevNodeW", CharSet = CharSet.Unicode)]
-    private static extern uint CM_Locate_DevNode(out uint deviceInstance, string deviceId, uint flags);
-
-    [DllImport("cfgmgr32.dll")]
-    private static extern uint CM_Get_DevNode_Status(
-        out uint status,
-        out uint problemNumber,
-        uint deviceInstance,
-        uint flags);
 }

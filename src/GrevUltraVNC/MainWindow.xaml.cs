@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Models;
@@ -38,18 +39,24 @@ public partial class MainWindow : Window
     {
         MachinesView = CollectionViewSource.GetDefaultView(Machines);
         MachinesView.Filter = FilterMachine;
-        MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.IsFavorite), ListSortDirection.Descending));
-        MachinesView.SortDescriptions.Add(new SortDescription(nameof(Machine.Name), ListSortDirection.Ascending));
 
         InitializeComponent();
+        Title = ProductBranding.ProductName;
         DataContext = this;
         _uiReady = true;
 
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         StateChanged += MainWindow_StateChanged;
+        PreviewKeyDown += MainWindow_AboutKeyDown;
         _statusTimer.Tick += StatusTimer_Tick;
         _searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
+
+        // Keep the requested credits permanently visible at the very bottom of the dashboard.
+        FooterViewerStatus.Text = ProductBranding.Credits;
+        FooterViewerStatus.Cursor = Cursors.Hand;
+        FooterViewerStatus.ToolTip = "About GrevConnect";
+        FooterViewerStatus.MouseLeftButtonUp += (_, _) => OpenAbout();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -94,10 +101,17 @@ public partial class MainWindow : Window
             // Startup registration can still be changed from Settings if Windows blocks it here.
         }
 
-        _tray = new TrayIconService(this, () => Machines.Where(x => x.IsFavorite), ConnectMachine);
+        _tray = new TrayIconService(
+            this,
+            () => Machines.Where(machine => machine.IsFavorite),
+            () => Machines,
+            ConnectMachine,
+            RefreshStatusesAsync,
+            OpenAbout);
         ConfigureStatusTimer();
         UpdateMachineFilterStyles();
-        RefreshMachineView();
+        ApplyViewArrangement();
+        UpdateViewerStatusText();
         await RefreshStatusesAsync();
 
         if (Machines.Count == 0 && !_firstRunPromptShown)
@@ -122,11 +136,45 @@ public partial class MainWindow : Window
             Hide();
     }
 
+    private void MainWindow_AboutKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F1) return;
+        e.Handled = true;
+        OpenAbout();
+    }
+
+    private void OpenAbout()
+    {
+        var about = new AboutWindow { Owner = this };
+        about.ShowDialog();
+    }
+
     private void ConfigureStatusTimer()
     {
         _statusTimer.Stop();
         _statusTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.StatusCheckSeconds, 3, 300));
         _statusTimer.Start();
+    }
+
+    /// <summary>
+    /// Preserve viewer health information without replacing the requested permanent credits footer.
+    /// </summary>
+    private void UpdateViewerStatusText()
+    {
+        if (!_uiReady) return;
+
+        var viewer = _vnc.FindViewer(_settings.UltraVncViewerPath);
+        FooterViewerStatus.Text = ProductBranding.Credits;
+
+        if (string.IsNullOrWhiteSpace(viewer))
+        {
+            FooterViewerStatus.ToolTip = "UltraVNC Viewer not found · set its path in Settings · click for About";
+            FooterViewerStatus.Foreground = ThemeService.ThemeBrush("WarnBrush");
+            return;
+        }
+
+        FooterViewerStatus.ToolTip = $"UltraVNC Viewer ready · auto-check every {Math.Clamp(_settings.StatusCheckSeconds, 3, 300)}s · click for About";
+        FooterViewerStatus.Foreground = ThemeService.ThemeBrush("FaintTextBrush");
     }
 
     private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject

@@ -1,5 +1,5 @@
 using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Contracts;
 using GrevUltraVNC.Models;
@@ -30,7 +30,7 @@ public partial class GrevControlPanelWindow
         : this(machine, vnc)
     {
         _collaborationSettings = settings;
-        AddCursorStyleQuickPicker();
+        BuildCursorStylePicker();
         _collaborationTimer.Tick += CollaborationTimer_Tick;
         Loaded += GrevCollaboration_Loaded;
         Closed += GrevCollaboration_Closed;
@@ -48,49 +48,20 @@ public partial class GrevControlPanelWindow
         UpdateCursorStyleQuickPickerSelection();
     }
 
-    private void AddCursorStyleQuickPicker()
+    private void BuildCursorStylePicker()
     {
-        if (ParticipantsItems.Parent is not StackPanel host)
-            return;
-
-        var heading = new Grid { Margin = new Thickness(1, 6, 1, 4) };
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var label = new TextBlock
-        {
-            Text = "YOUR CURSOR · CLICK A PREVIEW",
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 8,
-            FontWeight = FontWeights.SemiBold
-        };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "FaintTextBrush");
-        heading.Children.Add(label);
-
-        var current = new TextBlock
-        {
-            Text = CursorStyleCatalog.DisplayName(_collaborationSettings.CursorStyle),
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 8,
-            FontWeight = FontWeights.SemiBold
-        };
-        current.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
-        current.Tag = "cursor-current-label";
-        Grid.SetColumn(current, 1);
-        heading.Children.Add(current);
-
         _cursorStyleQuickSelector = new CursorStyleSelector(
             _collaborationSettings.CursorStyle,
             _collaborationSettings.CollaborationColor,
             compact: true)
         {
             HorizontalAlignment = HorizontalAlignment.Left,
-            MaxWidth = 360
+            MaxWidth = 400
         };
         _cursorStyleQuickSelector.SelectedStyleChanged += CursorStyleQuickSelector_SelectedStyleChanged;
 
-        host.Children.Add(heading);
-        host.Children.Add(_cursorStyleQuickSelector);
+        CursorStyleHost.Content = _cursorStyleQuickSelector;
+        UpdateCursorStyleCurrentLabel();
     }
 
     private void UpdateCursorStyleQuickPickerSelection()
@@ -101,20 +72,8 @@ public partial class GrevControlPanelWindow
         UpdateCursorStyleCurrentLabel();
     }
 
-    private void UpdateCursorStyleCurrentLabel()
-    {
-        if (ParticipantsItems.Parent is not StackPanel host) return;
-
-        foreach (var grid in host.Children.OfType<Grid>())
-        {
-            var label = grid.Children
-                .OfType<TextBlock>()
-                .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), "cursor-current-label", StringComparison.Ordinal));
-            if (label is null) continue;
-            label.Text = CursorStyleCatalog.DisplayName(_collaborationSettings.CursorStyle);
-            return;
-        }
-    }
+    private void UpdateCursorStyleCurrentLabel() =>
+        CursorStyleNameText.Text = CursorStyleCatalog.DisplayName(_collaborationSettings.CursorStyle);
 
     private async void CursorStyleQuickSelector_SelectedStyleChanged(string selected)
     {
@@ -154,6 +113,7 @@ public partial class GrevControlPanelWindow
         // Connecting never grants remote input automatically. The named pointer is available
         // immediately; mouse/keyboard input is enabled only after Take Control succeeds.
         _vnc.SetViewOnly(_machine.Id, true);
+        ApplyStoredSectionState();
         EnsureCursorOverlays();
         UpdateDisplayState();
         _collaborationTimer.Start();
@@ -214,23 +174,34 @@ public partial class GrevControlPanelWindow
             TakeControlButton.IsEnabled = true;
 
             if (_remoteAudio?.IsRunning != true && !_virtualDisplayStarting)
-                CollaborationStatusText.Text = response.ControlOwnerName is null
-                    ? "No controller"
-                    : $"Control · {response.ControlOwnerName}";
+                CollaborationStatusText.Text = "Grev Collaboration";
         }
         catch (Exception ex)
         {
+            var needsAgentUpdate = ex.Message.Contains("too old", StringComparison.OrdinalIgnoreCase);
+
             ParticipantsHeaderText.Text = "CONNECTED · —";
-            ParticipantsItems.ItemsSource = Array.Empty<string>();
+            ParticipantsItems.ItemsSource = Array.Empty<ParticipantRow>();
+            ParticipantsEmptyText.Visibility = Visibility.Visible;
+            ParticipantsEmptyText.Text = needsAgentUpdate
+                ? "Update the Grev Agent on this machine to see who else is connected."
+                : "Grev collaboration is not reachable, so nobody can be listed.";
+
             AudioButton.IsEnabled = false;
             WhiteboardButton.IsEnabled = false;
             TakeControlButton.IsEnabled = false;
-            ControlStatusText.Text = "VIEW ONLY · collaboration unavailable";
             RemoteKeysPanel.IsEnabled = false;
             try { _vnc.SetViewOnly(_machine.Id, true); } catch { }
-            CollaborationStatusText.Text = ex.Message.Contains("too old", StringComparison.OrdinalIgnoreCase)
-                ? "Update Agent"
-                : "Unavailable";
+
+            ApplyControlState(
+                available: false,
+                localHasControl: false,
+                ownerName: null,
+                unavailableReason: needsAgentUpdate
+                    ? "This machine's Grev Agent is too old for shared control. Update it from Machine actions."
+                    : ex.Message);
+
+            CollaborationStatusText.Text = needsAgentUpdate ? "update agent" : "unavailable";
         }
         finally
         {
@@ -277,19 +248,81 @@ public partial class GrevControlPanelWindow
             StringComparison.OrdinalIgnoreCase);
 
         _vnc.SetViewOnly(_machine.Id, !localHasControl);
-        RemoteKeysPanel.IsEnabled = localHasControl;
+        ApplyControlState(
+            available: true,
+            localHasControl: localHasControl,
+            ownerName: response.ControlOwnerName,
+            unavailableReason: null);
+    }
+
+    /// <summary>
+    /// Single source of truth for the remote-input banner: the headline, the explanation,
+    /// the colour, the button caption, and whether the remote keys are usable.
+    /// </summary>
+    private void ApplyControlState(bool available, bool localHasControl, string? ownerName, string? unavailableReason)
+    {
+        RemoteKeysPanel.IsEnabled = available && localHasControl;
+        RemoteKeysHintText.Visibility = available && localHasControl
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        if (!available)
+        {
+            SetControlBannerColour("DangerBrush");
+            ControlStatusText.Text = "Remote control unavailable";
+            ControlHintText.Text = unavailableReason ?? "Grev collaboration could not be reached on this machine.";
+            TakeControlButton.Content = "Take control";
+            RemoteKeysNoteText.Text = "unavailable";
+            RemoteKeysNoteText.Foreground = ThemeService.ThemeBrush("DangerBrush");
+            RemoteKeysHintText.Text = "Remote keys need shared control, which is not available on this machine right now.";
+            return;
+        }
+
         TakeControlButton.IsEnabled = true;
-        TakeControlButton.Content = localHasControl ? "Release control" : "Take control";
-        ControlStatusText.Text = localHasControl
-            ? "CONTROL · YOU · remote mouse + keyboard enabled"
-            : response.ControlOwnerName is null
-                ? "VIEW ONLY · move your pointer freely · no one has control"
-                : $"VIEW ONLY · {response.ControlOwnerName} has control";
+
+        if (localHasControl)
+        {
+            SetControlBannerColour("OkBrush");
+            ControlStatusText.Text = "You have control";
+            ControlHintText.Text = "Your mouse and keyboard now go to the remote PC. Release control to hand it back.";
+            TakeControlButton.Content = "Release control";
+            RemoteKeysNoteText.Text = "ready";
+            RemoteKeysNoteText.Foreground = ThemeService.ThemeBrush("OkBrush");
+            return;
+        }
+
+        TakeControlButton.Content = "Take control";
+        RemoteKeysHintText.Text = "Take control first — these keys are sent to the remote PC, not this one.";
+
+        if (string.IsNullOrWhiteSpace(ownerName))
+        {
+            SetControlBannerColour("AccentBrush");
+            ControlStatusText.Text = "View only · nobody has control";
+            ControlHintText.Text = "Your named pointer is already visible to everyone. Take control to send mouse and keyboard to this PC.";
+            RemoteKeysNoteText.Text = "needs control";
+            RemoteKeysNoteText.Foreground = ThemeService.ThemeBrush("FaintTextBrush");
+            return;
+        }
+
+        SetControlBannerColour("WarnBrush");
+        ControlStatusText.Text = $"View only · {ownerName} has control";
+        ControlHintText.Text = $"Taking control will move it away from {ownerName}. Your pointer stays visible either way.";
+        RemoteKeysNoteText.Text = $"{ownerName} has control";
+        RemoteKeysNoteText.Foreground = ThemeService.ThemeBrush("WarnBrush");
+    }
+
+    private void SetControlBannerColour(string brushKey)
+    {
+        var brush = ThemeService.ThemeBrush(brushKey);
+        ControlAccentBar.Background = brush;
+        ControlBanner.BorderBrush = brush;
+        ControlStatusText.Foreground = brush;
     }
 
     private void UpdateParticipants(IReadOnlyList<AgentPresenceInfo> participants)
     {
         ParticipantsHeaderText.Text = $"CONNECTED · {participants.Count}";
+
         ParticipantsItems.ItemsSource = participants
             .Select(participant =>
             {
@@ -297,11 +330,43 @@ public partial class GrevControlPanelWindow
                     participant.ControllerId,
                     _collaborationSettings.ControllerId,
                     StringComparison.OrdinalIgnoreCase);
-                var role = participant.HasControl ? " · CONTROL" : " · VIEWING";
-                return $"● {participant.DisplayName}{(mine ? " · YOU" : string.Empty)}{role}";
+
+                return new ParticipantRow(
+                    mine ? $"{participant.DisplayName} (you)" : participant.DisplayName,
+                    participant.HasControl ? "CONTROL" : "VIEWING",
+                    ParticipantBrush(participant.Color));
             })
+            // You first, then whoever holds control, then everyone else alphabetically.
+            .OrderByDescending(row => row.Name.EndsWith("(you)", StringComparison.Ordinal))
+            .ThenByDescending(row => row.Role == "CONTROL")
+            .ThenBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToArray();
+
+        // One participant is just you, which is worth saying rather than showing a lone row
+        // with no context.
+        ParticipantsEmptyText.Visibility = participants.Count > 1 ? Visibility.Collapsed : Visibility.Visible;
+        ParticipantsEmptyText.Text = participants.Count == 0
+            ? "Nobody is listed as connected yet."
+            : "Nobody else is connected to this machine right now.";
     }
+
+    /// <summary>A participant's own collaboration colour, falling back to the Grev default.</summary>
+    private static Brush ParticipantBrush(string? color)
+    {
+        try
+        {
+            var normalized = CollaborationColors.Normalize(color);
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(normalized)!);
+            brush.Freeze();
+            return brush;
+        }
+        catch
+        {
+            return ThemeService.ThemeBrush("AccentBrush");
+        }
+    }
+
+    private sealed record ParticipantRow(string Name, string Role, Brush Colour);
 
     private async void TakeControl_Click(object sender, RoutedEventArgs e)
     {
@@ -435,23 +500,32 @@ public partial class GrevControlPanelWindow
             if (_remoteAudio.IsRunning)
             {
                 await _remoteAudio.StopAsync();
-                AudioButton.Content = "🔊 Computer sound";
-                CollaborationStatusText.Text = "Computer audio off";
+                SetAudioButtonState(playing: false);
+                CollaborationStatusText.Text = "sound off";
                 return;
             }
 
             _remoteAudio.StatusChanged -= RemoteAudio_StatusChanged;
             _remoteAudio.StatusChanged += RemoteAudio_StatusChanged;
             await _remoteAudio.StartAsync();
-            AudioButton.Content = "🔇 Sound off";
-            CollaborationStatusText.Text = "Computer audio on";
+            SetAudioButtonState(playing: true);
+            CollaborationStatusText.Text = "sound on";
         }
         catch (Exception ex)
         {
-            AudioButton.Content = "🔊 Computer sound";
-            CollaborationStatusText.Text = "Audio unavailable";
+            SetAudioButtonState(playing: false);
+            CollaborationStatusText.Text = "sound unavailable";
             MessageBox.Show(this, ex.Message, "Computer audio", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private void SetAudioButtonState(bool playing)
+    {
+        AudioGlyphText.Text = playing ? "🔇" : "🔊";
+        AudioLabelText.Text = playing ? "Mute" : "Sound";
+        AudioButton.ToolTip = playing
+            ? "Stop playing the remote PC's sound on this computer"
+            : "Hear the remote PC's sound on this computer";
     }
 
     private void RemoteAudio_StatusChanged(string message)
@@ -463,7 +537,7 @@ public partial class GrevControlPanelWindow
         }
 
         if (message.StartsWith("Audio reconnecting", StringComparison.OrdinalIgnoreCase))
-            CollaborationStatusText.Text = "Audio reconnecting";
+            CollaborationStatusText.Text = "sound reconnecting";
     }
 
     private void Whiteboard_Click(object sender, RoutedEventArgs e)
@@ -528,11 +602,12 @@ public partial class GrevControlPanelWindow
 
         var screen2Active = _vnc.HasVirtualSession(_machine.Id);
         VirtualDisplayButton.IsEnabled = true;
-        VirtualDisplayButton.Content = screen2Active ? "▣ Screen 2 · ACTIVE" : "＋ Screen 2";
+        VirtualDisplayButton.Content = screen2Active ? "▣  Screen 2 open" : "＋  Screen 2";
         CloseVirtualDisplayButton.Visibility = screen2Active ? Visibility.Visible : Visibility.Collapsed;
         DisplayStatusText.Text = screen2Active
-            ? "Screen 1 physical · Screen 2 virtual"
-            : "Screen 1 · physical display";
-        SessionStatusText.Text = screen2Active ? "● SCREEN 1 + 2 ACTIVE" : "● SCREEN 1 ACTIVE";
+            ? "Screen 1 is the real monitor · Screen 2 is a virtual monitor added by Grev"
+            : "Screen 1 · the remote PC's real display. Add Screen 2 for a second workspace.";
+        SessionStatusText.Text = screen2Active ? "Screen 1 + 2 active" : "Screen 1 active";
+        SessionStatusDot.Fill = ThemeService.ThemeBrush("OkBrush");
     }
 }

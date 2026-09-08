@@ -24,14 +24,20 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border Width="42" Height="42" CornerRadius="10" Background="#030509" BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
+                <Border Width="42" Height="42" CornerRadius="10" Background="{DynamicResource LogoPlateBrush}" BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
                     <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
                 </Border>
                 <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="REMOTE FILES" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold" />
                     <TextBlock x:Name="MachineNameText" FontSize="23" FontWeight="Bold" Margin="0,1,0,0" />
                 </StackPanel>
-                <TextBlock Grid.Column="2" x:Name="SecurityText" Text="Encrypted Agent file channel" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                <Border Grid.Column="2" Style="{StaticResource Pill}" Padding="10,5">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🔒" FontSize="11" VerticalAlignment="Center" Margin="0,0,7,0" />
+                        <TextBlock x:Name="SecurityText" Text="Encrypted Agent file channel"
+                                   Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
@@ -52,19 +58,60 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="2" Margin="22,0,22,10" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="10">
-            <ListView x:Name="FilesList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextBrush}" MouseDoubleClick="FilesList_MouseDoubleClick">
-                <ListView.View>
-                    <GridView>
-                        <GridViewColumn Header="Type" Width="90" DisplayMemberBinding="{Binding Type}" />
-                        <GridViewColumn Header="Name" Width="380" DisplayMemberBinding="{Binding Name}" />
-                        <GridViewColumn Header="Size" Width="120" DisplayMemberBinding="{Binding Size}" />
-                        <GridViewColumn Header="Modified" Width="170" DisplayMemberBinding="{Binding Modified}" />
-                        <GridViewColumn Header="Details" Width="210" DisplayMemberBinding="{Binding Detail}" />
-                    </GridView>
-                </ListView.View>
-            </ListView>
-        </Border>
+        <Grid Grid.Row="2" Margin="22,0,22,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="14,0,14,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="30" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="160" />
+                    <ColumnDefinition Width="200" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="1" Text="NAME" Style="{StaticResource MicroLabel}" />
+                <TextBlock Grid.Column="2" Text="SIZE" Style="{StaticResource MicroLabel}" TextAlignment="Right" />
+                <TextBlock Grid.Column="3" Text="MODIFIED" Style="{StaticResource MicroLabel}" Margin="14,0,0,0" />
+                <TextBlock Grid.Column="4" Text="DETAILS" Style="{StaticResource MicroLabel}" />
+            </Grid>
+
+            <Border Grid.Row="1" Style="{StaticResource CardSurface}" Padding="10">
+                <ListView x:Name="FilesList" Background="Transparent" BorderThickness="0"
+                          Foreground="{DynamicResource TextBrush}"
+                          ItemContainerStyle="{StaticResource DataRowItem}"
+                          ScrollViewer.CanContentScroll="True"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          MouseDoubleClick="FilesList_MouseDoubleClick">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="3,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="200" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Glyph}" FontSize="13" VerticalAlignment="Center"
+                                           ToolTip="{Binding Type}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,14,0" />
+                                <TextBlock Grid.Column="2" Text="{Binding Size}" TextAlignment="Right"
+                                           Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="{Binding Modified}" Margin="14,0,0,0"
+                                           Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="4" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource FaintTextBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Border>
+        </Grid>
 
         <Border Grid.Row="3" Margin="22,0,22,10" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="10">
             <Grid>
@@ -89,8 +136,16 @@
 
         <Border Grid.Row="4" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="22,9">
             <Grid>
-                <TextBlock x:Name="StatusText" Text="Ready" Foreground="{DynamicResource MutedTextBrush}" />
-                <TextBlock x:Name="ClipboardStatusText" HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" />
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid>
+                    <TextBlock x:Name="StatusText" Text="Ready" Style="{StaticResource CaptionText}" />
+                    <TextBlock x:Name="ClipboardStatusText" HorizontalAlignment="Right" Style="{StaticResource MicroLabel}" FontWeight="Normal" />
+                </Grid>
+                <ProgressBar x:Name="TransferProgress" Grid.Row="1" Style="{StaticResource MeterBar}"
+                             Margin="0,8,0,0" Value="0" Visibility="Collapsed" />
             </Grid>
         </Border>
     </Grid>

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using GrevUltraVNC.Models;
@@ -16,8 +17,13 @@ public partial class GrevControlPanelWindow : Window
     private bool _agentRefreshRunning;
     private bool _agentActionRunning;
     private MachineOverviewWindow? _machineOverview;
+    private RemoteFileManagerWindow? _fileManager;
 
-    public GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
+    /// <summary>
+    /// Base construction only. Every caller must use the <see cref="AppSettings"/> overload so the
+    /// panel always comes up with collaboration, cursors, audio and the whiteboard wired in.
+    /// </summary>
+    private GrevControlPanelWindow(Machine machine, UltraVncSessionService vnc)
     {
         InitializeComponent();
         _machine = machine;
@@ -61,33 +67,31 @@ public partial class GrevControlPanelWindow : Window
             _machine.AgentMessage = result.Message;
 
             var sessionActionsReady = result.State == GrevAgentState.Connected && string.IsNullOrWhiteSpace(result.Message);
-            SessionActionPanel.IsEnabled = sessionActionsReady;
+            SetSessionActionsEnabled(sessionActionsReady, result.State, result.Message);
 
             if (result.State == GrevAgentState.Connected && result.Status is not null)
             {
                 var status = result.Status;
                 var usedMemory = Math.Max(0, status.TotalMemoryBytes - status.AvailableMemoryBytes);
-                AgentConnectionText.Text = sessionActionsReady ? "● AGENT CONNECTED" : "● AGENT UPDATE RECOMMENDED";
-                AgentConnectionText.Foreground = sessionActionsReady
-                    ? new SolidColorBrush(Color.FromRgb(80, 220, 145))
-                    : (Brush)FindResource("Accent2Brush");
-                AgentCpuRamText.Text = $"CPU {status.CpuUsagePercent:0.#}%   ·   RAM {FormatGiB(usedMemory)} / {FormatGiB(status.TotalMemoryBytes)}";
+                AgentConnectionText.Text = sessionActionsReady ? "AGENT OK" : "UPDATE AGENT";
+                AgentConnectionText.Foreground = ThemeService.ThemeBrush(sessionActionsReady ? "OkBrush" : "WarnBrush");
+                AgentCpuRamText.Text = $"CPU {GrevFormat.Percent(status.CpuUsagePercent)}  ·  RAM {GrevFormat.Gigabytes(usedMemory)} / {GrevFormat.Gigabytes(status.TotalMemoryBytes)}  ·  Up {GrevFormat.Uptime(status.UptimeSeconds)}";
                 return;
             }
 
-            SessionActionPanel.IsEnabled = false;
             AgentConnectionText.Text = result.State switch
             {
-                GrevAgentState.ReadyToPair => "● AGENT READY TO PAIR",
-                GrevAgentState.AuthenticationFailed => "● AGENT KEY REJECTED",
-                GrevAgentState.Error => "● AGENT ERROR",
-                _ => "AGENT NOT DETECTED"
+                GrevAgentState.ReadyToPair => "PAIR AGENT",
+                GrevAgentState.AuthenticationFailed => "KEY REJECTED",
+                GrevAgentState.Error => "AGENT ERROR",
+                _ => "NO AGENT"
             };
 
-            AgentConnectionText.Foreground = result.State is GrevAgentState.AuthenticationFailed or GrevAgentState.Error
-                ? new SolidColorBrush(Color.FromRgb(255, 107, 119))
-                : new SolidColorBrush(Color.FromRgb(98, 111, 130));
-            AgentCpuRamText.Text = result.Message ?? "Install or pair Grev Agent to enable system telemetry.";
+            AgentConnectionText.Foreground = ThemeService.ThemeBrush(
+                result.State is GrevAgentState.AuthenticationFailed or GrevAgentState.Error
+                    ? "DangerBrush"
+                    : "IdleBrush");
+            AgentCpuRamText.Text = result.Message ?? "Pair the Grev Agent to see live CPU, memory and uptime here.";
         }
         finally
         {
@@ -103,8 +107,65 @@ public partial class GrevControlPanelWindow : Window
             ? _machine.ResolvedRoute
             : string.IsNullOrWhiteSpace(_machine.ConnectId) ? "LAN" : "Grev Connect";
         var latency = _machine.LatencyMs is not null ? $"{_machine.LatencyMs} ms" : "ping —";
-        var vnc = _vnc.HasActiveSession(_machine.Id) ? "VNC ACTIVE" : _machine.VncAvailable ? "VNC READY" : "VNC CHECKING";
+        var vnc = _vnc.HasActiveSession(_machine.Id) ? "VNC active" : _machine.VncAvailable ? "VNC ready" : "VNC checking";
         RouteHealthText.Text = $"{route.ToUpperInvariant()}  ·  {latency}  ·  {vnc}";
+    }
+
+    /// <summary>
+    /// Enables the Agent-backed session actions and, when they are unavailable, says why
+    /// instead of leaving two greyed-out buttons with no explanation.
+    /// </summary>
+    private void SetSessionActionsEnabled(bool ready, GrevAgentState state, string? message)
+    {
+        SessionActionPanel.IsEnabled = ready;
+        SessionActionHintText.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
+
+        if (ready) return;
+
+        SessionActionHintText.Text = state switch
+        {
+            GrevAgentState.Connected => message ?? "Update the Grev Agent on this machine to use lock and Explorer restart.",
+            GrevAgentState.ReadyToPair => "The Agent is running but not paired. Add its pairing key in Edit machine.",
+            GrevAgentState.AuthenticationFailed => "The saved pairing key was rejected. Re-pair this machine in Edit machine.",
+            GrevAgentState.Error => message ?? "The Grev Agent returned an error, so lock and Explorer restart are unavailable.",
+            _ => "Install the Grev Agent on this machine to enable lock and Explorer restart."
+        };
+    }
+
+    private void Files_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fileManager is not null)
+        {
+            if (!_fileManager.IsVisible)
+                _fileManager.Show();
+
+            _fileManager.Activate();
+            return;
+        }
+
+        var files = new RemoteFileManagerWindow(_machine) { Owner = this };
+        _fileManager = files;
+        files.Closed += (_, _) => _fileManager = null;
+        files.Show();
+    }
+
+    private void ControlPanel_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            // The panel is Topmost and often the focused window, so the one shortcut worth
+            // having is the action people repeat most.
+            case Key.C when Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift):
+                e.Handled = true;
+                if (TakeControlButton.IsEnabled)
+                    TakeControl_Click(TakeControlButton, new RoutedEventArgs());
+                break;
+
+            case Key.Escape:
+                e.Handled = true;
+                Hide();
+                break;
+        }
     }
 
     private void ManageMachine_Click(object sender, RoutedEventArgs e)
@@ -130,6 +191,8 @@ public partial class GrevControlPanelWindow : Window
     private void AltTab_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltTab(_machine.Id));
     private void AltF4_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendAltF4(_machine.Id));
     private void WinR_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinR(_machine.Id));
+    private void WinE_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinE(_machine.Id));
+    private void WinL_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.SendWinL(_machine.Id));
     private void FullScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.ToggleFullScreen(_machine.Id));
     private void RefreshScreen_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.RequestScreenRefresh(_machine.Id));
     private void FileTransfer_Click(object sender, RoutedEventArgs e) => SendViewerAction(() => _vnc.OpenFileTransfer(_machine.Id));
@@ -246,6 +309,4 @@ public partial class GrevControlPanelWindow : Window
     }
 
     private void HidePanel_Click(object sender, RoutedEventArgs e) => Hide();
-
-    private static string FormatGiB(long bytes) => $"{Math.Max(0, bytes) / 1024d / 1024d / 1024d:0.#} GB";
 }

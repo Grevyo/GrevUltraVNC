@@ -3,40 +3,50 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:GrevUltraVNC.Converters"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
-        Title="GrevUltraVNC" Width="1220" Height="820" MinWidth="920" MinHeight="620"
+        Title="GrevUltraVNC" Width="1320" Height="880" MinWidth="980" MinHeight="640"
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        PreviewKeyDown="MainWindow_PreviewKeyDown">
+
     <Window.Resources>
         <conv:MachineStatusBrushConverter x:Key="StatusBrushConverter" />
+        <conv:MachineStatusSoftBrushConverter x:Key="StatusSoftBrushConverter" />
         <conv:AgentStateBrushConverter x:Key="AgentStateBrushConverter" />
+        <conv:UsageBrushConverter x:Key="UsageBrushConverter" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
 
         <Style x:Key="HeaderAction" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Padding" Value="13,9" />
             <Setter Property="MinHeight" Value="38" />
             <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,0,7,0" />
         </Style>
 
-        <Style x:Key="MainFilterButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-            <Setter Property="Padding" Value="10,7" />
-            <Setter Property="MinHeight" Value="34" />
-            <Setter Property="FontSize" Value="10" />
-            <Setter Property="Margin" Value="3,0" />
+        <!-- One reading in the fleet strip: a big number over a small caption. -->
+        <Style x:Key="FleetStatLabel" TargetType="TextBlock" BasedOn="{StaticResource MicroLabel}">
+            <Setter Property="FontSize" Value="8" />
+            <Setter Property="Margin" Value="0,1,0,0" />
         </Style>
 
-        <Style x:Key="MainFilterActiveButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-            <Setter Property="Padding" Value="10,7" />
-            <Setter Property="MinHeight" Value="34" />
-            <Setter Property="FontSize" Value="10" />
-            <Setter Property="Margin" Value="3,0" />
+        <Style x:Key="FleetStatValue" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="Bold" />
         </Style>
 
-        <Style x:Key="MachineMetaLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}" />
-            <Setter Property="FontSize" Value="9" />
-            <Setter Property="FontWeight" Value="SemiBold" />
+        <!-- Card meter row: caption on the left, value on the right, bar underneath. -->
+        <Style x:Key="MeterCaption" TargetType="TextBlock" BasedOn="{StaticResource MicroLabel}">
+            <Setter Property="FontSize" Value="8" />
         </Style>
+
+        <ItemsPanelTemplate x:Key="WrapItemsPanel">
+            <WrapPanel />
+        </ItemsPanelTemplate>
+
+        <ItemsPanelTemplate x:Key="GroupedItemsPanel">
+            <StackPanel />
+        </ItemsPanelTemplate>
     </Window.Resources>
 
     <Grid Background="{DynamicResource WindowBrush}">
@@ -47,20 +57,22 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- ==================== HEADER ==================== -->
         <Border Grid.Row="0"
                 Background="{DynamicResource SubtlePanelBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="24,15">
+                Padding="24,14">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Border Width="52" Height="52" CornerRadius="14"
-                        Background="#030509"
+                <Border Width="50" Height="50" CornerRadius="14"
+                        Background="{DynamicResource LogoPlateBrush}"
                         BorderBrush="{DynamicResource Accent2Brush}"
                         BorderThickness="1">
                     <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="3" Stretch="Uniform" />
@@ -68,167 +80,365 @@
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="13,0,0,0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Grev" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
-                        <TextBlock Text="UltraVNC" FontSize="26" FontWeight="Bold" Margin="1,0,0,0" />
+                        <TextBlock Text="Grev" Style="{StaticResource DisplayText}" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="UltraVNC" Style="{StaticResource DisplayText}" Margin="1,0,0,0" />
                     </StackPanel>
-                    <TextBlock Text="Remote control, machine management and Grev Connect"
-                               Foreground="{DynamicResource MutedTextBrush}"
-                               FontSize="11" Margin="1,2,0,0" />
+                    <TextBlock Text="Household device control · LAN and Zima / Grev Connect"
+                               Style="{StaticResource CaptionText}" Margin="1,1,0,0" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource HeaderAction}" Content="↻  Refresh" Click="Refresh_Click" Margin="0,0,7,0" />
-                    <Button Style="{StaticResource HeaderAction}" Content="⚙  Settings" Click="Settings_Click" Margin="0,0,7,0" />
-                    <Button Style="{StaticResource PrimaryButton}" Content="◇  Connect by ID" Click="QuickConnect_Click"
-                            Padding="14,8" MinHeight="38" FontSize="11" Margin="0,0,7,0" />
-                    <Button Style="{StaticResource HeaderAction}" Content="＋  Add PC" Click="AddMachine_Click"
-                            Padding="14,8" MinHeight="38" FontSize="11" ToolTip="Advanced/manual machine setup" />
+                <!-- Fleet health at a glance, so the window answers "is everything up?"
+                     before you read a single card. -->
+                <Border Grid.Column="2" Style="{StaticResource SubtleSurface}"
+                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                        Margin="26,0,20,0" Padding="16,9">
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel Margin="0,0,20,0">
+                            <TextBlock x:Name="SummaryOnlineText" Text="0"
+                                       Style="{StaticResource FleetStatValue}"
+                                       Foreground="{DynamicResource OkBrush}" />
+                            <TextBlock Text="ONLINE" Style="{StaticResource FleetStatLabel}" />
+                        </StackPanel>
+                        <Border Width="1" Background="{DynamicResource BorderBrush}" Margin="0,2,20,2" />
+                        <StackPanel Margin="0,0,20,0">
+                            <TextBlock x:Name="SummaryOfflineText" Text="0"
+                                       Style="{StaticResource FleetStatValue}"
+                                       Foreground="{DynamicResource DangerBrush}" />
+                            <TextBlock Text="OFFLINE" Style="{StaticResource FleetStatLabel}" />
+                        </StackPanel>
+                        <Border Width="1" Background="{DynamicResource BorderBrush}" Margin="0,2,20,2" />
+                        <StackPanel Margin="0,0,20,0">
+                            <TextBlock x:Name="SummaryAgentText" Text="0"
+                                       Style="{StaticResource FleetStatValue}"
+                                       Foreground="{DynamicResource AccentBrush}" />
+                            <TextBlock Text="AGENTS PAIRED" Style="{StaticResource FleetStatLabel}" />
+                        </StackPanel>
+                        <Border Width="1" Background="{DynamicResource BorderBrush}" Margin="0,2,20,2" />
+                        <StackPanel>
+                            <TextBlock x:Name="SummaryAttentionText" Text="0"
+                                       Style="{StaticResource FleetStatValue}"
+                                       Foreground="{DynamicResource WarnBrush}" />
+                            <TextBlock Text="NEED ATTENTION" Style="{StaticResource FleetStatLabel}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource HeaderAction}" Content="↻" MinWidth="42"
+                            Click="Refresh_Click" ToolTip="Re-resolve routes and re-check every machine (F5)" />
+                    <Button Style="{StaticResource HeaderAction}" Content="＋" MinWidth="42"
+                            Click="AddMachine_Click" ToolTip="Add a machine manually (IP, ports, MAC)" />
+                    <Button Style="{StaticResource HeaderAction}" Content="⚙" MinWidth="42"
+                            Click="Settings_Click" ToolTip="Identity, appearance, viewer and monitoring preferences" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="◇  Connect by ID"
+                            Click="QuickConnect_Click" Padding="15,9" MinHeight="38" FontSize="11"
+                            ToolTip="Connect using a GrevConnect ID (Ctrl+N)" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="24,16,24,14">
+        <!-- ==================== TOOLBAR ==================== -->
+        <Grid Grid.Row="1" Margin="24,16,24,12">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="460" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
-                <TextBlock Text="MACHINES" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold" />
-                <TextBlock x:Name="FilterSummaryText" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,2,0,0" />
-            </StackPanel>
-
-            <Border Grid.Column="1" MaxWidth="540" HorizontalAlignment="Stretch"
-                    Background="{DynamicResource PanelBrush}"
+            <Border Background="{DynamicResource PanelBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1" CornerRadius="11" Margin="0,0,14,0">
+                    BorderThickness="1" CornerRadius="10" Margin="0,0,14,0">
                 <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <TextBox x:Name="SearchBox"
                              TextChanged="SearchBox_TextChanged"
-                             ToolTip="Search name, Grev Connect ID, IP, group or notes"
-                             Padding="35,10,11,10" BorderThickness="0" Background="Transparent" />
-                    <TextBlock Text="⌕" FontSize="18" Foreground="{DynamicResource FaintTextBrush}"
-                               Margin="11,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                             ToolTip="Search name, GrevConnect ID, IP, group or notes (Ctrl+F)"
+                             Padding="36,9,8,9" BorderThickness="0" Background="Transparent" />
+                    <TextBlock Text="⌕" FontSize="17" Foreground="{DynamicResource FaintTextBrush}"
+                               Margin="12,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center"
                                IsHitTestVisible="False" />
+                    <TextBlock x:Name="SearchPlaceholder" Text="Search machines…"
+                               Foreground="{DynamicResource FaintTextBrush}" FontSize="12"
+                               Margin="37,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                               IsHitTestVisible="False" />
+                    <Button x:Name="ClearSearchButton" Grid.Column="1" Style="{StaticResource GhostButton}"
+                            Content="✕" Padding="10,6" FontSize="11" Visibility="Collapsed"
+                            Click="ClearSearch_Click" ToolTip="Clear search" />
                 </Grid>
             </Border>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button x:Name="AllFilterButton" Style="{StaticResource MainFilterActiveButton}"
-                        Content="All" Tag="all" Click="MachineFilter_Click" />
-                <Button x:Name="OnlineFilterButton" Style="{StaticResource MainFilterButton}"
-                        Content="Online" Tag="online" Click="MachineFilter_Click" />
-                <Button x:Name="OfflineFilterButton" Style="{StaticResource MainFilterButton}"
-                        Content="Offline" Tag="offline" Click="MachineFilter_Click" />
-                <Button x:Name="FavoritesFilterButton" Style="{StaticResource MainFilterButton}"
-                        Content="★ Favourites" Tag="favorites" Click="MachineFilter_Click" Margin="3,0,0,0" />
+            <Border Grid.Column="1" Style="{StaticResource SegmentGroup}" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <ToggleButton x:Name="AllFilterButton" Style="{StaticResource SegmentButton}"
+                                  Content="All" Tag="all" IsChecked="True" Click="MachineFilter_Click" />
+                    <ToggleButton x:Name="OnlineFilterButton" Style="{StaticResource SegmentButton}"
+                                  Content="Online" Tag="online" Click="MachineFilter_Click" />
+                    <ToggleButton x:Name="OfflineFilterButton" Style="{StaticResource SegmentButton}"
+                                  Content="Offline" Tag="offline" Click="MachineFilter_Click" />
+                    <ToggleButton x:Name="AgentFilterButton" Style="{StaticResource SegmentButton}"
+                                  Content="Agent" Tag="agent" Click="MachineFilter_Click"
+                                  ToolTip="Only machines with a paired Grev Agent" />
+                    <ToggleButton x:Name="FavoritesFilterButton" Style="{StaticResource SegmentButton}"
+                                  Content="★" Tag="favorites" Click="MachineFilter_Click"
+                                  ToolTip="Favourites only" />
+                </StackPanel>
+            </Border>
+
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock x:Name="FilterSummaryText" Style="{StaticResource CaptionText}"
+                           VerticalAlignment="Center" Margin="0,0,14,0" />
+                <Border Style="{StaticResource SegmentGroup}">
+                    <StackPanel Orientation="Horizontal">
+                        <ToggleButton x:Name="GroupToggleButton" Style="{StaticResource SegmentButton}"
+                                      Content="Groups" IsChecked="True" Click="GroupToggle_Click"
+                                      ToolTip="Group machines by their group name" />
+                        <ToggleButton x:Name="SortStatusButton" Style="{StaticResource SegmentButton}"
+                                      Content="By status" Click="SortToggle_Click"
+                                      ToolTip="Sort machines by reachability instead of by name" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Grid>
 
+        <!-- ==================== MACHINE GRID ==================== -->
         <Grid Grid.Row="2">
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Background="{DynamicResource WindowBrush}"
-                          Margin="24,0,10,0">
-                <ItemsControl ItemsSource="{Binding MachinesView}" Background="{DynamicResource WindowBrush}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
+                          Padding="24,0,14,4">
+                <ItemsControl x:Name="MachineItems" ItemsSource="{Binding MachinesView}"
+                              Background="Transparent"
+                              ItemsPanel="{StaticResource GroupedItemsPanel}">
+                    <ItemsControl.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.Panel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </GroupStyle.Panel>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="2,4,2,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="Bold"
+                                                   Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                        <Border Grid.Column="1" Style="{StaticResource AccentPill}" Margin="9,0,0,0" Padding="7,2">
+                                            <TextBlock Text="{Binding ItemCount}" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{DynamicResource AccentBrush}" />
+                                        </Border>
+                                        <Border Grid.Column="2" Height="1" Background="{DynamicResource BorderBrush}"
+                                                VerticalAlignment="Center" Margin="14,0,14,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ItemsControl.GroupStyle>
+
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Width="360" Height="244" Margin="0,0,14,14"
+                            <Border Width="378" Height="286" Margin="0,0,14,14"
                                     Style="{StaticResource MachineCardStyle}" Cursor="Hand"
                                     MouseLeftButtonDown="MachineCard_MouseLeftButtonDown"
-                                    MouseRightButtonUp="MachineCard_MouseRightButtonUp">
+                                    MouseRightButtonUp="MachineCard_MouseRightButtonUp"
+                                    ToolTip="{Binding NotesTooltip}">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="3" />
                                         <RowDefinition Height="*" />
                                     </Grid.RowDefinitions>
 
-                                    <Border Background="{StaticResource BrandGradientBrush}" CornerRadius="13,13,0,0" />
+                                    <Border Background="{StaticResource CardEdgeBrush}" CornerRadius="13,13,0,0" />
 
-                                    <Grid Grid.Row="1" Margin="15,12,15,13">
+                                    <Grid Grid.Row="1" Margin="15,13,15,13">
                                         <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="*" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
 
+                                        <!-- Identity row -->
                                         <Grid>
-                                            <StackPanel Orientation="Horizontal">
-                                                <Button Style="{StaticResource IconButton}" Content="{Binding FavoriteGlyph}"
-                                                        Click="FavoriteMachine_Click" ToolTip="Toggle favourite"
-                                                        Padding="7,4" MinWidth="32" Margin="0,0,7,0" />
-                                                <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="7" Padding="8,4" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Group}" Foreground="{DynamicResource AccentBrush}" FontSize="9" FontWeight="SemiBold" />
-                                                </Border>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Width="38" Height="38" CornerRadius="11"
+                                                    Background="{DynamicResource AccentSoftBrush}"
+                                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                                <TextBlock Text="{Binding Initials}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           FontSize="14" FontWeight="Bold"
+                                                           Foreground="{DynamicResource AccentBrush}" />
+                                            </Border>
+
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="11,0,8,0">
+                                                <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Group}" Style="{StaticResource MicroLabel}"
+                                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
 
-                                            <Border HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                    Background="{DynamicResource SubtlePanelBrush}"
-                                                    BorderBrush="{DynamicResource BorderBrush}"
-                                                    BorderThickness="1" CornerRadius="7" Padding="8,4">
-                                                <TextBlock Text="{Binding StatusText}"
+                                            <Border Grid.Column="2" Style="{StaticResource Pill}"
+                                                    Background="{Binding Status, Converter={StaticResource StatusSoftBrushConverter}}"
+                                                    BorderBrush="{Binding Status, Converter={StaticResource StatusBrushConverter}}"
+                                                    ToolTip="{Binding DetailText}">
+                                                <TextBlock Text="{Binding StatusLabel}"
                                                            Foreground="{Binding Status, Converter={StaticResource StatusBrushConverter}}"
-                                                           FontWeight="SemiBold" FontSize="9" />
+                                                           FontWeight="Bold" FontSize="9" />
                                             </Border>
+
+                                            <Button Grid.Column="3" Style="{StaticResource GhostButton}"
+                                                    Content="{Binding FavoriteGlyph}" FontSize="15"
+                                                    Foreground="{DynamicResource WarnBrush}"
+                                                    Click="FavoriteMachine_Click" ToolTip="Toggle favourite"
+                                                    Padding="7,3" MinWidth="28" Margin="4,0,0,0" />
                                         </Grid>
 
-                                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="2,6,2,6">
-                                            <TextBlock Text="{Binding Name}" FontSize="21" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding ConnectDisplayText}" Foreground="{DynamicResource AccentBrush}"
-                                                       FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                        <!-- Route row: how this machine is reached right now -->
+                                        <Border Grid.Row="1" Style="{StaticResource SubtleSurface}"
+                                                Padding="10,7" Margin="0,11,0,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Style="{StaticResource AccentPill}" Padding="7,2">
+                                                    <TextBlock Text="{Binding RouteBadge}" FontSize="8" FontWeight="Bold"
+                                                               Foreground="{DynamicResource AccentBrush}" />
+                                                </Border>
+                                                <TextBlock Grid.Column="1" Text="{Binding RouteDetail}"
+                                                           Style="{StaticResource CaptionText}" FontSize="10"
+                                                           VerticalAlignment="Center" Margin="9,0,8,0"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="2" Text="{Binding LatencyText}"
+                                                           Style="{StaticResource MicroLabel}" VerticalAlignment="Center"
+                                                           ToolTip="Round-trip ping time" />
+                                            </Grid>
+                                        </Border>
 
-                                            <Grid Margin="0,8,0,0">
+                                        <!-- Live telemetry, when the Agent is paired -->
+                                        <Grid Grid.Row="2" Margin="0,11,0,0" VerticalAlignment="Top"
+                                              Visibility="{Binding HasTelemetry, Converter={StaticResource BoolToVisibility}}">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+                                            <Grid Margin="0,0,0,9">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="34" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="CPU" Style="{StaticResource MeterCaption}" VerticalAlignment="Center" />
+                                                <ProgressBar Grid.Column="1" Style="{StaticResource MeterBar}"
+                                                             Value="{Binding CpuPercent, Mode=OneWay}"
+                                                             Foreground="{Binding CpuPercent, Converter={StaticResource UsageBrushConverter}}"
+                                                             VerticalAlignment="Center" Margin="0,0,9,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding CpuText}" FontSize="9"
+                                                           MinWidth="42" TextAlignment="Right"
+                                                           Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                                            </Grid>
+
+                                            <Grid Grid.Row="1" Margin="0,0,0,9">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="34" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="RAM" Style="{StaticResource MeterCaption}" VerticalAlignment="Center" />
+                                                <ProgressBar Grid.Column="1" Style="{StaticResource MeterBar}"
+                                                             Value="{Binding MemoryPercent, Mode=OneWay}"
+                                                             Foreground="{Binding MemoryPercent, Converter={StaticResource UsageBrushConverter}}"
+                                                             VerticalAlignment="Center" Margin="0,0,9,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding MemoryText}" FontSize="9"
+                                                           MinWidth="42" TextAlignment="Right"
+                                                           Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                                            </Grid>
+
+                                            <Grid Grid.Row="2" Margin="0,0,0,9">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="34" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="DISK" Style="{StaticResource MeterCaption}" VerticalAlignment="Center" />
+                                                <ProgressBar Grid.Column="1" Style="{StaticResource MeterBar}"
+                                                             Value="{Binding DiskPercent, Mode=OneWay}"
+                                                             Foreground="{Binding DiskPercent, Converter={StaticResource UsageBrushConverter}}"
+                                                             VerticalAlignment="Center" Margin="0,0,9,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding DiskText}" FontSize="9"
+                                                           MinWidth="42" TextAlignment="Right"
+                                                           Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+
+                                            <Grid Grid.Row="3">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding DetailText}" Foreground="{DynamicResource MutedTextBrush}"
-                                                           FontSize="10" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="1" Text="{Binding LastCheckedText}"
+                                                <TextBlock Text="{Binding SignedInUserText}" FontSize="9"
                                                            Foreground="{DynamicResource FaintTextBrush}"
-                                                           FontSize="9" Margin="10,0,0,0" />
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding OsText}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding UptimeText}" FontSize="9"
+                                                           Foreground="{DynamicResource FaintTextBrush}"
+                                                           Margin="8,0,0,0" ToolTip="Uptime" />
                                             </Grid>
+                                        </Grid>
 
-                                            <Border Background="{DynamicResource SubtlePanelBrush}"
-                                                    BorderBrush="{DynamicResource BorderBrush}"
-                                                    BorderThickness="1" CornerRadius="9"
-                                                    Padding="9,7" Margin="0,8,0,0"
-                                                    ToolTip="{Binding AgentMessage}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Text="{Binding AgentStatusText}"
-                                                               Foreground="{Binding AgentState, Converter={StaticResource AgentStateBrushConverter}}"
-                                                               FontSize="9" FontWeight="SemiBold"
-                                                               VerticalAlignment="Center" Margin="0,0,9,0" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding AgentSummaryText}"
-                                                               Foreground="{DynamicResource MutedTextBrush}"
-                                                               FontSize="9" TextTrimming="CharacterEllipsis"
-                                                               VerticalAlignment="Center" />
-                                                </Grid>
-                                            </Border>
-                                        </StackPanel>
+                                        <!-- What to do next, when there is no Agent telemetry to show -->
+                                        <Border Grid.Row="2" Style="{StaticResource SubtleSurface}"
+                                                Padding="11,10" Margin="0,11,0,0" VerticalAlignment="Top"
+                                                Visibility="{Binding HasTelemetry, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"
+                                                ToolTip="{Binding AgentMessage}">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                             Fill="{Binding AgentState, Converter={StaticResource AgentStateBrushConverter}}" />
+                                                    <TextBlock Text="{Binding AgentStatusLabel}" FontSize="9" FontWeight="Bold"
+                                                               Margin="7,0,0,0"
+                                                               Foreground="{Binding AgentState, Converter={StaticResource AgentStateBrushConverter}}" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding AgentSummaryText}" FontSize="10"
+                                                           Foreground="{DynamicResource MutedTextBrush}"
+                                                           TextWrapping="Wrap" Margin="0,6,0,0" />
+                                            </StackPanel>
+                                        </Border>
 
-                                        <Grid Grid.Row="2">
+                                        <!-- Actions -->
+                                        <Grid Grid.Row="3" Margin="0,11,0,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <Button Style="{StaticResource PrimaryButton}" Content="Connect" Click="ConnectMachine_Click"
-                                                    Margin="0,0,6,0" Padding="12,7" FontSize="11" />
+                                            <Button Style="{StaticResource PrimaryButton}" Content="Connect"
+                                                    Click="ConnectMachine_Click"
+                                                    Margin="0,0,6,0" Padding="12,8" FontSize="11" />
                                             <Button Grid.Column="1" Style="{StaticResource CardActionButton}" Content="Manage"
-                                                    Click="ManageMachine_Click" Margin="0,0,6,0" />
+                                                    Click="ManageMachine_Click" Margin="0,0,6,0"
+                                                    ToolTip="Live telemetry, processes, services, terminal and files" />
                                             <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="⋯"
-                                                    Click="MoreMachine_Click" ToolTip="Edit and more machine actions" Padding="8,5" MinWidth="34" />
+                                                    Click="MoreMachine_Click"
+                                                    ToolTip="Edit, power, recovery and diagnostics"
+                                                    Padding="9,6" MinWidth="34" />
                                         </Grid>
                                     </Grid>
                                 </Grid>
@@ -239,34 +449,48 @@
             </ScrollViewer>
 
             <Border x:Name="EmptyStatePanel" Visibility="Collapsed"
-                    Width="430" HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Background="{DynamicResource PanelBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                    CornerRadius="16" Padding="28">
+                    Width="470" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Style="{StaticResource CardSurface}" Padding="32">
                 <StackPanel>
-                    <TextBlock Text="◇" HorizontalAlignment="Center" FontSize="32"
-                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,10" />
+                    <TextBlock Text="◇" HorizontalAlignment="Center" FontSize="34"
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,12" />
                     <TextBlock x:Name="EmptyStateTitle" Text="No machines yet"
-                               HorizontalAlignment="Center" FontSize="18" FontWeight="SemiBold" />
+                               HorizontalAlignment="Center" Style="{StaticResource TitleText}" />
                     <TextBlock x:Name="EmptyStateDetail"
-                               Text="Got a GC- ID? Use Connect by ID and GrevUltraVNC will find the current route for you."
-                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
-                               Foreground="{DynamicResource MutedTextBrush}" FontSize="11" Margin="0,6,0,0" />
-                    <Button Style="{StaticResource PrimaryButton}" Content="◇  Connect by GrevConnect ID"
-                            Click="QuickConnect_Click" HorizontalAlignment="Center" Margin="0,16,0,0" Padding="15,8" />
+                               Text="Got a GC- ID? Use Connect by ID and GrevUltraVNC will find the current route for you, on your LAN or across your Zima server."
+                               HorizontalAlignment="Center" TextAlignment="Center"
+                               Style="{StaticResource SubtitleText}" Margin="0,8,0,0" />
+                    <StackPanel x:Name="EmptyStateActions" Orientation="Horizontal"
+                                HorizontalAlignment="Center" Margin="0,18,0,0">
+                        <Button Style="{StaticResource PrimaryButton}" Content="◇  Connect by GrevConnect ID"
+                                Click="QuickConnect_Click" Padding="16,9" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="＋  Add manually"
+                                Click="AddMachine_Click" Padding="16,9" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>
 
+        <!-- ==================== FOOTER ==================== -->
         <Border Grid.Row="3" Background="{DynamicResource SubtlePanelBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
                 Padding="24,9">
             <Grid>
-                <TextBlock x:Name="FooterStatus" Foreground="{DynamicResource MutedTextBrush}" FontSize="10" Text="Ready" />
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <TextBlock Text="Double-click a card to connect" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" Margin="0,0,18,0" />
-                    <TextBlock Text="LAN  •  Grev Connect" Foreground="{DynamicResource FaintTextBrush}" FontSize="10" />
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="FooterPulse" Width="7" Height="7" VerticalAlignment="Center"
+                             Fill="{DynamicResource IdleBrush}" Margin="0,0,8,0" />
+                    <TextBlock x:Name="FooterStatus" Style="{StaticResource MicroLabel}"
+                               FontWeight="Normal" Text="Ready" VerticalAlignment="Center" />
                 </StackPanel>
+                <TextBlock x:Name="FooterViewerStatus" Grid.Column="1" Style="{StaticResource MicroLabel}"
+                           FontWeight="Normal" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Style="{StaticResource MicroLabel}" FontWeight="Normal"
+                           Text="Double-click a card to connect  ·  right-click for actions  ·  F5 to refresh" />
             </Grid>
         </Border>
     </Grid>

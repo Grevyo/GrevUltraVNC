@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
+using GrevUltraVNC.Services;
 using System.Windows.Threading;
 
 namespace GrevUltraVNC;
@@ -49,7 +49,8 @@ public partial class GrevControlPanelWindow
         if (!trackedSessionAlive ||
             (!viewerWindowAlive && (_compactViewerWindowSeen || startupGraceExpired)))
         {
-            SessionStatusText.Text = "● SESSION ENDED";
+            SessionStatusText.Text = "Session ended";
+            SessionStatusDot.Fill = ThemeService.ThemeBrush("IdleBrush");
             Close();
             return;
         }
@@ -95,7 +96,6 @@ public partial class GrevControlPanelWindow
         var workHeight = Math.Max(320d, workBottom - workTop);
         var availableHeight = Math.Max(320d, workHeight - 12d);
         var targetHeight = Math.Min(CompactPanelDesiredHeight, availableHeight);
-        var needsScroll = targetHeight + 1d < CompactPanelDesiredHeight;
 
         var minimumHeight = Math.Min(CompactPanelMinimumHeight, targetHeight);
         if (Math.Abs(MinHeight - minimumHeight) > 0.5d)
@@ -104,12 +104,6 @@ public partial class GrevControlPanelWindow
             MaxHeight = targetHeight;
         if (Math.Abs(Height - targetHeight) > 0.5d)
             Height = targetHeight;
-
-        var requestedScrollMode = needsScroll
-            ? ScrollBarVisibility.Auto
-            : ScrollBarVisibility.Disabled;
-        if (PanelScrollViewer.VerticalScrollBarVisibility != requestedScrollMode)
-            PanelScrollViewer.VerticalScrollBarVisibility = requestedScrollMode;
 
         Top = workTop + Math.Max(0d, (workHeight - targetHeight) / 2d);
 
