@@ -1,15 +1,12 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text;
 using GrevUltraVNC.Contracts;
 
 namespace GrevUltraVNC.Agent;
 
 public sealed class InteractiveSessionService
 {
-    private const uint MaximumAllowed = 0x02000000;
-    private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint TokenAdjustPrivileges = 0x0020;
     private const uint TokenQuery = 0x0008;
     private const uint SePrivilegeEnabled = 0x00000002;
@@ -32,8 +29,8 @@ public sealed class InteractiveSessionService
 
     private static AgentActionResponse RestartExplorer()
     {
-        var sessionId = WTSGetActiveConsoleSessionId();
-        if (sessionId == uint.MaxValue)
+        var sessionId = InteractiveSessionLauncher.GetActiveConsoleSessionId();
+        if (sessionId == InteractiveSessionLauncher.NoActiveSession)
             return new AgentActionResponse(false, "No interactive Windows session is currently active.");
 
         try
@@ -62,7 +59,7 @@ public sealed class InteractiveSessionService
             if (!File.Exists(explorerPath))
                 return new AgentActionResponse(false, $"Windows Explorer was not found at {explorerPath}.");
 
-            LaunchInInteractiveSession(sessionId, explorerPath);
+            InteractiveSessionLauncher.Launch(sessionId, explorerPath, arguments: null, detached: false, what: "Windows Explorer");
             return new AgentActionResponse(true, "Restarted Windows Explorer in the active user session.");
         }
         catch (Exception ex)
@@ -73,8 +70,8 @@ public sealed class InteractiveSessionService
 
     private static AgentActionResponse LockWorkstation()
     {
-        var sessionId = WTSGetActiveConsoleSessionId();
-        if (sessionId == uint.MaxValue)
+        var sessionId = InteractiveSessionLauncher.GetActiveConsoleSessionId();
+        if (sessionId == InteractiveSessionLauncher.NoActiveSession)
             return new AgentActionResponse(false, "No interactive Windows session is currently active.");
 
         try
@@ -88,7 +85,7 @@ public sealed class InteractiveSessionService
 
             // LockWorkStation must run on the interactive desktop, so launch the
             // request with the active console user's token instead of from Session 0.
-            LaunchInInteractiveSession(sessionId, rundll32, "user32.dll,LockWorkStation");
+            InteractiveSessionLauncher.Launch(sessionId, rundll32, "user32.dll,LockWorkStation", detached: false, what: "the workstation lock request");
             return new AgentActionResponse(true, "Lock request sent to the active Windows session.");
         }
         catch (Exception ex)
@@ -99,8 +96,8 @@ public sealed class InteractiveSessionService
 
     private static AgentActionResponse SignOutInteractiveUser()
     {
-        var sessionId = WTSGetActiveConsoleSessionId();
-        if (sessionId == uint.MaxValue)
+        var sessionId = InteractiveSessionLauncher.GetActiveConsoleSessionId();
+        if (sessionId == InteractiveSessionLauncher.NoActiveSession)
             return new AgentActionResponse(false, "No interactive Windows session is currently active.");
 
         try
@@ -182,97 +179,8 @@ public sealed class InteractiveSessionService
         }
         finally
         {
-            CloseHandle(token);
+            InteractiveSessionLauncher.CloseHandle(token);
         }
-    }
-
-    private static void LaunchInInteractiveSession(uint sessionId, string executablePath, string? arguments = null)
-    {
-        if (!WTSQueryUserToken(sessionId, out var userToken))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not get the interactive user's Windows token.");
-
-        try
-        {
-            if (!DuplicateTokenEx(
-                    userToken,
-                    MaximumAllowed,
-                    IntPtr.Zero,
-                    SecurityImpersonationLevel.SecurityImpersonation,
-                    TokenType.TokenPrimary,
-                    out var primaryToken))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not create an interactive primary token.");
-
-            try
-            {
-                IntPtr environment = IntPtr.Zero;
-                try
-                {
-                    if (!CreateEnvironmentBlock(out environment, primaryToken, false))
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not create the interactive user's environment.");
-
-                    var startupInfo = new StartupInfo
-                    {
-                        cb = Marshal.SizeOf<StartupInfo>(),
-                        lpDesktop = @"winsta0\default"
-                    };
-
-                    StringBuilder? commandLine = null;
-                    if (!string.IsNullOrWhiteSpace(arguments))
-                        commandLine = new StringBuilder($"\"{executablePath}\" {arguments}");
-
-                    if (!CreateProcessAsUser(
-                            primaryToken,
-                            executablePath,
-                            commandLine,
-                            IntPtr.Zero,
-                            IntPtr.Zero,
-                            false,
-                            CreateUnicodeEnvironment,
-                            environment,
-                            Path.GetDirectoryName(executablePath),
-                            ref startupInfo,
-                            out var processInfo))
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows refused to launch the action in the interactive session.");
-
-                    try
-                    {
-                        // Creation succeeded; the interactive process owns its lifetime.
-                    }
-                    finally
-                    {
-                        if (processInfo.hThread != IntPtr.Zero) CloseHandle(processInfo.hThread);
-                        if (processInfo.hProcess != IntPtr.Zero) CloseHandle(processInfo.hProcess);
-                    }
-                }
-                finally
-                {
-                    if (environment != IntPtr.Zero)
-                        DestroyEnvironmentBlock(environment);
-                }
-            }
-            finally
-            {
-                CloseHandle(primaryToken);
-            }
-        }
-        finally
-        {
-            CloseHandle(userToken);
-        }
-    }
-
-    private enum SecurityImpersonationLevel
-    {
-        SecurityAnonymous,
-        SecurityIdentification,
-        SecurityImpersonation,
-        SecurityDelegation
-    }
-
-    private enum TokenType
-    {
-        TokenPrimary = 1,
-        TokenImpersonation
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -296,58 +204,9 @@ public sealed class InteractiveSessionService
         public LuidAndAttributes Privileges;
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct StartupInfo
-    {
-        public int cb;
-        public string? lpReserved;
-        public string? lpDesktop;
-        public string? lpTitle;
-        public int dwX;
-        public int dwY;
-        public int dwXSize;
-        public int dwYSize;
-        public int dwXCountChars;
-        public int dwYCountChars;
-        public int dwFillAttribute;
-        public int dwFlags;
-        public short wShowWindow;
-        public short cbReserved2;
-        public IntPtr lpReserved2;
-        public IntPtr hStdInput;
-        public IntPtr hStdOutput;
-        public IntPtr hStdError;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ProcessInformation
-    {
-        public IntPtr hProcess;
-        public IntPtr hThread;
-        public uint dwProcessId;
-        public uint dwThreadId;
-    }
-
-    [DllImport("kernel32.dll")]
-    private static extern uint WTSGetActiveConsoleSessionId();
-
-    [DllImport("Wtsapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool WTSQueryUserToken(uint sessionId, out IntPtr token);
-
     [DllImport("Wtsapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WTSLogoffSession(IntPtr serverHandle, uint sessionId, bool wait);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DuplicateTokenEx(
-        IntPtr existingToken,
-        uint desiredAccess,
-        IntPtr tokenAttributes,
-        SecurityImpersonationLevel impersonationLevel,
-        TokenType tokenType,
-        out IntPtr newToken);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -370,31 +229,4 @@ public sealed class InteractiveSessionService
     [DllImport("powrprof.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);
-
-    [DllImport("userenv.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CreateEnvironmentBlock(out IntPtr environment, IntPtr token, bool inherit);
-
-    [DllImport("userenv.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DestroyEnvironmentBlock(IntPtr environment);
-
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CreateProcessAsUser(
-        IntPtr token,
-        string? applicationName,
-        StringBuilder? commandLine,
-        IntPtr processAttributes,
-        IntPtr threadAttributes,
-        bool inheritHandles,
-        uint creationFlags,
-        IntPtr environment,
-        string? currentDirectory,
-        ref StartupInfo startupInfo,
-        out ProcessInformation processInformation);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(IntPtr handle);
 }
