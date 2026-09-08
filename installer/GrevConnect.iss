@@ -1,5 +1,5 @@
 #define MyAppName "GrevConnect"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "Grev"
 #define MyAppExeName "GrevConnect.exe"
 
@@ -16,19 +16,19 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\GrevConnect
+DefaultDirName=C:\GrevCo\GrevConnect
 DefaultGroupName=GrevConnect
 DisableProgramGroupPage=yes
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=GrevConnect-1.2.0-Setup
+OutputBaseFilename=GrevConnect-1.2.1-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
-UninstallDisplayName=GrevConnect 1.2.0
+UninstallDisplayName=GrevConnect 1.2.1
 UninstallDisplayIcon={app}\GrevConnect.exe
 CloseApplications=yes
 RestartApplications=no
