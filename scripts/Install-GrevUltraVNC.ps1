@@ -464,6 +464,25 @@ function Install-Files {
 
     Write-Step "Installing to $TargetDir"
 
+    # This function clears the target folder, so refuse anything that is obviously not
+    # an install folder. A mistyped -InstallDir should not be able to empty a repo,
+    # a profile folder or a drive root.
+    $resolved = [IO.Path]::GetFullPath($TargetDir).TrimEnd('\')
+    $forbidden = @(
+        [IO.Path]::GetPathRoot($resolved).TrimEnd('\'),
+        $env:USERPROFILE, $env:LOCALAPPDATA, $env:APPDATA,
+        $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramData, $env:SystemRoot,
+        [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('MyDocuments')
+    ) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') }
+
+    if ($forbidden -contains $resolved) {
+        throw "Refusing to install into $resolved, because installing there would clear the folder. Pass a dedicated -InstallDir."
+    }
+
+    if (Test-Path (Join-Path $resolved '.git')) {
+        throw "Refusing to install into $resolved: it looks like a git checkout, and installing there would delete it."
+    }
+
     Stop-RunningApp
 
     if (Test-Path $TargetDir) {
