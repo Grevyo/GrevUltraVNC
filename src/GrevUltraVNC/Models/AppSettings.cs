@@ -13,4 +13,11 @@ public sealed class AppSettings
     public string ControllerId { get; set; } = string.Empty;
     public string CollaborationColor { get; set; } = "#32CFF0";
     public string CursorStyle { get; set; } = "arrow";
+
+    /// <summary>
+    /// Comma-separated ids of Grev Control Panel sections the user has collapsed.
+    /// Stored so the panel comes back the way it was left instead of re-expanding
+    /// everything on every connection.
+    /// </summary>
+    public string ControlPanelCollapsedSections { get; set; } = string.Empty;
 }

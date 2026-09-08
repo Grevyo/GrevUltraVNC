@@ -3,57 +3,130 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
         Title="Grev Control Panel"
-        Width="420" Height="820" MinHeight="520" MaxHeight="960"
+        Width="448" Height="820" MinHeight="480" MaxHeight="1040"
         ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True"
         ShowInTaskbar="False" Topmost="True"
         ContentRendered="CompactPanel_ContentRendered" Closed="CompactPanel_Closed"
+        PreviewKeyDown="ControlPanel_PreviewKeyDown"
         Icon="{x:Static svc:BrandAssets.Logo}"
         Background="Transparent"
         Foreground="{DynamicResource TextBrush}">
     <Window.Resources>
-        <Style x:Key="PanelSectionButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+
+        <!-- Section header: a real toggle, so the chevron and the state cannot disagree. -->
+        <Style x:Key="SectionHeaderToggle" TargetType="ToggleButton">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}" />
-            <Setter Property="Padding" Value="2,4" />
-            <Setter Property="FontSize" Value="9" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="MinHeight" Value="26" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}"
+                                CornerRadius="7" Padding="6,7" SnapsToDevicePixels="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Path x:Name="Chevron" Data="M 0 0 L 4 4 L 8 0"
+                                      Stroke="{DynamicResource AccentBrush}" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      VerticalAlignment="Center" Margin="2,0,9,0" />
+                                <ContentPresenter Grid.Column="1" Grid.ColumnSpan="2"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Stretch" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Setter TargetName="Chevron" Property="Data" Value="M 0 0 L 4 4 L 0 8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <Style x:Key="PanelActionButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
-            <Setter Property="Padding" Value="9,7" />
+        <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
+
+        <Style x:Key="SectionNote" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="9" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SectionBody" TargetType="Border" BasedOn="{StaticResource SubtleSurface}">
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+
+        <!-- Panel readouts. Nothing here goes below 10px: this panel used to be almost
+             entirely 8px text, which is the main reason it was hard to use. -->
+        <Style x:Key="PanelValue" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="PanelMuted" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="PanelAction" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="MinHeight" Value="34" />
         </Style>
 
-        <Style x:Key="ToolIconButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
-            <Setter Property="Padding" Value="4" />
-            <Setter Property="FontSize" Value="17" />
+        <!-- Key caps read as keys: monospaced-ish, tight, evenly sized. -->
+        <Style x:Key="KeyButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="4,7" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Margin" Value="2" />
+        </Style>
+
+        <Style x:Key="ScaleButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="4,6" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Margin" Value="2" />
+        </Style>
+
+        <Style x:Key="TinyStatusButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="MinHeight" Value="34" />
+        </Style>
+
+        <!-- Tool button: glyph over a word, so nothing depends on hovering for a tooltip. -->
+        <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="4,8" />
+            <Setter Property="MinHeight" Value="52" />
+            <Setter Property="Margin" Value="2" />
             <Setter Property="FontWeight" Value="Normal" />
-            <Setter Property="MinHeight" Value="38" />
-            <Setter Property="Margin" Value="2" />
         </Style>
 
-        <Style x:Key="KeyButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
-            <Setter Property="Padding" Value="5,6" />
-            <Setter Property="FontSize" Value="9" />
-            <Setter Property="MinHeight" Value="32" />
-            <Setter Property="Margin" Value="2" />
-        </Style>
-
-        <Style x:Key="TinyStatusButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
-            <Setter Property="Padding" Value="7,4" />
-            <Setter Property="FontSize" Value="9" />
-            <Setter Property="MinHeight" Value="26" />
-        </Style>
-
-        <Style x:Key="ScaleButton" TargetType="Button" BasedOn="{StaticResource CardActionButton}">
-            <Setter Property="Padding" Value="5,5" />
-            <Setter Property="FontSize" Value="9" />
-            <Setter Property="MinHeight" Value="28" />
-            <Setter Property="Margin" Value="2" />
+        <Style x:Key="HeaderIconButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="5,0,0,0" />
         </Style>
     </Window.Resources>
 
@@ -61,7 +134,7 @@
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
         <Border.Effect>
-            <DropShadowEffect Color="#000000" BlurRadius="24" ShadowDepth="5" Opacity="0.55" />
+            <DropShadowEffect Color="#000000" BlurRadius="26" ShadowDepth="6" Opacity="0.58" />
         </Border.Effect>
 
         <Grid>
@@ -70,310 +143,392 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Border Padding="14,11,12,10" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <!-- ==================== HEADER (drag handle) ==================== -->
+            <Border Padding="13,11,11,11" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="38" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Width="32" Height="32" CornerRadius="9" Background="{DynamicResource LogoPlateBrush}"
+                    <Border Width="34" Height="34" CornerRadius="10"
+                            Background="{DynamicResource LogoPlateBrush}"
                             BorderBrush="{DynamicResource Accent2Brush}" BorderThickness="1">
                         <Image Source="{x:Static svc:BrandAssets.Logo}" Margin="2" Stretch="Uniform" />
                     </Border>
 
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="7,0,8,0">
-                        <TextBlock Text="GREV CONTROL" Foreground="{DynamicResource AccentBrush}"
-                                   FontSize="8" FontWeight="Bold" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="9,0,8,0">
+                        <TextBlock Text="GREV CONTROL PANEL" Foreground="{DynamicResource AccentBrush}"
+                                   FontSize="9" FontWeight="Bold" />
                         <TextBlock x:Name="MachineNameText" FontSize="16" FontWeight="SemiBold"
                                    Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
 
-                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="↦"
-                            Click="RedockPanel_Click" ToolTip="Redock beside Screen 1"
-                            Padding="7,4" MinWidth="30" Margin="0,0,6,0" VerticalAlignment="Center" />
-
-                    <TextBlock Grid.Column="3" Text="⋮⋮  DRAG" VerticalAlignment="Center"
-                               Foreground="{DynamicResource FaintTextBrush}" FontSize="8" FontWeight="SemiBold"
-                               Margin="0,0,9,0" ToolTip="Drag this header to move the control panel" />
-
-                    <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="—"
-                            Click="HidePanel_Click" ToolTip="Hide control panel" Padding="7,4"
-                            MinWidth="30" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource HeaderIconButton}" Content="↦"
+                                Click="RedockPanel_Click"
+                                ToolTip="Snap the panel back beside the viewer window" Margin="0" />
+                        <Button Style="{StaticResource HeaderIconButton}" Content="—"
+                                Click="HidePanel_Click"
+                                ToolTip="Hide this panel (Esc). It reopens from the dashboard." />
+                    </StackPanel>
                 </Grid>
             </Border>
 
-            <Border Grid.Row="1" Margin="12,9,12,0" Padding="10,7" CornerRadius="10"
+            <!-- ==================== CONNECTION ==================== -->
+            <Border Grid.Row="1" Margin="12,10,12,0" Padding="11,9" CornerRadius="11"
                     Background="{DynamicResource SubtlePanelBrush}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel MinWidth="0">
-                        <TextBlock x:Name="MachineAddressText" Foreground="{DynamicResource MutedTextBrush}"
-                                   FontSize="8" TextTrimming="CharacterEllipsis" />
-                        <TextBlock x:Name="RouteHealthText" Text="ROUTE CHECKING"
-                                   Foreground="{DynamicResource AccentBrush}" FontSize="8" FontWeight="SemiBold"
-                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                            <TextBlock x:Name="SessionStatusText" Text="● SCREEN 1 ACTIVE"
-                                       Foreground="{DynamicResource OkBrush}"
-                                       FontSize="8" FontWeight="SemiBold" Margin="0,0,8,0" />
-                            <TextBlock x:Name="AgentCpuRamText" Text="CPU / RAM waiting"
-                                       Foreground="{DynamicResource FaintTextBrush}" FontSize="8"
-                                       TextTrimming="CharacterEllipsis" />
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="SessionStatusDot" Width="8" Height="8" VerticalAlignment="Center"
+                                     Fill="{DynamicResource OkBrush}" Margin="0,0,7,0" />
+                            <TextBlock x:Name="SessionStatusText" Text="Screen 1 active"
+                                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
-                    </StackPanel>
-                    <TextBlock x:Name="AgentConnectionText" Grid.Column="1" Text="AGENT CHECKING"
-                               VerticalAlignment="Center" Margin="8,0,0,0"
-                               Foreground="{DynamicResource FaintTextBrush}" FontSize="8" FontWeight="SemiBold" />
-                </Grid>
+                        <Border Grid.Column="1" Style="{StaticResource Pill}" Padding="7,3">
+                            <TextBlock x:Name="AgentConnectionText" Text="Agent checking"
+                                       Foreground="{DynamicResource FaintTextBrush}"
+                                       FontSize="9" FontWeight="Bold" />
+                        </Border>
+                    </Grid>
+
+                    <TextBlock x:Name="MachineAddressText" Style="{StaticResource PanelMuted}" Margin="0,7,0,0" />
+                    <TextBlock x:Name="RouteHealthText" Text="Route checking"
+                               Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="SemiBold"
+                               Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="AgentCpuRamText" Text="Waiting for Grev Agent telemetry"
+                               Style="{StaticResource PanelMuted}" Margin="0,3,0,0" />
+                </StackPanel>
             </Border>
 
+            <!-- ==================== SCROLLING BODY ==================== -->
             <ScrollViewer x:Name="PanelScrollViewer" Grid.Row="2"
-                          VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           Margin="0,8,0,0" Padding="0" CanContentScroll="False">
-                <StackPanel Margin="12,0,12,6">
-                    <Button x:Name="ViewerSectionButton" Style="{StaticResource PanelSectionButton}"
-                            Content="VIEWER  ▾" Tag="viewer" Click="TogglePanelSection_Click"
-                            ToolTip="Expand or collapse viewer controls" />
-                    <Border x:Name="ViewerSectionBody"
+                <StackPanel Margin="12,0,12,8">
+
+                    <!-- REMOTE INPUT: the one thing people come here for -->
+                    <Border x:Name="ControlBanner" CornerRadius="12" Padding="0" Margin="0,0,0,8"
                             Background="{DynamicResource SubtlePanelBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                            CornerRadius="12" Padding="8">
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="ControlAccentBar" CornerRadius="12,0,0,12"
+                                    Background="{DynamicResource IdleBrush}" />
+                            <StackPanel Grid.Column="1" Margin="11,10,11,11">
+                                <TextBlock Text="REMOTE INPUT" Style="{StaticResource MicroLabel}" />
+                                <TextBlock x:Name="ControlStatusText"
+                                           Text="View only · nobody has control"
+                                           FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"
+                                           Margin="0,5,0,0" />
+                                <TextBlock x:Name="ControlHintText"
+                                           Text="Your named pointer is already visible to everyone. Take control to send mouse and keyboard to this PC."
+                                           Style="{StaticResource PanelMuted}" TextWrapping="Wrap"
+                                           TextTrimming="None" Margin="0,5,0,0" />
+                                <Button x:Name="TakeControlButton" Style="{StaticResource PrimaryButton}"
+                                        Content="Take control" Click="TakeControl_Click" IsEnabled="False"
+                                        Padding="12,9" FontSize="12" Margin="0,10,0,0"
+                                        HorizontalAlignment="Stretch"
+                                        ToolTip="Take or release remote mouse and keyboard (Ctrl+Shift+C)" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- SCREENS -->
+                    <ToggleButton x:Name="ViewerSectionButton" Style="{StaticResource SectionHeaderToggle}"
+                                  IsChecked="True" Tag="screens" Click="TogglePanelSection_Click"
+                                  ToolTip="Show or hide the screen and view-size controls">
+                        <TextBlock Text="SCREENS &amp; VIEW" Style="{StaticResource SectionTitle}" />
+                    </ToggleButton>
+                    <Border x:Name="ViewerSectionBody" Style="{StaticResource SectionBody}">
                         <StackPanel>
-                            <Grid Margin="0,0,0,6">
+                            <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Button Style="{StaticResource PanelActionButton}"
+                                <Button Style="{StaticResource PanelAction}"
                                         Content="▣  Screen 1" Click="BringToFront_Click"
                                         ToolTip="Bring the physical display viewer to the front"
-                                        Margin="0,0,3,0" />
+                                        Margin="0,0,4,0" />
                                 <Button x:Name="VirtualDisplayButton" Grid.Column="1"
-                                        Style="{StaticResource PanelActionButton}"
+                                        Style="{StaticResource PanelAction}"
                                         Content="＋  Screen 2" Click="CreateScreen2_Click"
-                                        ToolTip="Create or focus Grev virtual Screen 2"
-                                        Margin="3,0" />
+                                        ToolTip="Add a second, virtual monitor on the remote PC and open a viewer for it"
+                                        Margin="4,0,0,0" />
                                 <Button x:Name="CloseVirtualDisplayButton" Grid.Column="2"
                                         Visibility="Collapsed" Style="{StaticResource TinyStatusButton}"
-                                        Content="×" Click="CloseScreen2_Click"
-                                        ToolTip="Close Screen 2" FontSize="14" Margin="3,0,0,0" />
+                                        Content="✕" Click="CloseScreen2_Click"
+                                        ToolTip="Close Screen 2 and remove the virtual monitor"
+                                        Margin="6,0,0,0" />
                             </Grid>
                             <TextBlock x:Name="DisplayStatusText" Text="Screen 1 · physical display"
-                                       Foreground="{DynamicResource FaintTextBrush}" FontSize="8"
-                                       Margin="2,0,2,7" TextTrimming="CharacterEllipsis" />
+                                       Style="{StaticResource PanelMuted}" Margin="2,8,2,0" />
 
-                            <Border Margin="0,0,0,7" Padding="9,7" CornerRadius="9"
-                                    Background="{DynamicResource PanelBrush}"
-                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
-                                        <TextBlock Text="REMOTE INPUT" Foreground="{DynamicResource FaintTextBrush}"
-                                                   FontSize="8" FontWeight="SemiBold" />
-                                        <TextBlock x:Name="ControlStatusText"
-                                                   Text="VIEW ONLY · no one has control"
-                                                   Foreground="{DynamicResource MutedTextBrush}" FontSize="8"
-                                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                    <Button x:Name="TakeControlButton" Grid.Column="1"
-                                            Style="{StaticResource PrimaryButton}" Content="Take control"
-                                            Click="TakeControl_Click" IsEnabled="False"
-                                            Padding="11,6" MinWidth="98" />
-                                </Grid>
-                            </Border>
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,10,0,10" />
 
-                            <Grid Margin="2,0,2,3">
-                                <TextBlock Text="VIEW SIZE" Foreground="{DynamicResource FaintTextBrush}"
-                                           FontSize="8" FontWeight="SemiBold" />
+                            <Grid Margin="2,0,2,5">
+                                <TextBlock Text="VIEW SIZE" Style="{StaticResource MicroLabel}" />
                                 <TextBlock x:Name="ZoomStatusText" Text="Fit" HorizontalAlignment="Right"
-                                           Foreground="{DynamicResource AccentBrush}" FontSize="8" FontWeight="SemiBold" />
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           FontSize="11" FontWeight="Bold" />
                             </Grid>
-                            <UniformGrid Columns="5" Margin="-2,0,-2,2">
-                                <Button Style="{StaticResource ScaleButton}" Content="Fit" Tag="fit" Click="ViewerScale_Click" />
+                            <UniformGrid Columns="5" Margin="-2,0,-2,0">
+                                <Button Style="{StaticResource ScaleButton}" Content="Fit" Tag="fit" Click="ViewerScale_Click"
+                                        ToolTip="Scale the remote desktop to fit the viewer window" />
                                 <Button Style="{StaticResource ScaleButton}" Content="50%" Tag="50" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="100%" Tag="100" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="150%" Tag="150" Click="ViewerScale_Click" />
                                 <Button Style="{StaticResource ScaleButton}" Content="200%" Tag="200" Click="ViewerScale_Click" />
                             </UniformGrid>
-                            <Grid Margin="4,0,4,6">
+                            <Grid Margin="2,6,2,0">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="38" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Slider x:Name="ViewerScaleSlider" Minimum="10" Maximum="300" Value="100"
+                                <TextBlock Text="10%" Style="{StaticResource MicroLabel}" VerticalAlignment="Center" />
+                                <Slider x:Name="ViewerScaleSlider" Grid.Column="1" Minimum="10" Maximum="300" Value="100"
                                         TickFrequency="5" IsSnapToTickEnabled="True"
                                         ValueChanged="ViewerScaleSlider_ValueChanged"
                                         PreviewMouseLeftButtonDown="ViewerScaleSlider_PreviewMouseLeftButtonDown"
                                         PreviewMouseLeftButtonUp="ViewerScaleSlider_PreviewMouseLeftButtonUp"
                                         LostMouseCapture="ViewerScaleSlider_LostMouseCapture"
-                                        VerticalAlignment="Center" ToolTip="Fine viewer scale 10%–300%" />
-                                <TextBlock Grid.Column="1" Text="300%" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
+                                        VerticalAlignment="Center" Margin="9,0"
+                                        ToolTip="Fine viewer scale, 10% to 300%" />
+                                <TextBlock Grid.Column="2" Text="300%" Style="{StaticResource MicroLabel}" VerticalAlignment="Center" />
                             </Grid>
 
-                            <Grid Margin="2,0,2,3">
-                                <TextBlock Text="TOOLS" Foreground="{DynamicResource FaintTextBrush}"
-                                           FontSize="8" FontWeight="SemiBold" />
-                                <TextBlock Text="VIEWER" HorizontalAlignment="Right"
-                                           Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
-                            </Grid>
-                            <UniformGrid Columns="4" Margin="-2,0,-2,2">
-                                <Button Style="{StaticResource ToolIconButton}" Content="↥"
-                                        Click="BringToFront_Click" ToolTip="Bring Screen 1 to front" />
-                                <Button Style="{StaticResource ToolIconButton}" Content="⛶"
-                                        Click="FullScreen_Click" ToolTip="Toggle fullscreen" />
-                                <Button Style="{StaticResource ToolIconButton}" Content="↻"
-                                        Click="RefreshScreen_Click" ToolTip="Refresh remote screen" />
-                                <Button Style="{StaticResource ToolIconButton}" Content="⇄"
-                                        Click="FileTransfer_Click" ToolTip="UltraVNC file transfer" />
-                            </UniformGrid>
-                            <Grid Margin="2,2,2,3">
-                                <TextBlock Text="SESSION TOOLS" Foreground="{DynamicResource FaintTextBrush}"
-                                           FontSize="8" FontWeight="SemiBold" />
-                                <TextBlock Text="GREV" HorizontalAlignment="Right"
-                                           Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
-                            </Grid>
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,10,0,10" />
+
                             <UniformGrid Columns="3" Margin="-2,0,-2,0">
-                                <Button Style="{StaticResource ToolIconButton}" Content=">_"
-                                        Click="TerminalTool_Click" ToolTip="Open Manage Terminal" FontSize="12" />
-                                <Button x:Name="AudioButton" Style="{StaticResource ToolIconButton}"
-                                        Content="🔊" Click="Audio_Click" ToolTip="Toggle computer sound"
-                                        IsEnabled="False">
-                                    <Button.ContentTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="🔊" FontSize="15" />
-                                        </DataTemplate>
-                                    </Button.ContentTemplate>
-                                </Button>
-                                <Grid>
-                                    <Button x:Name="WhiteboardButton" Style="{StaticResource ToolIconButton}"
-                                            Content="✎" Click="Whiteboard_Click" ToolTip="Shared whiteboard"
-                                            IsEnabled="False" />
-                                </Grid>
+                                <Button Style="{StaticResource PanelAction}" Content="⛶  Fullscreen"
+                                        Click="FullScreen_Click" Margin="2"
+                                        ToolTip="Toggle the UltraVNC viewer between fullscreen and windowed" />
+                                <Button Style="{StaticResource PanelAction}" Content="↻  Redraw"
+                                        Click="RefreshScreen_Click" Margin="2"
+                                        ToolTip="Force a full repaint if the remote screen looks stale" />
+                                <Button Style="{StaticResource PanelAction}" Content="⇄  Transfer"
+                                        Click="FileTransfer_Click" Margin="2"
+                                        ToolTip="Open the UltraVNC file-transfer window" />
                             </UniformGrid>
                         </StackPanel>
                     </Border>
 
-                    <Grid Margin="0,7,0,1">
-                        <Button x:Name="RemoteKeysSectionButton" Style="{StaticResource PanelSectionButton}"
-                                Content="REMOTE KEYS  ▾" Tag="keys" Click="TogglePanelSection_Click"
-                                ToolTip="Expand or collapse remote key shortcuts" />
-                        <TextBlock Text="CONTROL REQUIRED" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                   Foreground="{DynamicResource FaintTextBrush}" FontSize="8" Margin="0,0,4,0" />
-                    </Grid>
-                    <Border x:Name="RemoteKeysPanel" IsEnabled="False"
-                            Background="{DynamicResource SubtlePanelBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                            CornerRadius="12" Padding="6">
-                        <UniformGrid Columns="4" Rows="2" Margin="-2">
-                            <Button Style="{StaticResource KeyButton}" Content="CTRL ALT DEL"
-                                    Click="Cad_Click" ToolTip="Ctrl + Alt + Delete on the remote machine" />
-                            <Button Style="{StaticResource KeyButton}" Content="⊞ WIN"
-                                    Click="WindowsKey_Click" ToolTip="Open the remote Start menu" />
-                            <Button Style="{StaticResource KeyButton}" Content="TASK MGR"
-                                    Click="TaskManager_Click" ToolTip="Ctrl + Shift + Esc on the remote machine" />
-                            <Button Style="{StaticResource KeyButton}" Content="ALT ↹"
-                                    Click="AltTab_Click" ToolTip="Alt + Tab on the remote machine" />
-                            <Button Style="{StaticResource KeyButton}" Content="ALT F4"
-                                    Click="AltF4_Click" ToolTip="Close the remote foreground window" />
-                            <Button Style="{StaticResource KeyButton}" Content="⊞ R"
-                                    Click="WinR_Click" ToolTip="Remote Run dialog" />
-                            <Button Style="{StaticResource KeyButton}" Content="⊞ E"
-                                    Click="WinE_Click" ToolTip="Open File Explorer on the remote machine" />
-                            <Button Style="{StaticResource KeyButton}" Content="⊞ L"
-                                    Click="WinL_Click" ToolTip="Lock the remote workstation" />
+                    <!-- REMOTE KEYS -->
+                    <ToggleButton x:Name="RemoteKeysSectionButton" Style="{StaticResource SectionHeaderToggle}"
+                                  IsChecked="True" Tag="keys" Click="TogglePanelSection_Click"
+                                  Margin="0,4,0,0" ToolTip="Show or hide the remote key shortcuts">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="REMOTE KEYS" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" x:Name="RemoteKeysNoteText" Text="needs control"
+                                       Style="{StaticResource SectionNote}" />
+                        </Grid>
+                    </ToggleButton>
+                    <Border x:Name="RemoteKeysSectionBody" Style="{StaticResource SectionBody}">
+                        <StackPanel>
+                            <TextBlock x:Name="RemoteKeysHintText"
+                                       Text="Take control first — these keys are sent to the remote PC, not this one."
+                                       Style="{StaticResource PanelMuted}" TextWrapping="Wrap"
+                                       TextTrimming="None" Margin="2,0,2,8" />
+                            <Grid x:Name="RemoteKeysPanel" IsEnabled="False">
+                                <UniformGrid Columns="4" Rows="2" Margin="-2">
+                                    <Button Style="{StaticResource KeyButton}" Content="Ctrl Alt Del"
+                                            Click="Cad_Click" ToolTip="Ctrl + Alt + Delete on the remote PC" />
+                                    <Button Style="{StaticResource KeyButton}" Content="⊞ Start"
+                                            Click="WindowsKey_Click" ToolTip="Open the remote Start menu" />
+                                    <Button Style="{StaticResource KeyButton}" Content="Task Mgr"
+                                            Click="TaskManager_Click" ToolTip="Ctrl + Shift + Esc on the remote PC" />
+                                    <Button Style="{StaticResource KeyButton}" Content="Alt ↹"
+                                            Click="AltTab_Click" ToolTip="Alt + Tab on the remote PC" />
+                                    <Button Style="{StaticResource KeyButton}" Content="Alt F4"
+                                            Click="AltF4_Click" ToolTip="Close the remote foreground window" />
+                                    <Button Style="{StaticResource KeyButton}" Content="⊞ R"
+                                            Click="WinR_Click" ToolTip="Remote Run dialog" />
+                                    <Button Style="{StaticResource KeyButton}" Content="⊞ E"
+                                            Click="WinE_Click" ToolTip="Open File Explorer on the remote PC" />
+                                    <Button Style="{StaticResource KeyButton}" Content="⊞ L"
+                                            Click="WinL_Click" ToolTip="Lock the remote workstation" />
+                                </UniformGrid>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- SESSION TOOLS -->
+                    <ToggleButton x:Name="ToolsSectionButton" Style="{StaticResource SectionHeaderToggle}"
+                                  IsChecked="True" Tag="tools" Click="TogglePanelSection_Click"
+                                  Margin="0,4,0,0" ToolTip="Show or hide the Grev session tools">
+                        <TextBlock Text="SESSION TOOLS" Style="{StaticResource SectionTitle}" />
+                    </ToggleButton>
+                    <Border x:Name="ToolsSectionBody" Style="{StaticResource SectionBody}">
+                        <UniformGrid Columns="4" Margin="-2">
+                            <Button Style="{StaticResource ToolButton}" Click="TerminalTool_Click"
+                                    ToolTip="Run PowerShell or CMD on the remote PC through the Grev Agent">
+                                <StackPanel>
+                                    <TextBlock Text="&gt;_" FontSize="15" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Terminal" FontSize="10" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="AudioButton" Click="Audio_Click" Style="{StaticResource ToolButton}"
+                                    IsEnabled="False"
+                                    ToolTip="Hear the remote PC's sound on this computer">
+                                <StackPanel>
+                                    <TextBlock x:Name="AudioGlyphText" Text="🔊" FontSize="15" HorizontalAlignment="Center" />
+                                    <TextBlock x:Name="AudioLabelText" Text="Sound" FontSize="10" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="WhiteboardButton" Click="Whiteboard_Click" Style="{StaticResource ToolButton}"
+                                    IsEnabled="False"
+                                    ToolTip="Draw on top of the remote screen so everyone connected can see it">
+                                <StackPanel>
+                                    <TextBlock Text="✎" FontSize="15" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Whiteboard" FontSize="10" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource ToolButton}" Click="Files_Click"
+                                    ToolTip="Browse, upload and download files on the remote PC">
+                                <StackPanel>
+                                    <TextBlock Text="📁" FontSize="15" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Files" FontSize="10" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                         </UniformGrid>
                     </Border>
 
-                    <Button x:Name="PcSectionButton" Style="{StaticResource PanelSectionButton}"
-                            Content="PC  ▾" Tag="pc" Click="TogglePanelSection_Click"
-                            ToolTip="Expand or collapse PC controls" Margin="0,7,0,1" />
-                    <Border x:Name="PcSectionBody"
-                            Background="{DynamicResource SubtlePanelBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                            CornerRadius="12" Padding="6">
+                    <!-- PC -->
+                    <ToggleButton x:Name="PcSectionButton" Style="{StaticResource SectionHeaderToggle}"
+                                  IsChecked="True" Tag="pc" Click="TogglePanelSection_Click"
+                                  Margin="0,4,0,0" ToolTip="Show or hide the machine power controls">
+                        <TextBlock Text="THIS PC" Style="{StaticResource SectionTitle}" />
+                    </ToggleButton>
+                    <Border x:Name="PcSectionBody" Style="{StaticResource SectionBody}">
+                        <StackPanel>
+                            <Grid x:Name="SessionActionPanel" IsEnabled="False">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Style="{StaticResource PanelAction}" Content="🔒  Lock"
+                                        Click="LockMachine_Click" Margin="0,0,4,0"
+                                        ToolTip="Lock the remote Windows session" />
+                                <Button Grid.Column="1" Style="{StaticResource PanelAction}" Content="↻  Explorer"
+                                        Click="RestartExplorerAgent_Click" Margin="4,0,0,0"
+                                        ToolTip="Restart the remote Windows shell (taskbar and desktop)" />
+                            </Grid>
+                            <TextBlock x:Name="SessionActionHintText"
+                                       Text="Pair the Grev Agent on this machine to enable lock and Explorer restart."
+                                       Style="{StaticResource PanelMuted}" TextWrapping="Wrap"
+                                       TextTrimming="None" Margin="2,8,2,0" />
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Style="{StaticResource PanelAction}" Content="↻  Restart PC"
+                                        Click="Restart_Click" Margin="0,0,4,0"
+                                        ToolTip="Restart the remote machine. You will be asked to confirm." />
+                                <Button Grid.Column="1" Style="{StaticResource DangerButton}" Content="⏻  Shut down"
+                                        Click="Shutdown_Click" Margin="4,0,0,0"
+                                        Padding="10,8" FontSize="11" FontWeight="Normal" MinHeight="34"
+                                        ToolTip="Shut the remote machine down. You will be asked to confirm." />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- PEOPLE -->
+                    <ToggleButton x:Name="PeopleSectionButton" Style="{StaticResource SectionHeaderToggle}"
+                                  IsChecked="True" Tag="people" Click="TogglePanelSection_Click"
+                                  Margin="0,4,0,0" ToolTip="Show or hide who else is connected">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="54" />
-                                <ColumnDefinition Width="54" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-
-                            <StackPanel x:Name="SessionActionPanel" Grid.ColumnSpan="2"
-                                        Orientation="Horizontal" IsEnabled="False">
-                                <Button Style="{StaticResource ToolIconButton}" Content="🔒"
-                                        Click="LockMachine_Click" ToolTip="Lock workstation"
-                                        Width="48" Margin="0,0,4,0" />
-                                <Button Style="{StaticResource ToolIconButton}" Content="↻"
-                                        Click="RestartExplorerAgent_Click" ToolTip="Restart Windows Explorer"
-                                        Width="48" Margin="0" />
-                            </StackPanel>
-
-                            <Button Grid.Column="2" Style="{StaticResource PanelActionButton}"
-                                    Content="Restart PC" Click="Restart_Click" Margin="4,2,3,2" />
-                            <Button Grid.Column="3" Style="{StaticResource DangerButton}"
-                                    Content="Shut down" Click="Shutdown_Click" Margin="3,2,2,2"
-                                    Padding="8,7" FontSize="10" MinHeight="34" />
+                            <TextBlock x:Name="ParticipantsHeaderText" Text="CONNECTED · checking"
+                                       Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" x:Name="CollaborationStatusText" Text="Grev Collaboration"
+                                       Style="{StaticResource SectionNote}" />
                         </Grid>
+                    </ToggleButton>
+                    <Border x:Name="PeopleSectionBody" Style="{StaticResource SectionBody}">
+                        <StackPanel>
+                            <ItemsControl x:Name="ParticipantsItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="2,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Width="9" Height="9" VerticalAlignment="Center"
+                                                     Fill="{Binding Colour}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11"
+                                                       Margin="8,0,8,0" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <Border Grid.Column="2" Style="{StaticResource Pill}" Padding="6,2">
+                                                <TextBlock Text="{Binding Role}" FontSize="8" FontWeight="Bold"
+                                                           Foreground="{Binding Colour}" />
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock x:Name="ParticipantsEmptyText"
+                                       Text="Nobody else is connected to this machine right now."
+                                       Style="{StaticResource PanelMuted}" TextWrapping="Wrap"
+                                       TextTrimming="None" Margin="2,2,2,0" Visibility="Collapsed" />
+
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,10,0,9" />
+
+                            <Grid Margin="2,0,2,6">
+                                <TextBlock Text="YOUR CURSOR" Style="{StaticResource MicroLabel}" />
+                                <TextBlock x:Name="CursorStyleNameText" Text="Classic arrow"
+                                           HorizontalAlignment="Right"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           FontSize="10" FontWeight="SemiBold" />
+                            </Grid>
+                            <TextBlock Text="This is the pointer other Grev users see beside your name."
+                                       Style="{StaticResource PanelMuted}" TextWrapping="Wrap"
+                                       TextTrimming="None" Margin="2,0,2,7" />
+                            <ContentControl x:Name="CursorStyleHost" HorizontalAlignment="Left" />
+                        </StackPanel>
                     </Border>
                 </StackPanel>
             </ScrollViewer>
 
-            <Border Grid.Row="3" Margin="12,2,12,7" Padding="9,7" CornerRadius="11"
-                    Background="{DynamicResource SubtlePanelBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                <StackPanel>
-                    <Grid Margin="1,0,1,3">
-                        <TextBlock x:Name="ParticipantsHeaderText" Text="CONNECTED · checking"
-                                   Foreground="{DynamicResource AccentBrush}" FontSize="8" FontWeight="SemiBold" />
-                        <TextBlock x:Name="CollaborationStatusText" Text="Grev Collaboration"
-                                   HorizontalAlignment="Right" Foreground="{DynamicResource FaintTextBrush}" FontSize="8" />
-                    </Grid>
-                    <ItemsControl x:Name="ParticipantsItems" Margin="1,1,1,0">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Background="{DynamicResource PanelBrush}" CornerRadius="7"
-                                        Padding="6,2" Margin="0,0,4,2">
-                                    <TextBlock Text="{Binding}" Foreground="{DynamicResource MutedTextBrush}" FontSize="8" />
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            <Border Grid.Row="4" Padding="12,8,12,10"
+            <!-- ==================== FOOTER ==================== -->
+            <Border Grid.Row="3" Padding="12,10,12,12"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource PrimaryButton}" Content="Manage machine"
-                            Click="ManageMachine_Click" Padding="13,7" Margin="0,0,6,0" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="▦  Manage machine"
+                            Click="ManageMachine_Click" Padding="12,9" FontSize="11" Margin="0,0,6,0"
+                            ToolTip="Live telemetry, processes, services, terminal, files and activity" />
                     <Button Grid.Column="1" Style="{StaticResource DangerButton}" Content="Disconnect"
-                            Click="Disconnect_Click" Padding="11,7" />
+                            Click="Disconnect_Click" Padding="12,9" FontSize="11"
+                            ToolTip="Close the VNC session and this panel" />
                 </Grid>
             </Border>
         </Grid>
