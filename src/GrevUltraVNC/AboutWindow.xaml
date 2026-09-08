@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:GrevUltraVNC.Services"
-        Title="About GrevConnect" Width="560" Height="420" ResizeMode="NoResize"
+        Title="About GrevConnect" Width="560" Height="450" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Style="{StaticResource AppWindowStyle}"
         Background="{DynamicResource WindowBrush}"
@@ -31,11 +31,12 @@
             <StackPanel>
                 <TextBlock Text="About" Style="{StaticResource TitleText}" />
                 <TextBlock Margin="0,12,0,0" TextWrapping="Wrap"
-                           Text="GrevConnect brings Grev's remote-control, machine-management and collaboration tools into one Windows app. UltraVNC provides the underlying VNC technology used for remote desktop connections." />
+                           Text="GrevConnect brings Grev's remote-control, machine-management and collaboration tools into one Windows app. UltraVNC provides the underlying VNC technology used for remote desktop connections, with Zima providing the connected route for GrevConnect devices away from the local network." />
 
                 <Separator Margin="0,20" Background="{DynamicResource BorderBrush}" />
 
                 <TextBlock Text="Powered by UltraVNC" FontWeight="SemiBold" />
+                <TextBlock Text="Connected by Zima" Margin="0,7,0,0" />
                 <TextBlock Text="Thought up by Grev" Margin="0,7,0,0" />
                 <TextBlock Text="Created by ChatGPT" Margin="0,7,0,0" />
                 <TextBlock Text="Assisted by Claude" Margin="0,7,0,0" />
