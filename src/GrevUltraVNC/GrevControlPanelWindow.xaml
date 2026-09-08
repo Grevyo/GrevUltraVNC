@@ -484,7 +484,7 @@
                                                        Margin="8,0,8,0" VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis" />
                                             <Border Grid.Column="2" Style="{StaticResource Pill}" Padding="6,2">
-                                                <TextBlock Text="{Binding Role}" FontSize="8" FontWeight="Bold"
+                                                <TextBlock Text="{Binding Role}" FontSize="9" FontWeight="Bold"
                                                            Foreground="{Binding Colour}" />
                                             </Border>
                                         </Grid>
