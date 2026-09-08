@@ -17,7 +17,7 @@ Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $downloadDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $publish, $downloadDir, $licenses -Force | Out-Null
 
-Write-Host 'Publishing GrevConnect 1.2.0 self-contained win-x64...'
+Write-Host 'Publishing GrevConnect 1.2.1 self-contained win-x64...'
 dotnet publish (Join-Path $root 'src\GrevUltraVNC\GrevUltraVNC.csproj') `
     --configuration $Configuration `
     --runtime win-x64 `
@@ -58,9 +58,6 @@ if (-not $viewer) {
     $viewer = $viewerCandidates | Sort-Object Length -Descending | Select-Object -First 1
 }
 
-# Package the whole directory containing the verified x64 viewer rather than only one EXE.
-# This keeps the matching UltraVNC support files together and means users do not need a
-# separate UltraVNC download before GrevConnect can work.
 $uvncSourceDir = Split-Path -Parent $viewer.FullName
 New-Item -ItemType Directory -Path $uvncTarget -Force | Out-Null
 Copy-Item -Path (Join-Path $uvncSourceDir '*') -Destination $uvncTarget -Recurse -Force
@@ -97,7 +94,7 @@ Write-Host 'Building GrevConnect single EXE installer...'
 & $iscc "/DSourceDir=$publish" "/DOutputDir=$dist" $iss
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
 
-$installer = Join-Path $dist 'GrevConnect-1.2.0-Setup.exe'
+$installer = Join-Path $dist 'GrevConnect-1.2.1-Setup.exe'
 if (-not (Test-Path $installer)) {
     throw 'Expected GrevConnect installer EXE was not created.'
 }
