@@ -35,7 +35,9 @@
     Pass a path under Program Files to make it machine-wide (needs admin).
 
 .PARAMETER Branch
-    Branch to build from. Defaults to main.
+    Branch to build from. Defaults to the branch of the checkout this script came
+    from, or main when the script is run on its own. Passing this explicitly always
+    wins, even from inside a checkout.
 
 .PARAMETER SkipViewer
     Do not download or bundle the UltraVNC Viewer. Use this if UltraVNC is
@@ -75,7 +77,9 @@ param(
 
     [string]$InstallDir,
 
-    [string]$Branch = 'main',
+    # No default on purpose: it is resolved below from the checkout this script
+    # came from, so running the script out of a branch builds that branch.
+    [string]$Branch,
 
     [string]$Repository = 'Grevyo/GrevUltraVNC',
 
@@ -285,16 +289,71 @@ function Resolve-DotnetSdk {
 # Source
 # ==================================================================================
 
-function Get-LocalRepositoryRoot {
-    # When the script is run from a checkout, build that checkout rather than
-    # downloading a second copy of the same code.
+function Get-LocalCheckout {
+    # When the script is run from a checkout, that checkout is the obvious source.
+    # Report which branch and commit it is on, because "the app looks unchanged" is
+    # almost always "it built a different branch than you thought".
     $candidate = Split-Path -Parent $PSScriptRoot
     if ([string]::IsNullOrWhiteSpace($candidate)) { return $null }
 
     $project = Join-Path $candidate 'src\GrevUltraVNC\GrevUltraVNC.csproj'
-    if (Test-Path $project) { return $candidate }
+    if (-not (Test-Path $project)) { return $null }
 
-    return $null
+    $branch = $null
+    $commit = $null
+
+    $headFile = Join-Path $candidate '.git\HEAD'
+    if (Test-Path $headFile) {
+        $head = (Get-Content -LiteralPath $headFile -Raw).Trim()
+        if ($head -match '^ref:\s*refs/heads/(.+)$') {
+            $branch = $Matches[1]
+            $refFile = Join-Path $candidate ".git\refs\heads\$branch"
+            if (Test-Path $refFile) {
+                $commit = (Get-Content -LiteralPath $refFile -Raw).Trim()
+            }
+            elseif (Test-Path (Join-Path $candidate '.git\packed-refs')) {
+                $packed = Get-Content -LiteralPath (Join-Path $candidate '.git\packed-refs')
+                $match = $packed | Where-Object { $_ -match "\srefs/heads/$([regex]::Escape($branch))$" } | Select-Object -First 1
+                if ($match) { $commit = $match.Split(' ')[0] }
+            }
+        }
+        elseif ($head -match '^[0-9a-f]{40}$') {
+            $branch = '(detached HEAD)'
+            $commit = $head
+        }
+    }
+
+    return [pscustomobject]@{
+        Root   = $candidate
+        Branch = $branch
+        Commit = $commit
+    }
+}
+
+function Get-RemoteBranchHead {
+    param([string]$BranchName)
+
+    # Best effort: the install must not fail just because GitHub did not answer.
+    try {
+        $headers = @{ 'User-Agent' = 'GrevUltraVNC-Installer' }
+        $encoded = [Uri]::EscapeDataString($BranchName)
+        $info = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/commits/$encoded" `
+            -Headers $headers -UseBasicParsing
+        return [pscustomobject]@{
+            Commit  = $info.sha
+            Subject = ($info.commit.message -split "`n")[0]
+        }
+    }
+    catch {
+        return $null
+    }
+}
+
+function Format-ShortCommit {
+    param([string]$Commit)
+    if ([string]::IsNullOrWhiteSpace($Commit)) { return 'unknown' }
+    if ($Commit.Length -le 7) { return $Commit }
+    return $Commit.Substring(0, 7)
 }
 
 function Get-SourceTree {
@@ -302,10 +361,24 @@ function Get-SourceTree {
 
     Write-Step 'Getting the GrevUltraVNC source'
 
-    $local = Get-LocalRepositoryRoot
-    if ($local) {
-        Write-Good "Using the checkout this script came from: $local"
-        return $local
+    # Use the checkout only when it is the branch being asked for. Previously a
+    # -Branch argument was silently ignored from inside a checkout, so you could ask
+    # for one branch and quietly get another.
+    if ($script:Checkout -and $script:Checkout.Branch -eq $Branch) {
+        $script:BuiltCommit = $script:Checkout.Commit
+        Write-Good "Using the checkout this script came from: $($script:Checkout.Root)"
+        Write-Detail "Branch $Branch at $(Format-ShortCommit $script:Checkout.Commit)"
+        return $script:Checkout.Root
+    }
+
+    if ($script:Checkout) {
+        Write-Detail "This checkout is on '$($script:Checkout.Branch)', but '$Branch' was requested; downloading that instead."
+    }
+
+    $remote = Get-RemoteBranchHead -BranchName $Branch
+    if ($remote) {
+        $script:BuiltCommit = $remote.Commit
+        Write-Detail "$Branch is at $(Format-ShortCommit $remote.Commit) - $($remote.Subject)"
     }
 
     $zipUrl = "https://codeload.github.com/$Repository/zip/refs/heads/$Branch"
@@ -313,7 +386,13 @@ function Get-SourceTree {
     $extractDir = Join-Path $Workspace 'source'
 
     Write-Detail "Downloading $Repository ($Branch)..."
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+    try {
+        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+    }
+    catch {
+        throw "Could not download branch '$Branch' from $Repository. Check the branch name. ($($_.Exception.Message))"
+    }
+
     Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 
     $root = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
@@ -343,7 +422,12 @@ function Invoke-Publish {
         throw "Could not find GrevUltraVNC.csproj under $RepoRoot."
     }
 
-    Write-Detail 'Publishing self-contained win-x64 (first run downloads NuGet packages)...'
+    # Stamp the source identity into the assembly. Settings shows this, so "did my
+    # changes actually install?" is answerable from inside the app.
+    $stamp = "$($Branch -replace '[^A-Za-z0-9\.\-]', '-').$(Format-ShortCommit $script:BuiltCommit)"
+    $script:BuiltStamp = $stamp
+
+    Write-Detail "Publishing self-contained win-x64, stamped $stamp (first run downloads NuGet packages)..."
     & $Dotnet publish $project `
         --configuration Release `
         --runtime win-x64 `
@@ -351,7 +435,8 @@ function Invoke-Publish {
         --output $OutputDir `
         --nologo `
         -p:DebugType=None `
-        -p:DebugSymbols=false
+        -p:DebugSymbols=false `
+        -p:SourceRevisionId=$stamp
 
     if ($LASTEXITCODE -ne 0) {
         throw "The GrevUltraVNC build failed with exit code $LASTEXITCODE. The compiler output above says why."
@@ -674,8 +759,24 @@ $IsWindowsPlatform = ($env:OS -eq 'Windows_NT')
 $workspace = $null
 $startedAt = Get-Date
 
+$script:Checkout = Get-LocalCheckout
+$script:BuiltCommit = $null
+$script:BuiltStamp = $null
+
+if (-not $PSBoundParameters.ContainsKey('Branch') -or [string]::IsNullOrWhiteSpace($Branch)) {
+    # Running the script out of a branch should build that branch. Defaulting to main
+    # here is how you install the old app and wonder why nothing changed.
+    if ($script:Checkout -and -not [string]::IsNullOrWhiteSpace($script:Checkout.Branch)) {
+        $Branch = $script:Checkout.Branch
+    }
+    else {
+        $Branch = 'main'
+    }
+}
+
 try {
     Write-Banner
+    Write-Host "  Source: $Repository, branch '$Branch'" -ForegroundColor DarkGray
     Assert-Prerequisites
 
     $workspace = New-WorkspaceDirectory
@@ -706,6 +807,9 @@ try {
     Write-Host '===================================================================' -ForegroundColor Green
     Write-Host ''
     Write-Host "  App          $installedExe"
+    if ($Source -ne 'Release') {
+        Write-Host "  Built from   $Repository @ $Branch ($(Format-ShortCommit $script:BuiltCommit))" -ForegroundColor Cyan
+    }
     Write-Host "  Your data    $(Join-Path $env:APPDATA 'GrevUltraVNC')"
     Write-Host '  Secrets      Windows Credential Manager (VNC passwords, Agent keys)'
     Write-Host ''

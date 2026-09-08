@@ -178,12 +178,31 @@ public partial class SettingsWindow : Window
 
     private void RenderAboutSection()
     {
-        var version = Assembly.GetExecutingAssembly()
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+        var assembly = Assembly.GetExecutingAssembly();
+        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? assembly.GetName().Version?.ToString()
             ?? "unknown";
 
+        // The installer stamps SourceRevisionId with "<branch>.<short commit>", which lands
+        // after a '+' here. Showing it answers "is this actually the build I installed?"
+        // without reading an install log.
+        var plusIndex = informational.IndexOf('+');
+        var version = plusIndex > 0 ? informational[..plusIndex] : informational;
+        var source = plusIndex > 0 && plusIndex < informational.Length - 1
+            ? informational[(plusIndex + 1)..]
+            : null;
+
         VersionText.Text = $"GrevUltraVNC {version}  ·  Agent protocol v{AgentProtocol.ProtocolVersion}";
+
+        var built = File.Exists(assembly.Location)
+            ? File.GetLastWriteTime(assembly.Location).ToString("dd MMM yyyy HH:mm")
+            : null;
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(source)) parts.Add($"Built from {source}");
+        if (!string.IsNullOrWhiteSpace(built)) parts.Add($"installed {built}");
+        BuildSourceText.Text = parts.Count > 0 ? string.Join(" · ", parts) : "Build source not recorded";
+
         DataFolderText.Text = DataFolder;
     }
 

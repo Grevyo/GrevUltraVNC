@@ -27,7 +27,12 @@ Useful switches:
 | `-Source Release` | Download and silently run the newest published installer instead of building. |
 | `-SkipViewer` | Do not bundle UltraVNC (use an already-installed copy). |
 | `-InstallDir <path>` | Install somewhere else. |
+| `-Branch <name>` | Build a specific branch. Defaults to the branch of the checkout the script came from, or `main` when the script is run on its own. |
 | `-NoLaunch` | Install without starting the app. |
+
+The installer prints the branch and commit it built, and **Settings → About & data**
+shows the same stamp on the installed app, so "did my changes actually install?"
+is answerable without reading an install log.
 
 Re-running it upgrades in place. Machines, settings, saved commands and
 activity history in `%APPDATA%\GrevUltraVNC` are untouched, and VNC passwords

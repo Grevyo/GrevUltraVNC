@@ -167,6 +167,8 @@
                     <StackPanel>
                         <TextBlock Text="ABOUT &amp; DATA" Style="{StaticResource SectionLabel}" />
                         <TextBlock x:Name="VersionText" Style="{StaticResource CaptionText}" Margin="0,10,0,0" />
+                        <TextBlock x:Name="BuildSourceText" Style="{StaticResource MicroLabel}" FontWeight="Normal"
+                                   Margin="0,4,0,0" TextWrapping="Wrap" />
                         <TextBlock x:Name="DataFolderText" Style="{StaticResource MicroLabel}" FontWeight="Normal"
                                    Margin="0,5,0,0" TextWrapping="Wrap" />
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
