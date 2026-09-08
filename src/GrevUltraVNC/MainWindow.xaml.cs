@@ -92,7 +92,12 @@ public partial class MainWindow : Window
             // Startup registration can still be changed from Settings if Windows blocks it here.
         }
 
-        _tray = new TrayIconService(this, () => Machines.Where(x => x.IsFavorite), ConnectMachine);
+        _tray = new TrayIconService(
+            this,
+            () => Machines.Where(machine => machine.IsFavorite),
+            () => Machines,
+            ConnectMachine,
+            RefreshStatusesAsync);
         ConfigureStatusTimer();
         UpdateMachineFilterStyles();
         ApplyViewArrangement();
